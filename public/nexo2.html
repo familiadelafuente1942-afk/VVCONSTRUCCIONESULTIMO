@@ -2400,7 +2400,7 @@ let SAMPLE=null,IA_CTL=null,IA_BUSY=false;
 function estTarea(t){return t.real?(t.real.av>=100?'terminada':'en curso'):TODAY>=t.start?'en curso':'por empezar'}
 function snapshot(){
   const r=ROLE(),est=r==='estudio';
-  return misObras().map(o=>({obra:o.nombre,modelo:modeloFull(o),avance_real:avance(o)+'%',avance_segun_base:avancePlan(o)+'%',etapa_actual:actual(o).name,proxima_tarea:(proxima(o)||{}).name||'entrega',entrega_prevista:iso(finObra(o)),entrega_base:iso(finBase(o)),...(verCostos()?{jefe_de_obra:o.jefe}:{}),estudio:o.estudio,
+  return misObras().map(o=>({obra:o.nombre,modelo:modeloFull(o),avance_real:avance(o)+'%',avance_segun_base:avancePlan(o)+'%',etapa_actual:actual(o).name,proxima_tarea:(proxima(o)||{}).name||'entrega',entrega_prevista:iso(finObra(o)),entrega_base:iso(finBase(o)),...(verCostos()?{jefe_de_obra:o.jefe}:{}),...(iaCtOk()?{contratistas:iaCt(o)}:{}),estudio:o.estudio,
     tareas:o.tasks.map(t=>({tarea:t.name,inicio:iso(t.start),fin:iso(t.end),estado:estTarea(t),...(t.real?{avance:t.real.av+'%',...(t.real.causa?{causa_atraso:t.real.causa}:{})}:{}),...(desvioTarea(o,t)?{desvio_dias_vs_base:desvioTarea(o,t)}:{})})),
     tarjetas:o.cards.filter(c=>!est||c.tipo==='doc').filter(c=>color(c)!=='futuro').map(c=>{const k=timing(c),col=color(c);return{tarjeta:CARD[c.tipo].n,tarea:c.task.name,semaforo:NOMBRE[col],fecha_limite:iso(k.limit),completos:`${cProg(c).k}/${cProg(c).n}`,pendientes:c.items.filter(i=>!iDone(i)).map(i=>i.txt+(i.estado==='recibido'?' (recibido, falta verificar)':i.estado==='pedido'?' (pedido)':'')).slice(0,12),...(col==='rojo'?{dias_en_rojo:diasRojo(c),...(verCostos()?{costo_espera_estimado:Math.round(costoEst(c))}:{})}:{})}}),
     planos_en_revision:DOCS.filter(x=>x.obra===o&&x.estado==='en revisión').map(x=>x.nombre),
@@ -2413,11 +2413,15 @@ Español rioplatense, breve y concreto. Primero la respuesta directa en una o do
 function iaFormat(t){const e=esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');let h='',inL=false;e.split('\n').forEach(l=>{const m=l.match(/^\s*[-•*]\s+(.*)/);if(m){if(!inL){h+='<ul>';inL=true}h+=`<li>${m[1]}</li>`}else{if(inL){h+='</ul>';inL=false}if(l.trim())h+=`<p>${l}</p>`}});if(inL)h+='</ul>';return h}
 const norm=s=>s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
 const RUBROS=[['mamposter','mamp'],['revoque','revoques'],['instalac','inst'],['electric','inst'],['sanitari','inst'],['contrapiso','contrapisos'],['carpeta','contrapisos'],['losa','losa'],['abertura','aberturas'],['marco','aberturas'],['cielorraso','cielorrasos'],['revestimiento','revest'],['solado','revest'],['pintura','pintura'],['fundacion','fund'],['platea','fund'],['preliminar','prelim'],['pileta','pileta'],['excavac','excav']];
+function iaLocalCt(q,o){const L=[];const obs=o?[o]:misObras();obs.forEach(x=>{const a=CTR[x.id];if(a&&a.items)a.items.forEach(r=>L.push({o:x,r}))});if(!L.length)return 'Todavía no hay avisos, presupuestos ni listados de contratistas'+(o?' en '+o.nombre:'')+'.';
+  const n=norm(q),sel=L.filter(e=>/presupuesto/.test(n)?e.r.tipo==='presupuesto':/listado|material/.test(n)&&!/falta/.test(n)?e.r.tipo==='materiales':!e.r.doc).sort((a,b)=>b.r.creado-a.r.creado);
+  if(!sel.length)return 'No hay registros de ese tipo'+(o?' en '+o.nombre:'')+'.';return sel.slice(0,8).map(({o:x,r})=>`- **${x.nombre}** · ${CT_TIPO[r.tipo]||'Aviso'} de ${r.ctNombre}${r.rubro?' ('+r.rubro+')':''}: ${r.titulo}${r.doc&&r.monto&&ROLE()==='direccion'?' · $ '+Number(r.monto).toLocaleString('es-AR'):''} · ${CT_EST[r.estado]||r.estado} · ${fAR(r.creado)} ${hAR(r.creado)}${ctAbierto(r)&&!r.primeraResp?' · sin respuesta hace '+ctDur(Date.now()-r.creado):''}`).join('\n')}
 function iaLocal(q){
   const n=norm(q),obras=misObras();
   const o=obras.find(x=>n.includes(norm(x.nombre))||(x.nombre.match(/\d+/)&&n.includes(x.nombre.match(/\d+/)[0])));
   const rb=(RUBROS.find(([k])=>n.includes(k))||[])[1];
   const line=c=>`- ${CARD[c.tipo].n}: ${NOMBRE[color(c)].toLowerCase()} · ${cProg(c).k}/${cProg(c).n} · límite ${fmt(timing(c).limit)}`;
+  if(iaCtOk()&&/reclamo|contratista|presupuesto|listado de material|aviso|plomer|electricist|pintor|albanil/.test(n))return iaLocalCt(q,o);
   if(o&&rb){const ts=o.tasks.filter(t=>t.rubro===rb);if(!ts.length)return `En ${o.nombre} no hay tareas de ese rubro.`;return ts.map(t=>{const e=estTarea(t);return `**${t.name}**: ${e==='terminada'?'terminada':e==='en curso'?'en curso, termina el '+fmt(t.end):'arranca el '+fmt(t.start)}.\n`+o.cards.filter(c=>c.task===t).map(line).join('\n')}).join('\n')}
   if(n.includes('vencid')||n.includes('rojo')||n.includes('atras')&&!n.includes('equipo')){const cs=cardsDe(o?[o]:obras).filter(c=>color(c)==='rojo');return cs.length?`Hay ${plural(cs.length,'tarjeta vencida','tarjetas vencidas')}${o?' en '+o.nombre:''}.\n`+cs.map(c=>`- ${o?'':c.obra.nombre+': '}${titulo(c)} · ${diasRojo(c)} días hábiles en rojo`).join('\n'):'No hay tarjetas vencidas.'}
   if(n.includes('equipo')){const e=equiposMet();return e.length?`El equipo más lento es ${e.at(-1).k} (${e.at(-1).rend}% de lo planificado) y el que mejor rinde es ${e[0].k} (${e[0].rend}%).`:'Todavía no hay tareas terminadas para comparar equipos.'}
@@ -2442,7 +2446,7 @@ async function iaAsk(q){
   const local=note=>{ans.text=iaLocal(q);ans.note=note};
   if(!SAMPLE)local('Respuesta rápida con los datos de la app (sin IA en esta vista).');
   else{IA_CTL=new AbortController();
-    const turns=[{role:'user',content:iaRules()+'\n\nDATOS:\n'+JSON.stringify(snapshot())},...hist.map(m=>({role:m.role,content:m.text})),{role:'user',content:q}];
+    if(iaCtOk())await ctAsegura();const turns=[{role:'user',content:iaRules()+'\n\nDATOS:\n'+JSON.stringify(snapshot())},...hist.map(m=>({role:m.role,content:m.text})),{role:'user',content:q}];
     try{await SAMPLE(turns,{cache:false,modelTier:'quick',signal:IA_CTL.signal,onText:({text})=>{ans.text=text;const el=$('#ia-last');if(el)el.innerHTML=iaFormat(text)}})}
     catch(e){if(e&&e.code==='cancelled')ans.text=e.text||'Detenido.';
       else if(e&&['not_granted','sampling_disabled','not_declared','capability_disabled','capability_removed'].includes(e.code)){SAMPLE=null;local('La IA no está habilitada en esta vista: respuesta rápida con los datos de la app.')}
@@ -4200,8 +4204,8 @@ function iaGuardar(){const msgs=S.chat.filter(m=>!m.pending).map(m=>({role:m.rol
   c.msgs=msgs;c.updated=Date.now();iaSaveLocal();iaPush(c)}
 /* --- alcance de cada panel --- */
 const IA_ALCANCE={
-  direccion:'Sos el asistente del panel de Dirección. Tenés acceso a toda la base de datos de la constructora: obras, cronogramas base y conforme a obra, tarjetas de todos los tipos, costos e impacto económico, planos, auditorías, adicionales, registro diario, informes, desempeño y equipos. Podés responder cualquier consulta de gestión, comparar obras y sacar conclusiones con estos datos.',
-  jefe:'Sos el asistente del panel de Jefatura de Obra. Tu alcance son las obras a cargo de esta jefatura: tarjetas por tarea (planos y definiciones, materiales, condiciones y servicios), cronograma conforme a obra, planos por rubro, registro diario, informes semanales, adicionales y las fechas de auditoría que afectan a la obra. No hablás de costos de la constructora ni del desempeño de otras obras.',
+  direccion:'Sos el asistente del panel de Dirección. Tenés acceso a toda la base de datos de la constructora: obras, cronogramas base y conforme a obra, tarjetas de todos los tipos, costos e impacto económico, planos, auditorías, adicionales, registro diario, informes, desempeño, equipos y el panel de Contratistas (avisos de problemas, presupuestos y listados de materiales). Podés responder cualquier consulta de gestión, comparar obras y sacar conclusiones con estos datos.',
+  jefe:'Sos el asistente del panel de Jefatura de Obra. Tu alcance son las obras a cargo de esta jefatura, incluidos los avisos de problemas que cargan los contratistas en esas obras: tarjetas por tarea (planos y definiciones, materiales, condiciones y servicios), cronograma conforme a obra, planos por rubro, registro diario, informes semanales, adicionales y las fechas de auditoría que afectan a la obra. No hablás de costos de la constructora ni del desempeño de otras obras.',
   auditor:'Sos el asistente del panel de Auditoría. Tu alcance son las tareas del auditor: supervisiones de obra, revisión de documentación (planos subidos que esperan aprobación) y certificados de finalidad de etapa, más el avance y la etapa de cada obra auditada como contexto. Las tarjetas de pedidos y definiciones son gestión de la jefatura con el estudio: NO las presentes como compromisos ni pendientes del auditor. Cuando pregunte por sus compromisos, respondé con su agenda.',
   estudio:'Sos el asistente del panel del estudio de arquitectura. Tu alcance son sus entregas: ítems de planos y definiciones que la obra le pide, planos de cada carpeta (faltan, subidos, observados), adicionales para autorizar y el cronograma contractual. No hablás de costos, materiales, condiciones internas ni desempeño de la constructora.'};
 function snapRol(){const r=ROLE(),os=misObras();
@@ -4267,7 +4271,7 @@ async function iaAsk(q){
   const local=note=>{ans.text=iaLocal(q);ans.note=note};
   if(!SAMPLE)local('Respuesta rápida con los datos de la app (sin IA en esta vista).');
   else{IA_CTL=new AbortController();
-    const turns=[{role:'user',content:iaRules()+'\n\nDATOS:\n'+JSON.stringify(snapshot())},{role:'assistant',content:'Entendido. Respondo solo con esos datos y dentro de mi alcance.'},...hist.map(m=>({role:m.role,content:m.text})),{role:'user',content:q}];
+    if(iaCtOk())await ctAsegura();const turns=[{role:'user',content:iaRules()+'\n\nDATOS:\n'+JSON.stringify(snapshot())},{role:'assistant',content:'Entendido. Respondo solo con esos datos y dentro de mi alcance.'},...hist.map(m=>({role:m.role,content:m.text})),{role:'user',content:q}];
     try{await SAMPLE(turns,{cache:false,modelTier:ROLE()==='direccion'?'default':'quick',signal:IA_CTL.signal,onText:({text})=>{ans.text=text;const el=document.querySelector('#ia-last .mtx');if(el)el.innerHTML=iaFormat(text)}})}
     catch(e){if(e&&e.code==='cancelled')ans.text=e.text||'Detenido.';
       else if(e&&['not_granted','sampling_disabled','not_declared','capability_disabled','capability_removed'].includes(e.code)){SAMPLE=null;local('La IA no está habilitada en esta vista: respuesta rápida con los datos de la app.')}
@@ -4388,7 +4392,7 @@ function iaDatosObra(o){
   const sn=snapRol();let d=null;
   if(sn&&sn.obras)d=sn.obras.find(x=>x.obra===o.nombre)||null;
   if(!d)d={obra:o.nombre,etapa:etapaDe(o),avance:avance(o)+'%'};
-  return{...d,ubicacion:o.ubic,estudio:o.estudio,fotos_de_obra_disponibles:iaFotosObra(o).length,renders_disponibles:iaRendersObra(o).length,hoy:iso(TODAY)};
+  return{...d,ubicacion:o.ubic,estudio:o.estudio,fotos_de_obra_disponibles:iaFotosObra(o).length,renders_disponibles:iaRendersObra(o).length,hoy:iso(TODAY),...(iaCtOk()?{contratistas:iaCt(o)}:{})};
 }
 function iaDocEstado(o){
   const r=ROLE(),full=r==='direccion',hoy=fmtLargo(TODAY)+' de 2026';
@@ -4426,14 +4430,16 @@ function iaDocLibre(o,a){
   return{titulo:iaTxtCorto(a.titulo||'Informe',90),sub:`Nexo IA · ${ROL_TXT[ROLE()]||'Propietario'}`,obra:o.nombre,num:'IA-'+iso(TODAY).replace(/-/g,''),fecha:fmtLargo(TODAY)+' de 2026',campos:[],...(a.intro?{intro:iaTxtCorto(a.intro,900)}:{}),secciones:secs};
 }
 const IA_TOOLS=[
+  {name:'consultar_contratistas',description:'Trae lo que cargaron los contratistas (plomeros, electricistas, pintores, albañiles, etc.) en el panel de Contratistas: avisos de problemas (falta de material, falta de definiciones o planos, retrasos, adicionales) con quién los cargó, de qué obra, cuándo, estado y respuestas; presupuestos y listados de materiales enviados; quiénes tienen acceso; y cuánto tarda la jefatura en responder. Sin obra trae todas las obras. Usala para cualquier pregunta sobre reclamos, contratistas, presupuestos o listados de materiales.',input_schema:{type:'object',properties:{obra:{type:'string',description:'Opcional: nombre de la obra. Sin obra, trae todas.'}}}},
  {name:'consultar_obra',description:'Trae los datos reales y actualizados de una obra de la app: etapa, avance, cronograma por tarea, tarjetas pendientes, planos, adicionales, registro diario, informes, auditorías, equipo y más según el rol. Usala siempre antes de responder sobre una obra.',input_schema:{type:'object',properties:{obra:{type:'string',description:'Nombre o número de la obra, por ejemplo "Castores 475"'}},required:['obra']}},
  {name:'mostrar_imagenes',description:'Muestra imágenes dentro del chat: renders del proyecto, fotos de obra cargadas en los informes, o cómo se ve la casa en la etapa actual.',input_schema:{type:'object',properties:{obra:{type:'string'},tipo:{type:'string',enum:['renders','fotos_obra','etapa_actual']}},required:['obra','tipo']}},
  {name:'generar_pdf',description:'Genera un PDF descargable. Para pedidos de "estado general" usá plantilla estado_general (arma el informe completo solo). Para cualquier otro informe o resumen, usá plantilla personalizado y armá las secciones con datos que ya consultaste. Cada sección tiene titulo y UNO de: texto, items (lista), columnas+filas (tabla) o fotos ("obra" o "renders").',input_schema:{type:'object',properties:{obra:{type:'string'},plantilla:{type:'string',enum:['estado_general','personalizado']},titulo:{type:'string'},intro:{type:'string'},secciones:{type:'array',items:{type:'object',properties:{titulo:{type:'string'},texto:{type:'string'},items:{type:'array',items:{type:'string'}},columnas:{type:'array',items:{type:'string'}},filas:{type:'array',items:{type:'array',items:{type:'string'}}},fotos:{type:'string',enum:['obra','renders']}},required:['titulo']}}},required:['obra','plantilla']}}
 ];
 async function iaEjecutar(name,a,adj){
+  if(name==='consultar_contratistas'){if(!iaCtOk())return{error:'Este panel no tiene acceso a los contratistas.'};const o1=a&&a.obra?iaObra(a.obra):null;if(a&&a.obra&&!o1)return{error:`No encontré esa obra entre las que podés ver (${misObras().map(x=>x.nombre).join(', ')||'ninguna'}).`};await ctAsegura(o1);return{obras:(o1?[o1]:misObras()).map(x=>({obra:x.nombre,...iaCt(x)}))}}
   const o=iaObra(a&&a.obra);
   if(!o)return{error:`No encontré esa obra entre las que podés ver (${misObras().map(x=>x.nombre).join(', ')||'ninguna'}).`};
-  if(name==='consultar_obra')return iaDatosObra(o);
+  if(name==='consultar_obra'){if(iaCtOk())await ctAsegura(o);return iaDatosObra(o)}
   if(name==='mostrar_imagenes'){
     let l=[];
     if(a.tipo==='renders')l=iaRendersObra(o);
@@ -4457,7 +4463,7 @@ function iaSistema(){
 ${alcance}
 Cómo respondés: conversá como lo haría una persona muy capaz y cercana, en español rioplatense. Contestá lo que te preguntan con tus palabras, de forma natural, sin plantillas ni respuestas armadas; podés explicar, comparar, opinar con fundamento, resumir y razonar sobre los datos. Breve y concreto, pero completo cuando la pregunta lo pide. Usá listas solo cuando ayudan a leer.
 Datos: tenés herramientas para consultar la información real de la app. Antes de contestar sobre una obra, usá consultar_obra. Nunca inventes datos, fechas ni números: si algo no está en la app, decilo. Si te preguntan algo que no tiene que ver con la obra, ayudá igual de forma breve y volvé a lo tuyo.
-Archivos: si piden un PDF, informe o resumen para bajar, usá generar_pdf (para "estado general" usá la plantilla estado_general). Si piden fotos, renders o cómo se ve la casa, usá mostrar_imagenes. Después de usarlas, contá en una frase qué generaste o mostraste. No menciones nombres de herramientas.
+Contratistas: la app tiene un panel de Contratistas (plomeros, electricistas, pintores, albañiles…) que avisan problemas (falta de material, definiciones o planos, retrasos, adicionales) y envían presupuestos y listados de materiales; ${iaCtOk()?'para cualquier pregunta sobre reclamos, contratistas, quién los hizo, de qué obra, presupuestos o listados usá consultar_contratistas (o mirá el campo contratistas de consultar_obra) y respondé con nombre, rubro, obra, fecha y estado.':'no tenés acceso a ese panel.'} Archivos: si piden un PDF, informe o resumen para bajar, usá generar_pdf (para "estado general" usá la plantilla estado_general). Si piden fotos, renders o cómo se ve la casa, usá mostrar_imagenes. Después de usarlas, contá en una frase qué generaste o mostraste. No menciones nombres de herramientas.
 ${r==='direccion'?'Tenés acceso completo, incluidos costos y desempeño.':'No hables de costos ni montos de la constructora.'} Nunca reveles códigos de acceso.
 Obras que puede ver esta persona: ${JSON.stringify(idx)}`;
 }
@@ -4824,7 +4830,7 @@ const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearIn
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261113-214550';
+const NEXO_BUILD='20261113-220132';
 {let aviso=null;const ocupado=()=>document.querySelector('#layer .sheet,input:focus,textarea:focus');
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 const barra=()=>{if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -5149,6 +5155,14 @@ function tabReclamos(o){const a=CTR[o.id];if(!a||!a.items||Date.now()-a.t>15000)
   ${dir?`<div class="card"><span class="eyebrow">Contratistas con acceso</span>${a.cts.map(c=>`<div class="docrow"><span class="dl"><span class="dn">${esc(c.nombre)}${c.rubro?' · '+esc(c.rubro):''}</span><span class="dm">Código <b>${esc(c.cod)}</b></span></span><span class="fbtns"><button class="btn sm" data-act="ctCompartir" data-c="${c.id}" data-o="${o.id}">Enviar por WhatsApp</button><button class="btn sm ghost" data-act="ctBaja" data-c="${c.id}" data-o="${o.id}">Quitar</button></span></div>`).join('')||'<p class="muted small">Todavía no cargaste contratistas. Agregá uno y mandale el enlace y su código.</p>'}
   <form class="sec" data-submit="ctAlta" data-o="${o.id}" style="margin-top:8px"><label class="f">Nombre<input id="ct-nom" placeholder="Ej: Juan Pérez"></label><label class="f">Rubro<input id="ct-rub" placeholder="Ej: Plomería"></label><button class="btn gold" type="submit">Dar acceso y generar código</button></form><p class="muted small">Enlace para los contratistas: ${esc(link)}</p></div>`:''}
   ${ctPorContratista(o,a.items)}<div class="list">${L.filter(r=>!r.doc).map(r=>ctCard(o,r)).join('')||''}</div>`}
+/* --- Nexo IA: datos del panel de contratistas --- */
+function iaCt(o){const a=CTR[o.id];if(!a||!a.items)return{nota:'Todavía no se cargaron los avisos de contratistas de esta obra.'};const f=t=>fAR(t)+' '+hAR(t),ahora=Date.now();
+  const av=a.items.filter(r=>!r.doc).sort((p,q)=>q.creado-p.creado).map(r=>({obra:o.nombre,tipo:CT_TIPO[r.tipo]||r.tipo,cargado_por:r.ctNombre,rubro:r.rubro||'',resumen:r.titulo,detalle:r.desc||'',tarea_o_ambiente:r.tarea||'',estado:CT_EST[r.estado]||r.estado,cargado:f(r.creado),...(ctAbierto(r)&&!r.primeraResp?{sin_respuesta_hace:ctDur(ahora-r.creado)}:{}),...(r.primeraResp?{primera_respuesta:ctDur(r.primeraResp-r.creado)+' después, de '+(r.primeraPor==='dir'?'Dirección':'Jefatura')}:{}),dias_de_retraso:r.diasRetraso||0,adicional_estimado_pesos:r.monto||0,fotos:(r.fotos||[]).length,movimientos:(r.hist||[]).slice(1).map(h=>`${f(h.t)} ${h.nom}: ${h.tx||''}${h.estado?' ['+(CT_EST[h.estado]||h.estado)+']':''}`)}));
+  const docs=a.items.filter(r=>r.doc&&(ROLE()==='direccion'||r.tipo!=='presupuesto')).sort((p,q)=>q.creado-p.creado).map(r=>({tipo:CT_TIPO[r.tipo],contratista:r.ctNombre,rubro:r.rubro||'',titulo:r.titulo,detalle:r.desc||'',...(ROLE()==='direccion'&&r.monto?{monto_pesos:r.monto}:{}),archivos:(r.archivos||[]).map(x=>x.n),enviado:f(r.creado)}));
+  const st=ctStats(a.items);
+  return{avisos_de_contratistas:av,presupuestos_y_listados_de_materiales:docs,contratistas_con_acceso:(a.cts||[]).map(c=>({nombre:c.nombre,rubro:c.rubro||''})),respuesta_de_la_jefatura:{avisos_abiertos:st.abiertos,sin_respuesta:st.sinResp,sin_respuesta_mas_de_48h:st.sinResp48,tiempo_promedio_de_primera_respuesta:ctDur(st.tResp),tiempo_promedio_de_resolucion:ctDur(st.tRes),dias_de_retraso_reclamados:st.dias,adicionales_reclamados_pesos:st.monto}}}
+async function ctAsegura(o){try{if(ROLE()==='direccion')await ctLoadAll(true);else if(o)await ctLoad(o,true);else await Promise.all(misObras().map(x=>ctLoad(x,true)))}catch(e){}}
+const iaCtOk=()=>ROLE()==='direccion'||ROLE()==='jefe';
 function ctInicio(){const r=ROLE();if(r==='direccion'){if(!CTALL.t||Date.now()-CTALL.t>15000)ctLoadAll()}else misObras().forEach(o=>ctLoad(o));
   const ahora=Date.now(),vis=r==='direccion'?OBRAS:misObras();
   const L=vis.flatMap(o=>((CTR[o.id]||{}).items||[]).filter(ctAbierto).map(x=>({o,x}))).sort((p,q)=>(!!p.x.primeraResp-!!q.x.primeraResp)||(p.x.creado-q.x.creado));

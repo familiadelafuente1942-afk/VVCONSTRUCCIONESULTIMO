@@ -591,10 +591,21 @@ export default async function handler(req, res) {
         await escribir(H, clave, { items });
         res.status(200).json({ ok: true, rec: it }); return;
       }
+      if (b.op === "ct_del") {
+        if (quien !== "ct") { res.status(403).json({ error: "Solo el contratista puede borrar lo que cargó" }); return; }
+        const id = idOk(b.id);
+        const v = await leer(H, clave);
+        const items = ((v && v.items) || []);
+        const it = items.find((x) => x.id === id);
+        if (!it) { res.status(404).json({ error: "No existe" }); return; }
+        if (it.ctId !== ct.id) { res.status(403).json({ error: "No es tuyo" }); return; }
+        await escribir(H, clave, { items: items.filter((x) => x.id !== id) });
+        res.status(200).json({ ok: true }); return;
+      }
       if (b.op === "ct_list_obra") {
         if (quien === "ct") { res.status(403).json({ error: "No autorizado" }); return; }
         const v = await leer(H, clave);
-        res.status(200).json({ ok: true, items: (v && v.items) || [], cts: lista.filter((c) => c.obra === obra).map((c) => (quien === "dir" ? c : { id: c.id, nombre: c.nombre, rubro: c.rubro })) }); return;
+        res.status(200).json({ ok: true, items: ((v && v.items) || []).filter((x) => quien === "dir" || x.tipo !== "presupuesto"), cts: lista.filter((c) => c.obra === obra).map((c) => (quien === "dir" ? c : { id: c.id, nombre: c.nombre, rubro: c.rubro })) }); return;
       }
       if (b.op === "ct_list_all") {
         if (quien !== "dir") { res.status(403).json({ error: "Solo Dirección" }); return; }
