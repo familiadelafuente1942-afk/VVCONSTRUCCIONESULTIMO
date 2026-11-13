@@ -1688,14 +1688,14 @@ const olvidarCod=(r,id)=>{try{localStorage.setItem(LS_OBRAS[r],JSON.stringify(gu
 const propGuardadas=()=>guardadas('prop');
 const normClave=t=>String(t||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
 const obrasOrg=()=>OBRAS.filter(o=>o.constructora===ORG);
-function misObras(){const u=S.u;if(!u)return[];if(u.rol==='direccion')return obrasOrg();if(u.rol==='auditor')return obrasOrg().filter(o=>S.audObras.includes(o.id));if(u.rol==='jefe')return obrasOrg().filter(o=>S.mias.includes(o.id));if(u.rol==='estudio')return OBRAS.filter(o=>o.estudio===u.name&&o.constructora===S.cons&&o.invitados.estudio==='aceptada'&&(esAdmin()||guardadas('est').includes(o.id)));return[COBRA()]}
+function misObras(){const u=S.u;if(!u)return[];if(u.rol==='direccion')return obrasOrg();if(u.rol==='auditor')return obrasOrg().filter(o=>S.audObras.includes(o.id));if(u.rol==='jefe')return obrasOrg().filter(o=>S.mias.includes(o.id));if(u.rol==='estudio'){const g=guardadas('est');return OBRAS.filter(o=>o.constructora===S.cons&&(g.includes(o.id)||(esAdmin()&&(!g.length||(o.estudio===u.name&&o.invitados.estudio==='aceptada')))))}return[COBRA()]}
 const puedeVer=o=>misObras().includes(o);
 const verCostos=()=>ROLE()==='direccion';
 const puedePedir=o=>ROLE()==='jefe'&&puedeVer(o);
 const puedeEditar=o=>ROLE()==='jefe'&&puedeVer(o);
 const esDir=()=>ROLE()==='direccion';
 const cardsDe=obras=>obras.flatMap(o=>o.cards);
-const misNotifs=()=>NOTIF.filter(n=>n.to===ROLE()&&(ROLE()==='estudio'?(!n.obra||(n.obra.estudio===S.u.name&&n.obra.constructora===S.cons)):(!n.obra||puedeVer(n.obra))));
+const misNotifs=()=>NOTIF.filter(n=>n.to===ROLE()&&(!n.obra||puedeVer(n.obra)));
 
 /* ================= documentos: actas, revisiones, certificados e informes =================
    Un mismo documento se ve en pantalla (HTML) y se descarga como PDF real, generado en el dispositivo. */
@@ -3133,7 +3133,7 @@ const CHG={
   libW:(v,el)=>{LIB[el.dataset.r].w=clamp(+v||1,1,20);toast('Duración base actualizada')},
   libA:(v,el)=>{LIB[el.dataset.r].a=clamp(+v||0,0,16);toast('Anticipación actualizada')}
 };
-function login(id){S.u=USERS.find(u=>u.id===id);if(id==='cli'){S.u={...S.u,titulo:'Propietario · '+COBRA().nombre};S.casa=null;S.gal=0;S.misFotos=[]}S.step='panels';S.tab=S.u.rol==='cliente'?'cliente':'inicio';S.obraF='todas';S.filtro='activos';S.tipoF='Todas';S.chat=[];closeSheet();draw();scrollTo(0,0)}
+function login(id){S.u=USERS.find(u=>u.id===id);if(id==='est'){try{const g=guardadas('est'),oe=OBRAS.find(x=>g.includes(x.id)&&x.constructora===S.cons&&x.estudio);if(oe)S.u={...S.u,name:oe.estudio}}catch(e){}}if(id==='cli'){S.u={...S.u,titulo:'Propietario · '+COBRA().nombre};S.casa=null;S.gal=0;S.misFotos=[]}S.step='panels';S.tab=S.u.rol==='cliente'?'cliente':'inicio';S.obraF='todas';S.filtro='activos';S.tipoF='Todas';S.chat=[];closeSheet();draw();scrollTo(0,0)}
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(el&&!el.disabled){const f=A[el.dataset.act];if(f)f(el.dataset,el,e)}const di=e.target.closest('input[type=date]');if(di&&di.showPicker){try{di.showPicker()}catch(err){}}});
 document.addEventListener('change',e=>{const el=e.target.closest('[data-chg]');if(el&&CHG[el.dataset.chg])CHG[el.dataset.chg](el.value,el)});
 document.addEventListener('input',e=>{const el=e.target.closest('[data-inp]');if(!el)return;if(el.dataset.inp==='no'&&NO){readNO();const p=$('#no-prev');if(p)p.innerHTML=previewObra()}if(el.dataset.inp==='mo'&&MO){readMO();const p=$('#mo-prev');if(p)p.innerHTML=previewModelo()}});
