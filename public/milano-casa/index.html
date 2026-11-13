@@ -1296,7 +1296,7 @@ nav.bottom button svg{width:32px!important;height:32px!important;padding:7px!imp
 :root[data-tema="claro"] nav.bottom button{color:#1a1c22!important;font-weight:700!important;opacity:1!important}
 :root[data-tema="claro"] nav.bottom button[aria-current=page]{color:#8a5f1f!important}
 .vids{display:grid;grid-template-columns:1fr;gap:10px}
-</style><style id="sinfotos">nav.bottom button[data-t="o"],nav.bottom button[data-t="b"],[data-go="o"]{display:none!important}</style></head><body>
+</style><style id="sinfotos">.hero,nav.bottom button[data-t="g"]{display:none!important}nav.bottom button[data-t="o"],nav.bottom button[data-t="b"],[data-go="o"]{display:none!important}</style></head><body>
 <div class="app">
 <header class="top"><div class="brand"><span style="display:flex;align-items:center;gap:10px"><img src="/mh-iso.png" alt="Milano Habita" style="height:50px;width:auto"><span style="line-height:1.1"><b class="bname" style="font-size:17px;letter-spacing:.14em;font-weight:700">MILANO</b><br><i style="font-family:'Playfair Display',serif;font-size:15px;color:var(--gold)">habita</i></span></span><span class="mono" id="fecha"></span></div></header>
 <main>
@@ -1353,7 +1353,7 @@ function show(i){cur=(i+sls.length)%sls.length;sls.forEach((s,k)=>s.classList.to
 function auto(){clearInterval(tm);tm=setInterval(()=>show(cur+1),4500)}
 document.querySelectorAll('.hero .nv').forEach(b=>b.onclick=()=>{show(cur+ +b.dataset.nav);auto()});dts.forEach((d,k)=>d.onclick=()=>{show(k);auto()});auto();
 /* video */
-if(C.video){const v=document.querySelector('#vidcard video');v.src=C.video;v.poster=C.pairs[0][2];$('#vidcard').hidden=false}
+if(C.video){const v=document.querySelector('#vidcard video');v.src=C.video;$('#vidcard').hidden=false}
 /* comparador */
 function setPos(p){p=Math.max(0,Math.min(100,p));$('#it').style.clipPath='inset(0 '+(100-p)+'% 0 0)';$('#cbar').style.left=p+'%';$('#knob').style.left=p+'%'}
 function pair(i){$('#ib').src=C.pairs[i][2];$('#it').src=C.pairs[i][1];setPos(50);document.querySelectorAll('#ptabs button').forEach((b,k)=>b.setAttribute('aria-pressed',k===i))}
