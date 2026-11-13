@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Nexo · Contratistas</title><meta name="theme-color" content="#0d0e10">
+<title>Nexo · Contratistas</title><meta name="theme-color" content="#0d0e10"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Contratistas"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
 @font-face{font-family:'Barlow Condensed';font-weight:500;font-display:swap;src:url(/fonts/barlow-condensed-latin-500-normal.woff2) format('woff2')}
 @font-face{font-family:'Barlow Condensed';font-weight:600;font-display:swap;src:url(/fonts/barlow-condensed-latin-600-normal.woff2) format('woff2')}
@@ -75,5 +75,6 @@ let _t=null;function aviso(t){const e=$('#estado');e.textContent=t;e.style.color
 function estadoBarra(){const e=$('#estado');if(!navigator.onLine){e.textContent='Sin conexión · lo cargado se envía cuando vuelva';e.style.color='var(--warn)';return}e.style.color='var(--mut)';e.textContent=CT?(TS?'Actualizado hace '+Math.max(0,Math.round((Date.now()-TS)/1000))+' s':'Actualizando…'):'Nexo · Contratistas'}
 setInterval(estadoBarra,1000);setInterval(()=>{if(CT&&VISTA!=='nuevo')cargar(true)},10000);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&CT)cargar(true)});window.addEventListener('online',()=>{if(CT)cargar(true)});
-draw();if(CT)cargar();
+try{const c=new URLSearchParams(location.search).get('c');if(c){history.replaceState(null,'',location.pathname);if(!CT||CT.codigo!==c.toUpperCase().replace(/\s+/g,''))CT=null}
+ if(c&&!CT){draw();login(c)}else{draw();if(CT)cargar()}}catch(e){draw();if(CT)cargar()}
 </script></body></html>
