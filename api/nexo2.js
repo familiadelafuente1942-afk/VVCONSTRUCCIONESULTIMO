@@ -232,12 +232,12 @@ export default async function handler(req, res) {
 
     if (b.op === "bar_up_url") {
       // Barracas · Visita: URL firmada de subida directa (fotos y audio de la visita)
-      if (b.app !== "barracas" && b.app !== "paseo") { res.status(400).json({ error: "App inválida" }); return; }
+      if (b.app !== "barracas" && b.app !== "paseo" && b.app !== "milanocasa") { res.status(400).json({ error: "App inválida" }); return; }
       const nm = String(b.name || "").slice(0, 120), sz = Number(b.size) || 0;
       if (sz <= 0 || sz > 40e6) { res.status(400).json({ error: "El archivo debe pesar entre 1 byte y 40 MB" }); return; }
       const ext = ((/\.([A-Za-z0-9]{1,5})$/.exec(nm) || [])[1] || "bin").toLowerCase();
       if (!/^(jpg|jpeg|png|webp|webm|m4a|mp4|ogg|mp3|wav|pdf|heic|xls|xlsx|csv|doc|docx|dwg|dxf|zip)$/.test(ext)) { res.status(400).json({ error: "Tipo de archivo no permitido" }); return; }
-      const path = `${b.app === "paseo" ? "paseo" : "barracas"}/${String(b.pref || "adj").replace(/[^a-z]/g, "").slice(0, 8) || "adj"}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const path = `${b.app === "paseo" ? "paseo" : b.app === "milanocasa" ? "milanocasa" : "barracas"}/${String(b.pref || "adj").replace(/[^a-z]/g, "").slice(0, 8) || "adj"}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
       const firmar = () => fetch(`${URL_BASE}/storage/v1/object/upload/sign/nexo2-fotos/${path}`, { method: "POST", headers: H, body: "{}" });
       let r = await firmar();
       if (!r.ok) { await fetch(`${URL_BASE}/storage/v1/bucket`, { method: "POST", headers: H, body: JSON.stringify({ id: "nexo2-fotos", name: "nexo2-fotos", public: true }) }); r = await firmar(); }
