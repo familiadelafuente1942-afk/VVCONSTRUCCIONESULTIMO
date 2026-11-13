@@ -505,8 +505,9 @@ export default async function handler(req, res) {
       const str = (x, n) => String(x == null ? "" : x).slice(0, n);
       const num = (x, lo, hi) => Math.min(hi, Math.max(lo, Number(x) || 0));
       const idOk = (x) => String(x || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
-      const TIPOS = ["material", "definicion", "retraso", "adicional", "otro"];
-      const ESTADOS = ["abierto", "gestion", "resuelto", "rechazado", "cerrado"];
+      const TIPOS = ["material", "definicion", "retraso", "adicional", "otro", "presupuesto", "materiales"];
+      const DOC = (t) => t === "presupuesto" || t === "materiales";
+      const ESTADOS = ["abierto", "gestion", "resuelto", "rechazado", "cerrado", "recibido"];
       const reg = (await leer(H, "ctcods")) || { items: [] };
       const lista = Array.isArray(reg.items) ? reg.items : [];
       const cr = b.cred || {};
@@ -527,6 +528,7 @@ export default async function handler(req, res) {
       const clave = "ctrec_" + obra;
       const pubOk = (u) => typeof u === "string" && (u.startsWith(NEW_PUB) || u.startsWith(OLD_PUB));
       const fts = (arr) => (Array.isArray(arr) ? arr : []).filter(pubOk).slice(0, 10);
+      const arch = (arr) => (Array.isArray(arr) ? arr : []).filter((a) => a && pubOk(a.u)).map((a) => ({ u: a.u, n: str(a.n, 120) })).slice(0, 10);
 
       if (b.op === "ct_up_url") {
         const nm = str(b.name, 120), sz = Number(b.size) || 0;
@@ -551,13 +553,15 @@ export default async function handler(req, res) {
         if (quien !== "ct") { res.status(403).json({ error: "Solo para contratistas" }); return; }
         const q = b.rec || {};
         const tipo = TIPOS.includes(q.tipo) ? q.tipo : "otro";
-        if (!str(q.titulo, 200).trim()) { res.status(400).json({ error: "Escribí qué pasa" }); return; }
+        const esDoc = DOC(tipo);
+        if (!esDoc && !str(q.titulo, 200).trim()) { res.status(400).json({ error: "Escribí qué pasa" }); return; }
+        if (esDoc && !str(q.desc, 3000).trim() && !arch(q.archivos).length && !num(q.monto, 0, 1e12)) { res.status(400).json({ error: "Adjuntá el archivo o escribí el detalle" }); return; }
         const t = Date.now();
         const rec = {
           id: "r" + t.toString(36) + Math.random().toString(36).slice(2, 5), obra, ctId: ct.id, ctNombre: ct.nombre, rubro: ct.rubro,
-          tipo, titulo: str(q.titulo, 200), desc: str(q.desc, 3000), tarea: str(q.tarea, 200), diasRetraso: num(q.diasRetraso, 0, 999),
-          monto: num(q.monto, 0, 1e12), fotos: fts(q.fotos), estado: "abierto", creado: t, editado: t,
-          hist: [{ t, por: "ct", nom: ct.nombre, tx: "Reclamo cargado" }],
+          tipo, titulo: str(q.titulo, 200).trim() || (tipo === "presupuesto" ? "Presupuesto" : "Listado de materiales"), desc: str(q.desc, 3000), tarea: str(q.tarea, 200), diasRetraso: esDoc ? 0 : num(q.diasRetraso, 0, 999),
+          monto: num(q.monto, 0, 1e12), fotos: fts(q.fotos), archivos: arch(q.archivos), doc: esDoc, estado: esDoc ? "recibido" : "abierto", creado: t, editado: t,
+          hist: [{ t, por: "ct", nom: ct.nombre, tx: esDoc ? (tipo === "presupuesto" ? "Presupuesto enviado" : "Listado de materiales enviado") : "Reclamo cargado" }],
         };
         const v = await leer(H, clave);
         const items = ((v && v.items) || []); items.push(rec);
