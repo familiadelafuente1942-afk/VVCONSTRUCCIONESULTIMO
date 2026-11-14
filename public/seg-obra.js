@@ -14,7 +14,7 @@ function cerrar(){const d=document.getElementById('segov');if(d)d.remove()}
 const ul=(t,a)=>(a||[]).length?'<b>'+t+'</b><ul class="segul">'+a.map(z=>'<li>'+esc(z)+'</li>').join('')+'</ul>':'';
 function cmpH(c){if(!c)return'';return (c.resumen?'<div class="segx">'+esc(c.resumen)+'</div>':'')+(c.avance_estimado?'<div class="sub" style="margin:6px 0">Avance visible entre las dos fotos: <b>'+esc(String(c.avance_estimado))+'</b></div>':'')+'<div style="margin-top:8px">'+ul('Lo que avanzó',c.avances)+ul('Lo que sigue igual o falta',c.pendientes)+ul('Para revisar',c.observaciones)+'</div>'}
 function card(x){const k=kd(x),ar=AR[x.res];
- return '<div class="card"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap"><b style="font-size:17px"><span class="segtag" style="color:'+(k==='a'?(ar?ar[1]:'inherit'):'var(--gold,#b8915a)')+'">'+TIPO[k]+'</span>'+esc(x.t||TIPO[k])+'</b><span class="sub">'+kFec(x.f||'')+(x.av>0?' · avance '+f0(x.av)+'%':'')+'</span></div>'+
+ return '<div class="card"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap"><b style="font-size:17px"><span class="segtag" style="color:'+(k==='a'?(ar?ar[1]:'inherit'):'var(--gold,#b8915a)')+'">'+(String(x.t||'').toLowerCase().indexOf(TIPO[k].toLowerCase())===0?'':TIPO[k])+'</span>'+esc(x.t||TIPO[k])+'</b><span class="sub">'+kFec(x.f||'')+(x.av>0?' · avance '+f0(x.av)+'%':'')+'</span></div>'+
  (k==='a'?'<div class="sub" style="margin-top:6px">'+esc((AT[x.at]||AT.sup)[0])+(x.num?' · '+esc(x.num):'')+' · <b style="color:'+(ar?ar[1]:'inherit')+'">'+(ar?ar[0]:'')+'</b></div>':'')+
  ((x.x||'').trim()?'<div class="segx">'+esc(x.x)+'</div>':'')+
  (k==='a'&&(x.obs||[]).length?'<div style="margin-top:8px">'+ul('Observaciones',x.obs)+'</div>':'')+
@@ -66,7 +66,7 @@ async function img64(u){try{const r=await fetch(u),b=await r.blob();return await
 async function pdf(id){const o=O(),x=SG(o).find(z=>z.id===id);if(!x)return;if(!window.jspdf){ov('<b>El generador de PDF no cargó</b><div class="sub" style="margin:8px 0">Actualizá la app y probá de nuevo.</div><button class="btn gold sm" data-sgx>Cerrar</button>');return}
  const k=kd(x),{jsPDF}=window.jspdf,d=new jsPDF({unit:'pt',format:'a4'}),W=d.internal.pageSize.getWidth(),H=d.internal.pageSize.getHeight(),M=44;let y=56;
  const sp=h=>{if(y+h>H-50){d.addPage();y=56}},par=(t,sz,bold)=>{d.setFont('helvetica',bold?'bold':'normal');d.setFontSize(sz||11);d.splitTextToSize(String(t),W-M*2).forEach(l=>{sp(sz*1.4||16);d.text(l,M,y);y+=(sz||11)*1.4})},lista=(t,a)=>{if(!(a||[]).length)return;y+=6;par(t,12,1);a.forEach(z=>par('• '+z,11))};
- d.setTextColor(150,115,60);par(TIPO[k].toUpperCase()+(x.num?' · '+x.num:''),10,1);d.setTextColor(20);par(x.t||TIPO[k],18,1);d.setTextColor(90);par((o.nombre||'')+' · '+kFec(x.f||''),11);d.setTextColor(20);y+=8;
+ d.setTextColor(20);par((x.t||TIPO[k])+(x.num&&!String(x.t||'').includes(x.num)?' · '+x.num:''),18,1);d.setTextColor(90);par((o.nombre||'')+' · '+kFec(x.f||''),11);d.setTextColor(20);y+=8;
  if(k==='a'){par((AT[x.at]||AT.sup)[0]+' · Resultado: '+((AR[x.res]||['—'])[0]),12,1);y+=4}
  if(x.av>0)par('Avance general de la obra: '+f0(x.av)+'%',12,1);
  if((x.x||'').trim()){y+=4;String(x.x).split(/\r?\n/).forEach(l=>l.trim()?par(l,11):(y+=8))}
