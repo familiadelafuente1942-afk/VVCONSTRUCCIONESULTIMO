@@ -1,4 +1,4 @@
-<!doctype html><html lang="es"><head><meta name="app-build" content="20261114-210912"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0d0e10"><title>V+V Construcciones · Control de costos</title><script>/* modo "solo Compras": la app de la casa para compradores muestra este panel adentro, con clave */
+<!doctype html><html lang="es"><head><meta name="app-build" content="20261114-213111"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0d0e10"><title>V+V Construcciones · Control de costos</title><script>/* modo "solo Compras": la app de la casa para compradores muestra este panel adentro, con clave */
 if(/[?&]solo=compras/.test(location.search)){document.documentElement.classList.add('solok');try{sessionStorage.setItem('mhsplash','1')}catch(e){}document.addEventListener('DOMContentLoaded',function(){var s=document.getElementById('mhsplash');if(s){var v=s.querySelector('video');if(v)try{v.pause()}catch(e){}s.remove()}})}</script>
 <style>html.solok header.top,html.solok nav.bottom,html.solok #tools0,html.solok #mhsplash{display:none!important}html.solok .app{padding-top:8px!important}html.solok main>section.sec:not(#k){display:none!important}html.solok body{background:transparent}
 /* Compras: fotos y planos de cada ítem */
@@ -1889,7 +1889,7 @@ function resHtml(g,qs,c){const r=c.r||{},V={si:['Sí, se pueden comparar directo
 const CP=o=>(o.cotped=o.cotped||[]);
 const rnd=n=>{const a=new Uint8Array(n);crypto.getRandomValues(a);return [...a].map(x=>'abcdefghijklmnopqrstuvwxyz0123456789'[x%36]).join('')};
 const czApi=b=>fetch('/api/nexo2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json().then(j=>({s:r.status,j})));
-const plink=p=>location.origin+'/cotizar.html?p='+p.id;
+const plink=p=>location.origin+'/cotizar-vv.html?p='+p.id;
 const npU=u=>{const k=String(u||'').trim().toLowerCase().replace(/\.$/,'');return({u:'u',un:'u',unidad:'u',unidades:'u',uni:'u',m2:'m²','m²':'m²',mt2:'m²',m3:'m³','m³':'m³',ml:'ml',m:'ml',mts:'ml',kg:'kg',kilo:'kg',kilos:'kg',gl:'gl',global:'gl'})[k]||String(u||'').trim()};
 function npRead(){const S=window._np;if(!S||!document.getElementById('npent'))return;const v=i=>(document.getElementById(i)||{}).value||'';
  S.entrega=v('npent');S.lugar=v('nplug');S.iva=v('npiva');S.pago=v('nppago');S.hasta=v('nphasta');S.notas=v('npnotas');
