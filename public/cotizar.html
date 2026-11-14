@@ -64,7 +64,9 @@ let P=null;
 function msg(t,s){A.innerHTML='<div class="card"><h1>'+esc(t)+'</h1><div class="sub">'+esc(s)+'</div></div>'}
 if(!/^[a-z0-9]{10,24}$/.test(id)){msg('Link incompleto','Pedile a Belfast que te reenvíe el link de cotización.');return}
 api({op:'cz_ver',id}).then(({s,j})=>{if(s!==200||!j.ok){msg('No encontramos el pedido',(j&&j.error)||'Pedile a Belfast que te reenvíe el link.');return}
- if(j.cerrado){msg('Pedido cerrado','Este pedido de cotización ya no recibe ofertas. Gracias.');return}P=j.ped||{};pintar()}).catch(()=>msg('Sin conexión','No pudimos cargar el pedido. Probá de nuevo en un momento.'));
+ if(j.cerrado){msg('Pedido cerrado','Este pedido de cotización ya no recibe ofertas. Gracias.');return}P=j.ped||{};marca();pintar()}).catch(()=>msg('Sin conexión','No pudimos cargar el pedido. Probá de nuevo en un momento.'));
+/* marca de la constructora que pide la cotización (Belfast por defecto; V+V Construcciones si el pedido lo indica) */
+function marca(){if(P.marca!=='vv')return;window.ORGN='V+V Construcciones';document.title='Cotizador V+V Construcciones';const h=document.querySelector('header');if(h)h.innerHTML='<img src="/vv-icon-192.png" alt="V+V Construcciones" style="border-radius:50%"><div><b>Cotizador V+V</b><span>V+V Construcciones</span></div>'}
 function pintar(){const it=P.items||[];
  A.innerHTML='<div class="card"><span class="sub">Pedido de cotización</span><h1>'+esc(P.g||'Pedido')+'</h1>'+(P.obra?'<div class="sub">Obra: '+esc(P.obra)+'</div>':'')+
  '<div class="kv">'+(P.entrega?'<span>Entrega requerida</span><b>'+esc(P.entrega)+'</b>':'')+(P.lugar?'<span>Lugar de entrega</span><b>'+esc(P.lugar)+'</b>':'')+(P.pago?'<span>Forma de pago propuesta</span><b>'+esc(P.pago)+'</b>':'')+
@@ -90,7 +92,7 @@ function enviar(){const b0=document.getElementById('env');if(!b0||b0.disabled)re
  if(!v('ent')){E.textContent='Falta el plazo de entrega.';document.getElementById('ent').focus();return}
  const b=document.getElementById('env');b.disabled=true;b.textContent='Enviando…';
  api({op:'cz_resp',id,resp:{prov:v('prov').slice(0,120),cont:v('cont').slice(0,80),tel:v('tel').slice(0,40),mon:v('mon'),iva:v('iva'),ivap:+v('ivap'),items,ent:v('ent').slice(0,200),val:v('val').slice(0,100),ant:Math.max(0,Math.min(100,Math.round(num(v('ant'))))),fle:v('fle'),pago:v('pago').slice(0,300),notas:v('notas').slice(0,1500)}}).then(({s,j})=>{
-  if(s===200&&j.ok){A.innerHTML='<div class="card okb"><div class="ic">✓</div><h1>Cotización enviada</h1><div class="sub">Gracias, '+esc(v0)+'. Belfast ya la recibió y se va a comunicar con vos.</div></div>';scrollTo(0,0)}
+  if(s===200&&j.ok){A.innerHTML='<div class="card okb"><div class="ic">✓</div><h1>Cotización enviada</h1><div class="sub">Gracias, '+esc(v0)+'. '+(window.ORGN||'Belfast')+' ya la recibió y se va a comunicar con vos.</div></div>';scrollTo(0,0)}
   else{E.textContent=(j&&j.error)||'No se pudo enviar. Probá de nuevo.';b.disabled=false;b.textContent='Enviar cotización'}}).catch(()=>{E.textContent='Sin conexión. Probá de nuevo.';b.disabled=false;b.textContent='Enviar cotización'});
  var v0=v('prov')}
 })();
