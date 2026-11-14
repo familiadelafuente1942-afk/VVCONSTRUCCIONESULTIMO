@@ -223,6 +223,23 @@ export default async function handler(req, res) {
         res.status(200).json({ ok: true }); return;
       }
       if (!cur) { res.status(404).json({ error: "El pedido no existe" }); return; }
+      if (b.op === "cz_up_url") {
+        // el proveedor sube su presupuesto (PDF o foto) desde la página del link
+        if (cur.cerrado) { res.status(403).json({ error: "Este pedido ya está cerrado" }); return; }
+        const nm = String(b.name || "").slice(0, 120), sz = Number(b.size) || 0;
+        if (sz <= 0 || sz > 25e6) { res.status(400).json({ error: "El archivo debe pesar hasta 25 MB" }); return; }
+        const ext = ((/\.([A-Za-z0-9]{1,5})$/.exec(nm) || [])[1] || "").toLowerCase();
+        if (!/^(pdf|jpg|jpeg|png|webp|heic|xls|xlsx|doc|docx)$/.test(ext)) { res.status(400).json({ error: "Subí el presupuesto en PDF, foto, Excel o Word" }); return; }
+        const path = `cotiz/${id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const firmar = () => fetch(`${URL_BASE}/storage/v1/object/upload/sign/nexo2-fotos/${path}`, { method: "POST", headers: H, body: "{}" });
+        let r = await firmar();
+        if (!r.ok) { await fetch(`${URL_BASE}/storage/v1/bucket`, { method: "POST", headers: H, body: JSON.stringify({ id: "nexo2-fotos", name: "nexo2-fotos", public: true }) }); r = await firmar(); }
+        if (!r.ok) { res.status(502).json({ error: "No se pudo preparar la subida" }); return; }
+        const j = await r.json(); const rel = String(j.url || "");
+        const up = rel.startsWith("http") ? rel : rel ? `${URL_BASE}/storage/v1${rel.startsWith("/") ? "" : "/"}${rel}` : j.token ? `${URL_BASE}/storage/v1/object/upload/sign/nexo2-fotos/${path}?token=${j.token}` : "";
+        if (!up) { res.status(502).json({ error: "No se pudo preparar la subida" }); return; }
+        res.status(200).json({ ok: true, up, pub: NEW_PUB + path }); return;
+      }
       if (b.op === "cz_ver") { res.status(200).json({ ok: true, ped: cur.ped || {}, cerrado: !!cur.cerrado }); return; }
       if (b.op === "cz_resp") {
         if (cur.cerrado) { res.status(403).json({ error: "Este pedido ya está cerrado" }); return; }
