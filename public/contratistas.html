@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<html lang="es"><head><meta name="app-build" content="20261114-210058"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Nexo · Contratistas</title><meta name="theme-color" content="#0d0e10"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Contratistas"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
 @font-face{font-family:'Barlow Condensed';font-weight:500;font-display:swap;src:url(/fonts/barlow-condensed-latin-500-normal.woff2) format('woff2')}
@@ -86,4 +86,4 @@ setInterval(estadoBarra,1000);setInterval(()=>{if(CT&&VISTA!=='nuevo')cargar(tru
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&CT)cargar(true)});window.addEventListener('online',()=>{if(CT)cargar(true)});
 try{const c=new URLSearchParams(location.search).get('c');if(c){history.replaceState(null,'',location.pathname);if(!CT||CT.codigo!==c.toUpperCase().replace(/\s+/g,''))CT=null}
  if(c&&!CT){draw();login(c)}else{draw();if(CT)cargar()}}catch(e){draw();if(CT)cargar()}
-</script></body></html>
+</script><script src="/app-update.js"></script></body></html>
