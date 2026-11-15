@@ -244,7 +244,7 @@ export default async function handler(req, res) {
       const $ = (v) => "$" + N(v).toLocaleString("es-AR");
       const KES = { p: "Pendiente", z: "Cotizando", o: "Pedido", c: "Comprado", t: "En tránsito", r: "Recibido en obra" };
       const kTot = (x) => (x.var && x.var.length) ? x.var.reduce((a, v) => a + N(v.q) * N(v.pu), 0) : N(x.q) * N(x.pu);
-      const L = ["COSTOS · " + k.replace("_db", "").toUpperCase() + " (solo lectura) · actualizado " + (cur.t ? fechaLarga(Number(cur.t)) : "?"), ""];
+      const L = ["COSTOS · " + k.replace("_db", "").toUpperCase() + " · TODA LA APP (solo lectura) · actualizado " + (cur.t ? fechaLarga(Number(cur.t)) : "?"), ""];
       const J = [];
       for (const o of obrasC) {
         const rub = Array.isArray(o.rub) ? o.rub : [], comp = Array.isArray(o.compras) ? o.compras : [];
@@ -272,6 +272,20 @@ export default async function handler(req, res) {
         });
         if (!comp.length) L.push("(sin compras cargadas)");
         L.push("");
+        // VISITAS (lo que se carga en Visitas de obra, con las transcripciones de los audios)
+        const vis = Array.isArray(o.vis) ? o.vis : [];
+        L.push("VISITAS (" + vis.length + "):");
+        vis.forEach((v, i) => {
+          L.push(`--- Visita ${i + 1} · ${v.f || "sin fecha"}${v.lugar ? " · " + v.lugar : ""} ---`);
+          [["Asistentes", v.pres], ["Qué hay que hacer", v.tar], ["Qué se demuele", v.dem], ["Qué se conserva", v.cons], ["Datos técnicos", v.tec], ["Otras notas", v.notas]].forEach(([n, t]) => { if (t) L.push(n + ": " + String(t)); });
+          (Array.isArray(v.aud) ? v.aud : []).forEach((au, j) => { if (au && au.tx) L.push(`Transcripción audio ${j + 1}: ${String(au.tx).slice(0, 12000)}`); });
+        });
+        if (!vis.length) L.push("(sin visitas cargadas)");
+        L.push("");
+        // EL RESTO DE LA APP (cronograma, cash flow, documentos, etc.), tal cual está guardado
+        const resto = {}; Object.keys(o).forEach((x) => { if (!["rub", "compras", "vis"].includes(x)) resto[x] = o[x]; });
+        const limpio = JSON.stringify(resto, (kk, x) => (typeof x === "string" ? (/^data:/.test(x) ? "[imagen embebida]" : x.length > 6000 ? x.slice(0, 6000) + "…" : x) : x));
+        L.push("RESTO DE LOS DATOS DE ESTA OBRA (JSON: cronograma, cash flow, documentos, fotos, etc.):", limpio.length > 300000 ? limpio.slice(0, 300000) + "…(cortado)" : limpio, "");
         J.push({ obra: o.nombre, cotizacion_usd: o.cot || null, rubros: jr, compras: jc, totales: { materiales: totMat + sinR, mano_de_obra: totMo, total: totMat + sinR + totMo, mo_pagada: pagMo } });
       }
       if (f === "json") { res.status(200).json({ base: k, obras: J }); return; }
