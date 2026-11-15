@@ -279,6 +279,15 @@ export default async function handler(req, res) {
           L.push(`--- Visita ${i + 1} · ${v.f || "sin fecha"}${v.lugar ? " · " + v.lugar : ""} ---`);
           [["Asistentes", v.pres], ["Qué hay que hacer", v.tar], ["Qué se demuele", v.dem], ["Qué se conserva", v.cons], ["Datos técnicos", v.tec], ["Otras notas", v.notas]].forEach(([n, t]) => { if (t) L.push(n + ": " + String(t)); });
           (Array.isArray(v.aud) ? v.aud : []).forEach((au, j) => { if (au && au.tx) L.push(`Transcripción audio ${j + 1}: ${String(au.tx).slice(0, 12000)}`); });
+          const VT = { d: "Se demuele", m: "Se mantiene", n: "No va / se retira", t: "Técnico", o: "Otro" };
+          const fotos = Array.isArray(v.fotos) ? v.fotos : [];
+          if (fotos.length) { L.push(`Fotos (${fotos.length}) — cada link abre la foto:`); fotos.forEach((x, j) => { const u = String((x && x.u) || ""); if (!u || /^data:/.test(u)) return; L.push(`  Foto ${j + 1} [${VT[x.tag] || x.tag || "sin etiqueta"}]${x.n ? " " + x.n : ""}: ${/^https?:/.test(u) ? u : "https://" + base + (u.startsWith("/") ? "" : "/") + u}`); }); }
+          if (v.inf) {
+            const inf = v.inf, txt = (y) => (typeof y === "string" ? y : JSON.stringify(y));
+            L.push(`Informe IA de la visita (${inf.ts ? fechaLarga(Number(inf.ts)) : ""}):`);
+            if (Array.isArray(inf.f) && inf.f.length) { L.push("  Lo que se ve en cada foto (análisis de la IA):"); inf.f.forEach((d, j) => L.push("  - " + txt(d).slice(0, 1500))); }
+            if (inf.b) L.push("  " + txt(inf.b).slice(0, 20000));
+          }
         });
         if (!vis.length) L.push("(sin visitas cargadas)");
         L.push("");

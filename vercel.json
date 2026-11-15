@@ -51,6 +51,10 @@
     {
       "source": "/app/:app/:k",
       "destination": "/api/auditoria?k=:k&costos=:app"
+    },
+    {
+      "source": "/obra/:app/:k",
+      "destination": "/api/auditoria?k=:k&costos=:app"
     }
   ]
 }
