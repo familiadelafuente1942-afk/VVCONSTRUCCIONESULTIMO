@@ -1,4 +1,4 @@
-<!doctype html><html lang="es"><head><meta name="app-build" content="20261115-230726"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#000000"><title>Mi Asistente · Nanina</title>
+<!doctype html><html lang="es"><head><meta name="app-build" content="20261115-230905"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#000000"><title>Mi Asistente · Nanina</title>
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Nanina">
 <link rel="icon" type="image/png" href="/nanina/icon-192.png"><link rel="apple-touch-icon" href="/nanina/icon-180.png"><link rel="manifest" href="/nanina/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -110,7 +110,7 @@ html,body{background:radial-gradient(120% 46% at 92% -4%,rgba(184,145,90,.2),tra
 const SUPA_URL="https://bxhjgxzvayszfqwlwinq.supabase.co",SUPA_KEY="sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5",KEY="nanina_db";
 const SH={"Content-Type":"application/json",apikey:SUPA_KEY,Authorization:"Bearer "+SUPA_KEY};
 const VOCES=[["","Voz estándar"],["KoIf2KgeJA8uoGcgKIao","Marcela · alegre y melódica"],["SmgKjOvC1aIujLWcMzqq","Alisson · cálida"],["J4vZAFDEcpenkMp3f3R9","Valentina · de amiga"],["VmejBeYhbrcTPwDniox7","Lina · fresca"],["b2htR0pMe28pYwCY9gnP","Sofía · conversada"]];
-const DEF={perfil:{nombre:"Nanina",asist:"Mi Asistente",voz:"",tema:"oscuro",manejando:false,hablar:true},pin:"",props:[],clientes:[],agenda:[],ops:[],chat:[],t:0};
+const DEF={perfil:{nombre:"Nanina",asist:"Mi Asistente",voz:"",tema:"oscuro",manejando:false,hablar:true},pin:"",props:[],clientes:[],agenda:[],ops:[],pagos:[],gastos:[],chat:[],t:0};
 let D=JSON.parse(JSON.stringify(DEF)),VISTA="chat",FIL="",FES="",FORM=null,MAS=false,BUSY=false;
 let T={},BRASS="#D8B06A",CARD="";
 const $=s=>document.querySelector(s),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -131,6 +131,8 @@ const IC={chat:'<path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3
  mic:'<path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/>',
  enviar:'<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
  auto:'<path d="M5 17h14M6 17l1.5-6h9L18 17"/><circle cx="7.5" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/><path d="M8 11l1.2-3.5h5.6L16 11"/>',
+ pagos:'<line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+ gastos:'<polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/>',
  mas:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>'};
 const ico=(n,s=20)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:block">${IC[n]||""}</svg>`;
 /* ---- tema: mismos colores que Mi Asistente ---- */
@@ -156,7 +158,7 @@ const S={
  chip:(on)=>`background:${on?T.navy:"transparent"};color:${on?"#fff":T.sub};border:1px solid ${on?BRASS:T.border};border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer`,
  vacio:()=>`text-align:center;color:${T.muted};font-size:13.5px;line-height:1.6;padding:40px 20px`};
 /* ---- cabecera y navegación ---- */
-const NAV_PRINC=[["chat","Chat"],["props","Propiedades"],["clientes","Clientes"],["agenda","Agenda"]],NAV_MAS=[["ops","Operaciones"],["ajustes","Ajustes"]];
+const NAV_PRINC=[["chat","Chat"],["props","Propiedades"],["clientes","Clientes"],["agenda","Agenda"]],NAV_MAS=[["ops","Operaciones"],["pagos","Pagos"],["gastos","Gastos"],["ajustes","Ajustes"]];
 function hdr(){const claro=D.perfil.tema==="claro";
   $("#hdr").setAttribute("style",`background:${T.navy};color:#fff;padding:16px 18px 12px;padding-top:max(16px, env(safe-area-inset-top));border-bottom:1px solid ${BRASS}`);
   $("#hdr").innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:9.5px;font-weight:700;color:${BRASS};letter-spacing:.22em;text-transform:uppercase">Privado · ${esc(D.perfil.nombre||"Nanina")} · Broker inmobiliaria</div><div style="font-size:22px;font-weight:600;letter-spacing:.01em;margin-top:2px">${esc(D.perfil.asist||"Mi Asistente")}</div></div>
@@ -169,12 +171,12 @@ function navR(){const t=(id,lb)=>`<button class="tabg${VISTA===id?" on":""}" ari
   $("#rail").innerHTML=NAV_PRINC.concat(NAV_MAS).map(([i,l])=>t(i,l)).join("");
   $("#masov").innerHTML=MAS?`<div class="masov" data-cmas="1"><div class="massheet">${NAV_MAS.map(([i,l])=>`<button class="masit${VISTA===i?" on":""}" data-v="${i}"><span class="gem">${ico(i,22)}</span><span class="tl">${l}</span></button>`).join("")}</div></div>`:""}
 const hoyCount=()=>D.agenda.filter(a=>!a.hecho&&a.f===hoy()).length;
-document.addEventListener("click",e=>{const v=e.target.closest("[data-v]");if(v){VISTA=v.dataset.v;MAS=false;FIL="";FES="";FORM=null;render();return}
+document.addEventListener("click",e=>{const v=e.target.closest("[data-v]");if(v){VISTA=v.dataset.v;MAS=false;FIL="";FES="";FORM=null;MES=null;DEQ="";render();return}
   if(e.target.closest("[data-mas]")){MAS=!MAS;navR();return}if(e.target.matches("[data-cmas]")){MAS=false;navR()}});
 /* ---- render ---- */
 function render(){tema();hdr();navR();const m=$("#main");
   if(VISTA==="chat"){m.innerHTML=vChat();bindChat();return}
-  m.innerHTML=`<div style="flex:1;overflow-y:auto;padding:14px 16px 24px">${VISTA==="props"?vProps():VISTA==="clientes"?vCli():VISTA==="agenda"?vAg():VISTA==="ops"?vOps():vAjustes()}</div>`;
+  m.innerHTML=`<div style="flex:1;overflow-y:auto;padding:14px 16px 24px">${VISTA==="props"?vProps():VISTA==="clientes"?vCli():VISTA==="agenda"?vAg():VISTA==="ops"?vOps():VISTA==="pagos"?vPagos():VISTA==="gastos"?vGastos():vAjustes()}</div>`;
   bindVista()}
 const EP={"Disponible":"#3fa66b","Reservada":"#e0b43a","Vendida":"#e2493e","Alquilada":"#e2493e","Retirada":"#8c8c8c"},EC={"Nuevo":"#8c8c8c","En seguimiento":"#e0b43a","Visitó":"#e0b43a","Ofertó":"#3fa66b","Cerró":"#3fa66b","Perdido":"#e2493e"},EO={"Reserva":"#e0b43a","Boleto":"#e0b43a","Escriturada / Firmado":"#3fa66b","Comisión cobrada":"#3fa66b","Caída":"#e2493e"};
 const tag=(t,c)=>`<span style="font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:${c};border:1px solid ${c};border-radius:999px;padding:3px 9px;white-space:nowrap">${esc(t)}</span>`;
@@ -186,6 +188,8 @@ const SCH={
  prop:{col:"props",tit:"Propiedad",f:[["tit","Título (ej: 3 amb. con balcón)"],["op","Operación",["Venta","Alquiler","Alquiler temporario"]],["tipo","Tipo",["Departamento","Casa","PH","Lote","Local","Oficina","Cochera","Otro"]],["dir","Dirección"],["barrio","Barrio / zona"],["precio","Precio","money"],["mon","Moneda",["U$s","$"]],["amb","Ambientes","n"],["m2","m² totales","n"],["dueno","Dueño/a"],["tel","Teléfono del dueño"],["estado","Estado",Object.keys(EP)],["notas","Notas","area"]]},
  cli:{col:"clientes",tit:"Cliente",f:[["nom","Nombre"],["tel","Teléfono (WhatsApp)"],["mail","Email"],["busca","Qué busca (zona, ambientes, operación)","area"],["presu","Presupuesto máximo","money"],["mon","Moneda",["U$s","$"]],["estado","Estado",Object.keys(EC)],["notas","Notas","area"]]},
  ag:{col:"agenda",tit:"Evento",f:[["tit","Qué es (visita, tasación, reunión…)"],["f","Fecha","date"],["h","Hora","time"],["lugar","Lugar / propiedad"],["cli","Con quién"],["nota","Notas","area"],["hecho","Estado",["Pendiente","Hecho"]]]},
+ pago:{col:"pagos",tit:"Pago",f:[["a","¿A quién? (ej: expensas, colegio, Edenor)"],["monto","Monto","money"],["mon","Moneda",["$","U$s"]],["f","Fecha","date"],["de","¿De quién es?",["Propio","Familia"]],["estado","Estado",["Pendiente","Pagado"]],["metodo","Medio de pago",["","Efectivo","Transferencia","Tarjeta","Débito automático","Otro"]],["nota","Notas","area"]]},
+ gasto:{col:"gastos",tit:"Gasto",f:[["c","¿En qué? (ej: súper, nafta, farmacia)"],["monto","Monto","money"],["mon","Moneda",["$","U$s"]],["f","Fecha","date"],["de","¿De quién es?",["Propio","Familia"]],["cat","Categoría",["","Casa","Comida","Auto","Salud","Educación","Trabajo","Ropa","Salidas","Servicios","Otro"]],["nota","Notas","area"]]},
  op:{col:"ops",tit:"Operación",f:[["prop","Propiedad"],["cli","Cliente / comprador"],["tipo","Tipo",["Venta","Alquiler","Alquiler temporario"]],["monto","Monto de la operación","money"],["mon","Moneda",["U$s","$"]],["pct","Comisión %","n"],["estado","Estado",Object.keys(EO)],["f","Fecha","date"],["notas","Notas","area"]]}};
 function formHtml(k){const S2=SCH[k],id=FORM.id,o=id?D[S2.col].find(x=>x.id===id)||{}:{};const val=c=>c==="hecho"?(o.hecho?"Hecho":"Pendiente"):c==="f"&&!id?hoy():o[c]??"";
   return`<div style="background: ${CARD};border:1px solid ${BRASS};border-radius:12px;padding:13px;margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:${T.sub};text-transform:uppercase;margin-bottom:9px">${id?"Editar":"Nuevo"}: ${S2.tit}</div>
@@ -208,16 +212,39 @@ function vOps(){const L=D.ops.filter(o=>match(o,FIL)&&(!FES||o.estado===FES)),co
   return bloqueForm("op","Cargar operación")+`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">${kpi("Comisiones por cobrar",pen)}${kpi("Comisiones cobradas",cob)}</div>`+buscador("Buscar…")+filtros(Object.keys(EO),FES)+
   (L.map(o=>`<div style="${S.card()};cursor:pointer" data-ed="op:${o.id}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div style="font-size:16px;font-weight:600">${esc(o.prop||"Operación")}</div>${tag(o.estado||"Reserva",EO[o.estado]||EO.Reserva)}</div>
   <div style="font-size:12.5px;color:${T.sub};margin-top:4px">${esc([o.tipo,o.cli,o.f?fFec(o.f):""].filter(Boolean).join(" · "))}</div><div style="display:flex;justify-content:space-between;margin-top:8px;font-size:13.5px"><span>${money(o.monto,o.mon)}</span><b style="color:${BRASS}">Comisión ${num(o.pct)?num(o.pct)+"% = ":""}${money(com(o),o.mon)}</b></div></div>`).join("")||`<div style="${S.vacio()}">Sin operaciones cargadas.<br>Desde el Chat podés decir: "cargá la reserva del 3 ambientes de Palermo, 175 mil dólares, comisión 3%"</div>`)}
+let MES=null,DEQ="";
+const mesDe=f=>String(f||"").slice(0,7),mesHoy=()=>hoy().slice(0,7);
+const MESES=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const mesTxt=m=>{const[y,mm]=m.split("-");return MESES[+mm-1]+" "+y};
+function selMes(arr){const ms=[...new Set(arr.map(x=>mesDe(x.f)).filter(Boolean).concat([mesHoy()]))].sort().reverse();const cur=MES||mesHoy();
+  return`<select id="selmes" style="${S.inp()};margin-bottom:10px">${ms.map(m=>`<option value="${m}"${m===cur?" selected":""}>${m===mesHoy()?"Este mes · ":""}${mesTxt(m)}</option>`).join("")}</select>`}
+const filtroDe=()=>`<div style="display:flex;gap:6px;margin-bottom:12px">${[["","Todos"],["Propio","Propios"],["Familia","Familia"]].map(([v,l])=>`<button style="${S.chip(DEQ===v)}" data-deq="${v}">${l}</button>`).join("")}</div>`;
+const tot=(a,m)=>a.filter(x=>(x.mon||"$")===m).reduce((s,x)=>s+num(x.monto),0);
+const totTxt=a=>{const p=tot(a,"$"),u=tot(a,"U$s");return(p||!u?"$ "+fmt(p):"")+(u?(p?" · ":"")+"U$s "+fmt(u):"")};
+const kpiBox=(l,txt,c)=>`<div style="background: ${CARD};border:1px solid ${T.border};border-radius:12px;padding:11px 13px"><div style="font-size:9.5px;color:${T.sub};font-weight:700;letter-spacing:.1em;text-transform:uppercase">${l}</div><div style="font-size:19px;font-weight:700;color:${c||BRASS};margin-top:4px">${txt}</div></div>`;
+const deTag=d=>tag(d||"Propio",d==="Familia"?"#5b8fd6":BRASS);
+function vPagos(){const cur=MES||mesHoy(),L=D.pagos.filter(x=>mesDe(x.f)===cur&&(!DEQ||(x.de||"Propio")===DEQ)&&match(x,FIL)).sort((a,b)=>(a.f||"").localeCompare(b.f||""));
+  const pen=L.filter(x=>x.estado!=="Pagado"),pag=L.filter(x=>x.estado==="Pagado");
+  return bloqueForm("pago","Cargar pago")+selMes(D.pagos)+filtroDe()+`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">${kpiBox("Pendiente ("+(cur===mesHoy()?"este mes":mesTxt(cur))+")",totTxt(pen),"#e0b43a")}${kpiBox("Pagado",totTxt(pag),"#3fa66b")}</div>`+
+  (L.map(x=>`<div style="${S.card()};cursor:pointer" data-ed="pago:${x.id}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div style="font-size:15.5px;font-weight:600">${esc(x.a||"Pago")}</div><b style="color:${x.estado==="Pagado"?"#3fa66b":BRASS};white-space:nowrap">${money(x.monto,x.mon||"$")}</b></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:7px"><span style="font-size:12.5px;color:${T.sub}">${fFec(x.f)}${x.metodo?" · "+esc(x.metodo):""}</span><span style="display:flex;gap:6px">${deTag(x.de)}${x.estado==="Pagado"?tag("Pagado","#3fa66b"):`<button data-pagar="${x.id}" style="font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#fff;background:${T.accent};border:0;border-radius:999px;padding:4px 10px;cursor:pointer">Marcar pagado</button>`}</span></div>${x.nota?`<div style="font-size:12.5px;color:${T.sub};margin-top:5px">${esc(x.nota)}</div>`:""}</div>`).join("")||`<div style="${S.vacio()}">Todavía no cargaste pagos ${cur===mesHoy()?"este mes":"en "+mesTxt(cur)}.<br>Desde el Chat podés decir: "cargá un pago de expensas de 85 mil para el 10, es de la familia"</div>`)}
+function vGastos(){const cur=MES||mesHoy(),L=D.gastos.filter(x=>mesDe(x.f)===cur&&(!DEQ||(x.de||"Propio")===DEQ)&&match(x,FIL)).sort((a,b)=>(b.f||"").localeCompare(a.f||""));
+  const all=D.gastos.filter(x=>mesDe(x.f)===cur),pr=all.filter(x=>(x.de||"Propio")==="Propio"),fa=all.filter(x=>x.de==="Familia");
+  return bloqueForm("gasto","Cargar gasto")+selMes(D.gastos)+filtroDe()+`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">${kpiBox("Gastos propios",totTxt(pr))}${kpiBox("Gastos de la familia",totTxt(fa),"#5b8fd6")}</div>`+
+  (L.map(x=>`<div style="${S.card()};cursor:pointer" data-ed="gasto:${x.id}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div style="font-size:15.5px;font-weight:600">${esc(x.c||"Gasto")}</div><b style="color:${BRASS};white-space:nowrap">${money(x.monto,x.mon||"$")}</b></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:7px"><span style="font-size:12.5px;color:${T.sub}">${fFec(x.f)}${x.cat?" · "+esc(x.cat):""}</span>${deTag(x.de)}</div>${x.nota?`<div style="font-size:12.5px;color:${T.sub};margin-top:5px">${esc(x.nota)}</div>`:""}</div>`).join("")||`<div style="${S.vacio()}">Sin gastos ${cur===mesHoy()?"este mes":"en "+mesTxt(cur)}.<br>Desde el Chat podés decir: "anotá 45 mil de súper, gasto de la familia"</div>`)}
 function vAjustes(){const P=D.perfil;
   return`<div style="${S.card()}"><div style="font-size:10.5px;color:${BRASS};font-weight:700;letter-spacing:.18em;text-transform:uppercase;margin-bottom:10px">Perfil</div>
   <div style="${S.lbl()}">Tu nombre</div><input id="c_nom" value="${esc(P.nombre)}" style="${S.inp()}"><div style="${S.lbl()}">Nombre del asistente</div><input id="c_as" value="${esc(P.asist)}" style="${S.inp()}">
   <div style="${S.lbl()}">Cambiar clave (4 números)</div><input id="c_pin" inputmode="numeric" maxlength="4" placeholder="Dejala vacía para no cambiarla" style="${S.inp()}"><button id="c_ok" style="${S.prim()};margin:6px 0 0">Guardar</button><div id="c_msg" style="font-size:12.5px;color:${T.sub};margin-top:8px"></div></div>
   <div style="${S.card()}"><div style="font-size:10.5px;color:${BRASS};font-weight:700;letter-spacing:.18em;text-transform:uppercase">Voz del asistente</div><div style="font-size:13px;color:${T.sub};margin:6px 0 12px;line-height:1.4">Tocá una para escucharla y queda elegida.</div>
   <div style="display:flex;flex-direction:column;gap:8px">${VOCES.map(([id,n])=>`<button class="gbtn" data-voz="${id}" style="padding:12px 14px;justify-content:space-between;${(P.voz||"")===id?`box-shadow:inset 0 0 0 2px ${BRASS}`:""}"><span>${n}</span><span style="font-size:12px;color:${(P.voz||"")===id?BRASS:T.sub}">${(P.voz||"")===id?"✓ Elegida":"▶ Probar"}</span></button>`).join("")}</div></div>`}
-function bindVista(){const q=$("#q");if(q)q.oninput=()=>{FIL=q.value;const p=q.selectionStart;render();const n=$("#q");n.focus();n.setSelectionRange(p,p)};
+function bindVista(){const sm=$("#selmes");if(sm)sm.onchange=()=>{MES=sm.value;render()};const q=$("#q");if(q)q.oninput=()=>{FIL=q.value;const p=q.selectionStart;render();const n=$("#q");n.focus();n.setSelectionRange(p,p)};
   document.querySelectorAll("[data-money]").forEach(i=>i.oninput=()=>{const n=i.value.replace(/\D/g,"");i.value=n?Number(n).toLocaleString("es-AR"):""});
   const ok=$("#c_ok");if(ok)ok.onclick=async()=>{const P=D.perfil;P.nombre=$("#c_nom").value.trim()||"Nanina";P.asist=$("#c_as").value.trim()||"Mi Asistente";const pn=$("#c_pin").value.trim();if(/^\d{4}$/.test(pn))D.pin=await sha(pn);save();render();$("#c_msg").textContent="Guardado ✓"}}
 document.addEventListener("click",async e=>{const t=e.target;
+  const dq=t.closest("[data-deq]");if(dq){DEQ=dq.dataset.deq;render();return}
+  const pg=t.closest("[data-pagar]");if(pg){const x=D.pagos.find(y=>y.id===pg.dataset.pagar);if(x){x.estado="Pagado";save();render()}return}
   const f=t.closest("[data-fes]");if(f){FES=f.dataset.fes;render();return}
   const n=t.closest("[data-nuevo]");if(n){FORM={k:n.dataset.nuevo,id:null};render();$("#main>div").scrollTop=0;return}
   const ed=t.closest("[data-ed]");if(ed){const[k,id]=ed.dataset.ed.split(":");FORM={k,id};render();$("#main>div").scrollTop=0;return}
@@ -226,7 +253,7 @@ document.addEventListener("click",async e=>{const t=e.target;
   if(t.closest("[data-fok]")){const S2=SCH[FORM.k],arr=D[S2.col],o=FORM.id?arr.find(x=>x.id===FORM.id):{id:uid()};S2.f.forEach(([c,l,ty])=>{let v=$("#f_"+c).value;if(ty==="money"||ty==="n")v=num(v);if(c==="hecho")v=v==="Hecho";o[c]=v});if(!FORM.id)arr.push(o);FORM=null;save();render();return}
   const vz=t.closest("[data-voz]");if(vz){D.perfil.voz=vz.dataset.voz;save();render();decir("Hola "+(D.perfil.nombre||"")+", soy tu asistente. ¿En qué te ayudo hoy?");return}});
 /* ---- chat ---- */
-function bienvenida(){return`Hola ${D.perfil.nombre||"Nanina"} 👋 Soy tu asistente personal. Tengo acceso a todas tus propiedades, clientes, agenda y operaciones. Hablame o escribime: puedo cargar datos, decirte qué tenés hoy, cruzar qué propiedades le sirven a cada cliente, redactar avisos y dejarte listos los mensajes de WhatsApp.`}
+function bienvenida(){return`Hola ${D.perfil.nombre||"Nanina"} 👋 Soy tu asistente personal. Tengo acceso a todas tus propiedades, clientes, agenda, operaciones, pagos y gastos. Hablame o escribime: puedo cargar datos, decirte qué tenés hoy, cruzar qué propiedades le sirven a cada cliente, redactar avisos y dejarte listos los mensajes de WhatsApp.`}
 function vChat(){const msgs=[{r:"a",t:bienvenida()}].concat(D.chat.slice(-60));
   const b=m=>`<div style="display:flex;justify-content:${m.r==="u"?"flex-end":"flex-start"};margin-bottom:12px"><div style="max-width:88%;min-width:0">
    <div style="${m.r==="u"?`background:${T.navy};color:#fff;border:none`:`background: ${CARD};color:${T.text};border:1px solid ${T.border}`};border-radius:14px;padding:11px 14px;font-size:14px;line-height:1.5;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere">${esc(m.t)}</div>
@@ -274,13 +301,13 @@ function arrancar(seguir){const SR=window.SpeechRecognition||window.webkitSpeech
   rec.onerror=()=>{};try{rec.start();escuchando=true;pttUI()}catch{}
   if(D.perfil.manejando){let ult=Date.now(),prev="";const vig=setInterval(()=>{if(!escuchando){clearInterval(vig);return}if(texto!==prev){prev=texto;ult=Date.now()}else if(texto.trim()&&Date.now()-ult>2200){clearInterval(vig);try{rec.stop()}catch{}}},300)}}
 /* ---- IA ---- */
-function contexto(){const lim=a=>a.slice(-150);return JSON.stringify({hoy:hoy(),dia_semana:new Date().toLocaleDateString("es-AR",{weekday:"long"}),propiedades:lim(D.props),clientes:lim(D.clientes),agenda:lim(D.agenda.filter(a=>!a.hecho||a.f>=hoy())),operaciones:lim(D.ops)})}
+function contexto(){const lim=a=>a.slice(-150);return JSON.stringify({hoy:hoy(),dia_semana:new Date().toLocaleDateString("es-AR",{weekday:"long"}),propiedades:lim(D.props),clientes:lim(D.clientes),agenda:lim(D.agenda.filter(a=>!a.hecho||a.f>=hoy())),operaciones:lim(D.ops),pagos:lim(D.pagos),gastos:lim(D.gastos)})}
 function sistema(){return`Sos "${D.perfil.asist||"Mi Asistente"}", el asistente personal y privado de ${D.perfil.nombre||"Nanina"}, broker inmobiliaria en Argentina. Hablás en español rioplatense (vos), cálido, claro y directo. Tus respuestas se escuchan en voz alta (a veces manejando): contestá en 1 a 4 oraciones, sin listas largas ni símbolos, salvo que te pida detalle.
-Tenés acceso completo a sus datos (propiedades, clientes, agenda y operaciones) en el JSON que te paso. Usalos para responder: qué tiene hoy o mañana, qué propiedades le sirven a un cliente (cruzá zona, ambientes, operación y presupuesto), comisiones por cobrar, a quién hacerle seguimiento. También redactás avisos de propiedades y mensajes a clientes o dueños.
+Tenés acceso completo a sus datos (propiedades, clientes, agenda, operaciones, pagos y gastos) en el JSON que te paso. Usalos para responder: qué tiene hoy o mañana, qué propiedades le sirven a un cliente (cruzá zona, ambientes, operación y presupuesto), comisiones por cobrar, a quién hacerle seguimiento. También redactás avisos de propiedades y mensajes a clientes o dueños.
 Montos: dólares "U$s 180.000"; pesos "$ 1.500.000"; sin decimales. Fechas AAAA-MM-DD en las acciones.
 Para CARGAR o CAMBIAR datos agregá al final una línea por acción, exactamente así:
 <<ACCION>>{"tipo":"...","datos":{...}}<<FIN>>
-Tipos: "agregar_propiedad" (tit, op[Venta|Alquiler|Alquiler temporario], tipo, dir, barrio, precio número, mon[U$s|$], amb, m2, dueno, tel, estado[${Object.keys(EP).join("|")}], notas); "editar_propiedad" (id + campos); "agregar_cliente" (nom, tel, mail, busca, presu, mon, estado[${Object.keys(EC).join("|")}], notas); "editar_cliente" (id + campos); "agendar" (tit, f, h "HH:MM", lugar, cli, nota); "editar_evento" (id + campos; hecho:true para marcarlo hecho); "agregar_operacion" (prop, cli, tipo, monto, mon, pct, estado[${Object.keys(EO).join("|")}], f, notas); "editar_operacion" (id + campos); "whatsapp" (tel con código de país sin + ni espacios, ej 5491155556666; a = nombre; txt = mensaje) para dejarle listo un mensaje que ella manda con un toque.
+Tipos: "agregar_propiedad" (tit, op[Venta|Alquiler|Alquiler temporario], tipo, dir, barrio, precio número, mon[U$s|$], amb, m2, dueno, tel, estado[${Object.keys(EP).join("|")}], notas); "editar_propiedad" (id + campos); "agregar_cliente" (nom, tel, mail, busca, presu, mon, estado[${Object.keys(EC).join("|")}], notas); "editar_cliente" (id + campos); "agendar" (tit, f, h "HH:MM", lugar, cli, nota); "editar_evento" (id + campos; hecho:true para marcarlo hecho); "agregar_operacion" (prop, cli, tipo, monto, mon, pct, estado[${Object.keys(EO).join("|")}], f, notas); "editar_operacion" (id + campos); "cargar_pago" (a, monto, mon[$|U$s], f, de[Propio|Familia], estado[Pendiente|Pagado], metodo, nota) para cuentas a pagar o ya pagadas; "editar_pago" (id + campos; estado:"Pagado" para marcarlo pagado); "cargar_gasto" (c = en qué, monto, mon, f, de[Propio|Familia], cat, nota) para gastos del día a día; "editar_gasto" (id + campos). Cada pago o gasto es "Propio" (de ella) o "Familia": si no lo dice, preguntale o usá Propio y aclaráselo. "whatsapp" (tel con código de país sin + ni espacios, ej 5491155556666; a = nombre; txt = mensaje) para dejarle listo un mensaje que ella manda con un toque.
 Si falta un dato, cargá igual lo que haya y decile qué falta. Nunca inventes datos. Confirmá en una oración lo que hiciste.`}
 async function enviar(q){q=String(q||"").trim();if(!q||BUSY)return;borrador="";texto="";D.chat.push({r:"u",t:q});BUSY=true;save();render();
   const hist=D.chat.slice(-14).filter(m=>m.t).map(m=>({role:m.r==="u"?"user":"assistant",content:m.t}));while(hist.length&&hist[0].role!=="user")hist.shift();
@@ -291,12 +318,14 @@ async function enviar(q){q=String(q||"").trim();if(!q||BUSY)return;borrador="";t
   const msg={r:"a",t:out||"Listo."};if(hechos.length)msg.acc=hechos.join(" · ");if(wa.length)msg.wa=wa;D.chat.push(msg);BUSY=false;save();if(VISTA==="chat")render();else navR();
   if(D.perfil.hablar)decir(msg.t,()=>{if(D.perfil.manejando&&VISTA==="chat"&&!escuchando)setTimeout(()=>arrancar(false),400)})}
 function aplicar(a,wa){const d=a.datos||{},T2=a.tipo,fix=o=>{["precio","presu","monto","amb","m2","pct"].forEach(k=>{if(k in o)o[k]=num(o[k])});return o};
-  const add=(col,def,label)=>{const o=fix({...def,...d,id:uid()});D[col].push(o);return label+": "+(o.tit||o.nom||o.prop||o.dir||"")};
+  const add=(col,def,label)=>{const o=fix({...def,...d,id:uid()});D[col].push(o);return label+": "+(o.tit||o.nom||o.prop||o.dir||o.a||o.c||"")};
   const ed=(col,label)=>{const o=D[col].find(x=>x.id===d.id);if(!o)return null;Object.assign(o,fix({...d}));return label+" actualizado"};
   if(T2==="agregar_propiedad")return add("props",{estado:"Disponible",mon:"U$s"},"Propiedad cargada");if(T2==="editar_propiedad")return ed("props","Propiedad");
   if(T2==="agregar_cliente")return add("clientes",{estado:"Nuevo",mon:"U$s"},"Cliente cargado");if(T2==="editar_cliente")return ed("clientes","Cliente");
   if(T2==="agendar")return add("agenda",{f:hoy(),hecho:false},"Agendado");if(T2==="editar_evento")return ed("agenda","Evento");
   if(T2==="agregar_operacion")return add("ops",{estado:"Reserva",mon:"U$s"},"Operación cargada");if(T2==="editar_operacion")return ed("ops","Operación");
+  if(T2==="cargar_pago")return add("pagos",{f:hoy(),mon:"$",de:"Propio",estado:"Pendiente"},"Pago cargado ("+(d.de||"Propio")+")");if(T2==="editar_pago")return ed("pagos","Pago");
+  if(T2==="cargar_gasto")return add("gastos",{f:hoy(),mon:"$",de:"Propio"},"Gasto cargado ("+(d.de||"Propio")+")");if(T2==="editar_gasto")return ed("gastos","Gasto");
   if(T2==="whatsapp"&&d.txt){wa.push({tel:String(d.tel||"").replace(/\D/g,""),a:d.a||"",txt:d.txt})}return null}
 /* ---- PIN al entrar (como Mi Asistente) ---- */
 function pedirPin(){return new Promise(res=>{const nuevo=!D.pin,p=document.createElement("div");
