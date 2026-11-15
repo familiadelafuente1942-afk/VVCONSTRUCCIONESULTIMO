@@ -42,5 +42,11 @@
       "path": "/api/nexo2?backup=1",
       "schedule": "0 5 * * *"
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/costos/:app/:k",
+      "destination": "/api/auditoria?k=:k&costos=:app"
+    }
   ]
 }
