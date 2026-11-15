@@ -238,7 +238,10 @@ export default async function handler(req, res) {
       if (q.s) {
         const k = String(q.s);
         if (PROHIBIDO.test(k) || !claves.some((r) => r.clave === k)) { res.status(404).send("Esa sección no existe. Pedí el índice con &todo=1"); return; }
-        const v = limpiarB64(await leer(H, k));
+        let v0 = await leer(H, k);
+        // las apps de costos (barracas_db, paseocolon_db, casa_db, milanocasa_db) guardan el documento como texto JSON: se devuelve ya abierto
+        if (v0 && typeof v0.v === "string" && /_db$/.test(k)) { try { v0 = { ...v0, v: JSON.parse(v0.v) }; } catch { } }
+        const v = limpiarB64(v0);
         const txt = JSON.stringify(v);
         if (f === "json" || txt.length > 0) { res.setHeader("Content-Type", "application/json; charset=utf-8"); res.status(200).send(txt.length > 900000 ? txt.slice(0, 900000) + '"…(cortado)"' : txt); return; }
       }
@@ -257,7 +260,7 @@ export default async function handler(req, res) {
         res.setHeader("Content-Type", "application/json; charset=utf-8"); res.status(200).send(JSON.stringify({ busqueda: q.q, resultados: hits }, null, 1)); return;
       }
       const L = ["ENTORNO COMPLETO (solo lectura)\n", "Cada sección se pide con: " + enlace(rev) + "&todo=1&s=<sección>", "Buscar texto en todo: " + enlace(rev) + "&todo=1&q=<palabra>\n",
-        "Guía: seg_obras, seg_tareas, seg_personal, seg_gastos, seg_sueldos, seg_agenda, seg_hitos, seg_registros, seg_adicionales = app de Seguimiento. snap_<obra> = estado de NEXO 2 (avance, tarjetas, planos). informes_<obra> = informes semanales y avances. audreg_<obra> = actas de auditoría. gestion_<obra> = registros de gestión de NEXO 2. adic_<obra> = certificados de tareas adicionales. edif_proyecto = edificio propio.\n", "SECCIONES:"];
+        "Guía: barracas_db = app de costos de Barracas (presupuesto, compras, cash flow, obras); paseocolon_db = Paseo Colón; casa_db = Terralagos Canning (casa). seg_obras, seg_tareas, seg_personal, seg_gastos, seg_sueldos, seg_agenda, seg_hitos, seg_registros, seg_adicionales = app de Seguimiento. snap_<obra> = estado de NEXO 2 (avance, tarjetas, planos). informes_<obra> = informes semanales y avances. audreg_<obra> = actas de auditoría. gestion_<obra> = registros de gestión de NEXO 2. adic_<obra> = certificados de tareas adicionales. edif_proyecto = edificio propio.\n", "SECCIONES:"];
       claves.forEach((r) => L.push(`- ${r.clave} (actualizado ${fechaLarga(Date.parse(r.actualizado))})`));
       L.push("\nTambién: &plan=1 (Plan 90 días del edificio, con permiso para agregar objetivos y contactos), &hoy=1 (lo cargado hoy), &obra=<nombre> (PDF de acta).");
       res.setHeader("Content-Type", "text/plain; charset=utf-8"); res.status(200).send(L.join("\n")); return;
