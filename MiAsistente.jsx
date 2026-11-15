@@ -692,7 +692,9 @@ export default function MiAsistente() {
     vozHablandoRef.current = true;
     // El mensaje se parte en trozos (por frases) para que se lea completo, sin cortarse.
     const trozos = []; { let resto = limpio; while (resto.length > 0) { if (resto.length <= 800) { trozos.push(resto); break; } let k = Math.max(resto.lastIndexOf(". ", 800), resto.lastIndexOf("? ", 800), resto.lastIndexOf("! ", 800), resto.lastIndexOf("; ", 800), resto.lastIndexOf(", ", 800)); if (k < 200) k = resto.lastIndexOf(" ", 800); if (k < 1) k = 800; trozos.push(resto.slice(0, k + 1).trim()); resto = resto.slice(k + 1).trim(); } }
-    const pedir = (t) => fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texto: t }) }).then(r => { if (!r.ok) throw new Error("tts_error"); return r.blob(); });
+    const vozSel = cfg.voz === "def" ? "" : (cfg.voz || VOZ_DEF);
+    const pedir1 = (t, v) => fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v ? { texto: t, voz: v } : { texto: t }) }).then(r => { if (!r.ok) throw new Error("tts_error"); return r.blob(); });
+    const pedir = (t) => vozSel ? pedir1(t, vozSel).catch(() => pedir1(t)) : pedir1(t);
     const activo = () => vozHablandoRef.current && turno === vozSeqRef.current;
     let sig = pedir(trozos[0]); let audio = null;
     try {
@@ -1925,6 +1927,9 @@ function ModelosBody({ modelos, sel, setSel, subir, borrar }) {
   </div>);
 }
 
+// Voces femeninas colombianas de ElevenLabs (la primera es la que usa por defecto).
+const VOCES = [["KoIf2KgeJA8uoGcgKIao", "Marcela · alegre y melódica"], ["SmgKjOvC1aIujLWcMzqq", "Alisson · cálida, acento suave"], ["J4vZAFDEcpenkMp3f3R9", "Valentina · alegre, de amiga"], ["86V9x9hrQds83qf7zaGn", "Marcela · joven y natural"], ["VmejBeYhbrcTPwDniox7", "Lina · fresca"], ["b2htR0pMe28pYwCY9gnP", "Sofía · conversada"], ["def", "Voz anterior"]];
+const VOZ_DEF = VOCES[0][0];
 function AjustesBody({ cfg, saveCfg }) {
   const t = cfg.tema || "oscuro";
   const icoRef = React.useRef(null); const [icoPrev, setIcoPrev] = React.useState(""); const [icoMsg, setIcoMsg] = React.useState(""); const [icoT] = React.useState(Date.now());
@@ -1946,7 +1951,23 @@ function AjustesBody({ cfg, saveCfg }) {
     img.src = u;
   }
   const op = [["auto", "Automático", <React.Fragment><circle cx="12" cy="12" r="8" /><path d="M12 4v16" /><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" /></React.Fragment>], ["claro", "Claro", <React.Fragment><circle cx="12" cy="12" r="4" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4" /></React.Fragment>], ["oscuro", "Oscuro", <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />]];
+  const vozAct = cfg.voz || VOZ_DEF; const [vozMsg, setVozMsg] = React.useState(""); const vozAud = React.useRef(null);
+  async function probarVoz(v) {
+    saveCfg({ ...cfg, voz: v }); setVozMsg("Probando…");
+    try { if (vozAud.current) vozAud.current.pause(); } catch { }
+    try {
+      const r = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v === "def" ? { texto: "Hola Sebastián, ¿cómo vas? Acá estoy para lo que necesités." } : { texto: "Hola Sebastián, ¿cómo vas pues? Acá estoy para lo que necesités.", voz: v }) });
+      if (!r.ok) throw new Error("x");
+      const a = new Audio(URL.createObjectURL(await r.blob())); vozAud.current = a; await a.play(); setVozMsg("");
+    } catch { setVozMsg("Esta voz no respondió. Si sigue así, agregala a \"My Voices\" en tu cuenta de ElevenLabs o elegí otra. Mientras tanto el asistente habla con la voz anterior."); }
+  }
   return (<div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 18, padding: 16, marginBottom: 14 }}>
+      <div style={{ fontSize: 10.5, color: BRASS, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase" }}>Voz del asistente</div>
+      <div style={{ fontSize: 13, color: T.sub, margin: "6px 0 12px", lineHeight: 1.4 }}>Voces de mujer colombianas. Tocá una para escucharla y queda elegida.</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{VOCES.map(([id, n]) => (<button key={id} className="gbtn" aria-pressed={vozAct === id} onClick={() => probarVoz(id)} style={{ padding: "12px 14px", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center", border: vozAct === id ? `2px solid ${BRASS}` : undefined }}><span>{n}</span><span style={{ fontSize: 12, color: vozAct === id ? BRASS : T.sub }}>{vozAct === id ? "✓ Elegida" : "▶ Probar"}</span></button>))}</div>
+      {vozMsg && <div style={{ fontSize: 12.5, color: T.sub, marginTop: 10, lineHeight: 1.4 }}>{vozMsg}</div>}
+    </div>
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 18, padding: 16 }}>
       <div style={{ fontSize: 10.5, color: BRASS, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase" }}>Aspecto</div>
       <div style={{ fontSize: 13, color: T.sub, margin: "6px 0 12px", lineHeight: 1.4 }}>Elegí cómo se ve la app. Automático sigue el modo de tu teléfono.</div>
