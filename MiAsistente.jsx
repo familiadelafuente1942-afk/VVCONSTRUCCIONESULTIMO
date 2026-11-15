@@ -481,7 +481,14 @@ export default function MiAsistente() {
   const [busy, setBusy] = useState(false);
   const [useSearch, setUseSearch] = useState(false);
   const [escuchando, setEscuchando] = useState(false);
-  const [vozOn, setVozOn] = useState(false);
+  const [vozOn, setVozOnRaw] = useState(() => { try { return localStorage.getItem("sebastian_voz") !== "0"; } catch { return true; } }); // siempre contesta hablando (salvo que la apague)
+  const setVozOn = (f) => setVozOnRaw(v => { const n = typeof f === "function" ? f(v) : f; try { localStorage.setItem("sebastian_voz", n ? "1" : "0"); } catch { } return n; });
+  const audioCompartido = useRef(null);
+  useEffect(() => { // iPhone/iPad: destraba el audio con el primer toque para que después pueda hablar solo
+    const destrabar = () => { try { if (!audioCompartido.current) audioCompartido.current = new Audio(); const a = audioCompartido.current; if (!a.src || a.paused) { a.src = "data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA"; a.play().catch(() => { }); } } catch { } };
+    document.addEventListener("pointerdown", destrabar, { capture: true }); document.addEventListener("touchend", destrabar, { capture: true });
+    return () => { document.removeEventListener("pointerdown", destrabar, { capture: true }); document.removeEventListener("touchend", destrabar, { capture: true }); };
+  }, []);
   const recRef = useRef(null);
   const lastSpokeRef = useRef(-1);
   const currentAudioRef = useRef(null);
@@ -563,13 +570,13 @@ export default function MiAsistente() {
   }, []);
   // Voz: leer en voz alta las respuestas nuevas cuando está activado.
   useEffect(() => { if (vozOn) { lastSpokeRef.current = msgs.length - 1; } else { pararVoz(); } }, [vozOn]);
-  useEffect(() => { if (!vozOn) return; const i = msgs.length - 1; const last = msgs[i]; if (last && last.role === "assistant" && i > lastSpokeRef.current) { lastSpokeRef.current = i; hablar(last.content); } }, [msgs, vozOn]);
+  useEffect(() => { if (!vozOn) return; const i = msgs.length - 1; const last = msgs[i]; if (last && last.role === "assistant" && i > lastSpokeRef.current && msgs[i - 1] && msgs[i - 1].role === "user") { lastSpokeRef.current = i; hablar(last.content); } }, [msgs, vozOn]);
 
   // Memoria persistente: carga el historial del chat y el perfil al abrir.
   useEffect(() => {
     if (!pinOk) return;
     (async () => {
-      try { const r = await storage.get("sebastian_chat"); if (r?.value) { const arr = JSON.parse(r.value); if (Array.isArray(arr) && arr.length) setMsgs(arr); } } catch { }
+      try { const r = await storage.get("sebastian_chat"); if (r?.value) { const arr = JSON.parse(r.value); if (Array.isArray(arr) && arr.length) { lastSpokeRef.current = Math.max(lastSpokeRef.current, arr.length - 1); setMsgs(arr); } } } catch { }
       try { const rp = await storage.get("sebastian_perfil"); if (rp?.value) setPerfil(rp.value); } catch { }
     })();
   }, [pinOk]);
@@ -703,7 +710,7 @@ export default function MiAsistente() {
         if (!activo()) return;
         if (n + 1 < trozos.length) { sig = pedir(trozos[n + 1]); sig.catch(() => { }); }
         const url = URL.createObjectURL(blob);
-        if (!audio) audio = new Audio(); // un solo reproductor para todos los trozos (iPhone no deja arrancar otro sin tocar)
+        if (!audio) audio = audioCompartido.current || new Audio(); // un solo reproductor para todos los trozos (iPhone no deja arrancar otro sin tocar)
         audio.src = url;
         currentAudioRef.current = audio;
         const fin = new Promise(res => { audio.onended = res; audio.onerror = res; });
