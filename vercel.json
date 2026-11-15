@@ -27,7 +27,7 @@
       "maxDuration": 30
     },
     "api/auditoria.js": {
-      "maxDuration": 30
+      "maxDuration": 60
     },
     "api/claude.js": {
       "maxDuration": 60
@@ -54,6 +54,10 @@
     },
     {
       "source": "/obra/:app/:k",
+      "destination": "/api/auditoria?k=:k&costos=:app"
+    },
+    {
+      "source": "/ver/:app/:k",
       "destination": "/api/auditoria?k=:k&costos=:app"
     }
   ]

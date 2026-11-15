@@ -246,6 +246,35 @@ export default async function handler(req, res) {
       const kTot = (x) => (x.var && x.var.length) ? x.var.reduce((a, v) => a + N(v.q) * N(v.pu), 0) : N(x.q) * N(x.pu);
       const L = ["COSTOS · " + k.replace("_db", "").toUpperCase() + " · TODA LA APP (solo lectura) · actualizado " + (cur.t ? fechaLarga(Number(cur.t)) : "?"), ""];
       const J = [];
+      // Descripción con IA de cada foto de visita (el asistente externo no puede ver imágenes): se guarda y se reutiliza
+      const fdesc = (await leer(H, "fotodesc").catch(() => null)) || {};
+      const absU = (u) => (/^https?:/.test(u) ? u : "https://" + base + (u.startsWith("/") ? "" : "/") + u);
+      const VTg = { d: "Se demuele", m: "Se mantiene", n: "No va / se retira", t: "Técnico", o: "Otro" };
+      const pend = [];
+      for (const o of obrasC) for (const v of (Array.isArray(o.vis) ? o.vis : [])) for (const x of (Array.isArray(v.fotos) ? v.fotos : [])) {
+        const u = String((x && x.u) || ""); if (!u || /^data:/.test(u)) continue;
+        if (!fdesc[absU(u)]) pend.push({ u: absU(u), ctx: `Obra: ${o.nombre || ""}. Visita del ${v.f || ""}${v.lugar ? " en " + v.lugar : ""}. Etiqueta: ${VTg[x.tag] || "sin etiqueta"}.${x.n ? " Nota: " + x.n : ""}` });
+      }
+      let faltan = 0;
+      if (pend.length && process.env.ANTHROPIC_API_KEY) {
+        const t0 = Date.now(); let i = 0, nuevas = 0;
+        const una = async (p) => {
+          try {
+            const r = await fetch(p.u); if (!r.ok) return;
+            const ct = (r.headers.get("content-type") || "image/jpeg").split(";")[0]; if (!/^image\/(jpeg|png|webp|gif)$/.test(ct)) return;
+            const b64 = Buffer.from(await r.arrayBuffer()).toString("base64");
+            const ai = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+              body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 400, messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: ct, data: b64 } }, { type: "text", text: p.ctx + "\nDescribí en español, en 2 a 4 oraciones concretas, qué se ve en esta foto de obra: elementos, materiales, estado, daños o problemas visibles y textos legibles. Sin introducción." }] }] }) });
+            const j = await ai.json(); const t = ((j.content || []).find((c) => c.type === "text") || {}).text;
+            if (t) { fdesc[p.u] = t.trim(); nuevas++; }
+          } catch { }
+        };
+        const trabajador = async () => { while (i < pend.length && Date.now() - t0 < 40000) await una(pend[i++]); };
+        await Promise.all(Array.from({ length: 6 }, trabajador));
+        faltan = pend.filter((p) => !fdesc[p.u]).length;
+        if (nuevas) await escribir(H, "fotodesc", fdesc).catch(() => { });
+      } else faltan = pend.length;
+      if (faltan) L.push(`(Hay ${faltan} fotos que todavía no se pudieron describir: volvé a abrir el link en un minuto.)`, "");
       for (const o of obrasC) {
         const rub = Array.isArray(o.rub) ? o.rub : [], comp = Array.isArray(o.compras) ? o.compras : [];
         L.push("=== OBRA: " + (o.nombre || "sin nombre") + " ===" + (o.cot ? " · cotización U$s " + N(o.cot).toLocaleString("es-AR") : ""));
@@ -281,7 +310,7 @@ export default async function handler(req, res) {
           (Array.isArray(v.aud) ? v.aud : []).forEach((au, j) => { if (au && au.tx) L.push(`Transcripción audio ${j + 1}: ${String(au.tx).slice(0, 12000)}`); });
           const VT = { d: "Se demuele", m: "Se mantiene", n: "No va / se retira", t: "Técnico", o: "Otro" };
           const fotos = Array.isArray(v.fotos) ? v.fotos : [];
-          if (fotos.length) { L.push(`Fotos (${fotos.length}) — cada link abre la foto:`); fotos.forEach((x, j) => { const u = String((x && x.u) || ""); if (!u || /^data:/.test(u)) return; L.push(`  Foto ${j + 1} [${VT[x.tag] || x.tag || "sin etiqueta"}]${x.n ? " " + x.n : ""}: ${/^https?:/.test(u) ? u : "https://" + base + (u.startsWith("/") ? "" : "/") + u}`); }); }
+          if (fotos.length) { L.push(`Fotos (${fotos.length}) — cada link abre la foto:`); fotos.forEach((x, j) => { const u = String((x && x.u) || ""); if (!u || /^data:/.test(u)) return; L.push(`  Foto ${j + 1} [${VT[x.tag] || x.tag || "sin etiqueta"}]${x.n ? " " + x.n : ""}: ${absU(u)}`); if (fdesc[absU(u)]) L.push(`    Qué se ve: ${fdesc[absU(u)]}`); }); }
           if (v.inf) {
             const inf = v.inf, txt = (y) => (typeof y === "string" ? y : JSON.stringify(y));
             L.push(`Informe IA de la visita (${inf.ts ? fechaLarga(Number(inf.ts)) : ""}):`);
@@ -302,7 +331,7 @@ export default async function handler(req, res) {
     }
     if (q.todo !== undefined) {
       // acceso de lectura a todo el entorno (solo consulta): índice, una sección completa o búsqueda de texto
-      const PROHIBIDO = /^(codigos|cfg|asist_cfg|seg_cfg|seg_flags)$|^audfot_|^audtrash_|token|hash|sesion/i;
+      const PROHIBIDO = /^(codigos|cfg|asist_cfg|seg_cfg|seg_flags|fotodesc)$|^audfot_|^audtrash_|token|hash|sesion/i;
       const limpiarB64 = (v) => JSON.parse(JSON.stringify(v, (k, x) => (typeof x === "string" && /^data:/.test(x) ? "[imagen embebida omitida]" : x)));
       const rs = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave,actualizado&limit=2000&order=clave`, { headers: H });
       if (!rs.ok) throw new Error("db " + rs.status);
