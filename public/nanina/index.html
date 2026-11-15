@@ -1,0 +1,214 @@
+<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0f0e0d"><title>Asistente de Nanina</title>
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Nanina">
+<link rel="icon" type="image/png" href="/nanina/icon-192.png"><link rel="apple-touch-icon" href="/nanina/icon-180.png"><link rel="manifest" href="/nanina/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+:root{--bg:#0f0e0d;--card:#191715;--raise:#221f1c;--line:#2f2b27;--fg:#f2ede6;--sub:#a59d92;--gold:#c79a5b;--gsoft:rgba(199,154,91,.15);--ok:#4caf7a;--warn:#e0a83a;--bad:#e05a4e;--nav:#fff;color-scheme:dark}
+:root[data-tema="claro"]{--bg:#f6f2ec;--card:#ffffff;--raise:#f0ebe3;--line:#e2d9cc;--fg:#1a1714;--sub:#6c645a;--gold:#9a6b2c;--gsoft:rgba(154,107,44,.12);--nav:#1a1714;color-scheme:light}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--fg);font:15px/1.45 Inter,system-ui,-apple-system,sans-serif;-webkit-tap-highlight-color:transparent}
+button,input,select,textarea{font:inherit;color:inherit}button{cursor:pointer}
+h1,h2,h3,.serif{font-family:"Playfair Display",Georgia,serif}
+.app{max-width:680px;margin:0 auto;min-height:100%;display:flex;flex-direction:column}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px}
+header h1{margin:0;font-size:22px;font-weight:700}header small{display:block;color:var(--gold);font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-family:Inter,sans-serif;font-weight:600}
+.ib{background:var(--raise);border:1px solid var(--line);border-radius:999px;width:38px;height:38px;display:grid;place-items:center;font-size:17px}
+main{flex:1;padding:14px 16px calc(96px + env(safe-area-inset-bottom,0px))}
+nav{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:center;padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px))}
+nav .in{display:flex;width:100%;max-width:680px}
+nav button{flex:1;background:none;border:0;padding:6px 2px;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--nav);opacity:.78;font-size:11.5px;font-weight:600}
+nav button span{font-size:21px;line-height:1}nav button[aria-current="true"]{opacity:1;color:var(--gold)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:10px;align-items:center;justify-content:space-between}
+.sub{color:var(--sub);font-size:13px}.tag{display:inline-block;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--gsoft);color:var(--gold)}
+.tag.ok{background:rgba(76,175,122,.15);color:var(--ok)}.tag.warn{background:rgba(224,168,58,.15);color:var(--warn)}.tag.bad{background:rgba(224,90,78,.15);color:var(--bad)}
+.btn{background:var(--gold);color:#fff;border:0;border-radius:12px;padding:11px 16px;font-weight:700}.btn.sec{background:var(--raise);color:var(--fg);border:1px solid var(--line)}
+.btn.sm{padding:7px 12px;font-size:13px;border-radius:10px}
+.lst .card{cursor:pointer}.big{font-family:"Playfair Display",serif;font-size:19px;font-weight:600}
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px}.kpi b{display:block;font-family:"Playfair Display",serif;font-size:22px}
+.search{width:100%;padding:11px 13px;border-radius:12px;border:1px solid var(--line);background:var(--card);margin-bottom:12px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}.chips button{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 12px;font-size:13px}.chips button[aria-pressed="true"]{background:var(--gold);color:#fff;border-color:var(--gold)}
+/* chat */
+.chat{display:flex;flex-direction:column;gap:10px;padding-bottom:150px}
+.msg{max-width:88%;padding:10px 13px;border-radius:16px;white-space:pre-wrap;word-wrap:break-word}
+.msg.u{align-self:flex-end;background:var(--gold);color:#fff;border-bottom-right-radius:4px}.msg.a{align-self:flex-start;background:var(--card);border:1px solid var(--line);border-bottom-left-radius:4px}
+.msg .acc{margin-top:8px;font-size:12.5px;color:var(--ok)}.msg a.wa{display:inline-block;margin-top:8px;background:#25d366;color:#fff;text-decoration:none;padding:7px 12px;border-radius:10px;font-weight:700;font-size:13px}
+.dock{position:fixed;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom,0px));z-index:5;display:flex;justify-content:center;padding:8px 12px;background:linear-gradient(transparent,var(--bg) 30%)}
+.dock .in{width:100%;max-width:680px;display:flex;gap:8px;align-items:flex-end}
+.dock textarea{flex:1;min-height:46px;max-height:120px;resize:none;border-radius:14px;border:1px solid var(--line);background:var(--card);padding:12px}
+.mic{width:64px;height:64px;border-radius:50%;border:0;background:var(--gold);color:#fff;font-size:26px;flex:none;box-shadow:0 6px 20px rgba(0,0,0,.3)}.mic.on{background:var(--bad);animation:pul 1.2s infinite}
+@keyframes pul{50%{transform:scale(1.07)}}
+.vozbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+/* hoja */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--bg);width:100%;max-width:680px;max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
+.f{display:grid;gap:4px;margin-bottom:10px}.f label{font-size:12px;color:var(--sub);font-weight:600}
+.f input,.f select,.f textarea{width:100%;padding:11px 12px;border-radius:11px;border:1px solid var(--line);background:var(--card)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pin{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center}
+.pin input{font-size:28px;letter-spacing:.5em;text-align:center;width:200px;padding:12px;border-radius:14px;border:1px solid var(--line);background:var(--card)}
+.empty{text-align:center;color:var(--sub);padding:30px 10px}
+</style></head><body>
+<div class="app"><header><div><small>Broker inmobiliaria</small><h1 id="ttl">Asistente</h1></div><div style="display:flex;gap:8px"><button class="ib" id="btema" aria-label="Cambiar claro u oscuro">🌓</button><button class="ib" id="bcfg" aria-label="Ajustes">⚙</button></div></header>
+<main id="main"></main></div>
+<nav><div class="in" id="nav"></div></nav>
+<div id="dock"></div>
+<script>
+/* ===== Asistente de Nanina · broker inmobiliaria =====
+   Datos propios de Nanina (clave "nanina_db"), separados de los de Sebastián. */
+const SUPA_URL="https://bxhjgxzvayszfqwlwinq.supabase.co",SUPA_KEY="sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5",KEY="nanina_db";
+const SH={"Content-Type":"application/json",apikey:SUPA_KEY,Authorization:"Bearer "+SUPA_KEY};
+const VOCES=[["","Voz estándar"],["KoIf2KgeJA8uoGcgKIao","Marcela · alegre y melódica"],["SmgKjOvC1aIujLWcMzqq","Alisson · cálida"],["J4vZAFDEcpenkMp3f3R9","Valentina · de amiga"],["VmejBeYhbrcTPwDniox7","Lina · fresca"],["b2htR0pMe28pYwCY9gnP","Sofía · conversada"]];
+const DEF={perfil:{nombre:"Nanina",asist:"Asistente",voz:"",tema:"oscuro",manejando:false,hablar:true},pin:"",props:[],clientes:[],agenda:[],ops:[],chat:[],t:0};
+let D=JSON.parse(JSON.stringify(DEF)),TAB="chat",FIL="",FES="";
+const $=s=>document.querySelector(s),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const uid=()=>Math.random().toString(36).slice(2,9);
+const num=v=>typeof v==="number"?v:Math.round(Number(String(v??"").replace(/\./g,"").replace(",","."))||0);
+const fmt=v=>Math.round(num(v)).toLocaleString("es-AR");
+const money=(v,m)=>num(v)?(m==="$"?"$ ":"U$s ")+fmt(v):"—";
+const hoy=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+const fFec=f=>{if(!f)return"";const[y,m,d]=f.split("-");return d+"/"+m+"/"+y.slice(2)};
+async function sha(t){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("nanina:"+t));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}
+/* ---- guardado ---- */
+let sTimer=null;
+function save(){D.t=Date.now();try{localStorage.setItem(KEY,JSON.stringify(D))}catch{}clearTimeout(sTimer);sTimer=setTimeout(()=>fetch(SUPA_URL+"/rest/v1/bco_storage",{method:"POST",headers:{...SH,Prefer:"resolution=merge-duplicates"},body:JSON.stringify({key:KEY,value:JSON.stringify(D)})}).catch(()=>{}),600)}
+async function load(){let loc=null;try{loc=JSON.parse(localStorage.getItem(KEY)||"null")}catch{}let rem=null;
+  try{const r=await fetch(SUPA_URL+"/rest/v1/bco_storage?key=eq."+KEY+"&select=value&limit=1",{headers:SH});if(r.ok){const d=await r.json();if(d&&d[0])rem=JSON.parse(d[0].value)}}catch{}
+  const best=(rem&&(!loc||(rem.t||0)>=(loc.t||0)))?rem:loc;if(best)D={...DEF,...best,perfil:{...DEF.perfil,...(best.perfil||{})}};}
+/* ---- tema ---- */
+function tema(){document.documentElement.dataset.tema=D.perfil.tema==="claro"?"claro":"oscuro"}
+$("#btema").onclick=()=>{D.perfil.tema=D.perfil.tema==="claro"?"oscuro":"claro";tema();save()};
+/* ---- navegación ---- */
+const TABS=[["chat","🎙️","Asistente"],["props","🏠","Propiedades"],["clientes","👥","Clientes"],["agenda","📅","Agenda"],["ops","💼","Operaciones"]];
+function navR(){$("#nav").innerHTML=TABS.map(([k,i,n])=>`<button data-t="${k}" aria-current="${TAB===k}"><span>${i}</span>${n}</button>`).join("")}
+$("#nav").onclick=e=>{const b=e.target.closest("[data-t]");if(!b)return;TAB=b.dataset.t;FIL="";FES="";render();scrollTo(0,0)};
+function render(){$("#ttl").textContent=D.perfil.asist||"Asistente";navR();const m=$("#main");
+  m.innerHTML=TAB==="chat"?vChat():TAB==="props"?vProps():TAB==="clientes"?vCli():TAB==="agenda"?vAg():vOps();
+  $("#dock").innerHTML=TAB==="chat"?`<div class="dock"><div class="in"><textarea id="txt" rows="1" placeholder="Escribí o tocá el micrófono…"></textarea><button class="btn" id="env" style="height:46px">➤</button><button class="mic${escuchando?" on":""}" id="mic" aria-label="Hablar">🎙️</button></div></div>`:"";
+  if(TAB==="chat"){const t=$("#txt");t.onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();enviar(t.value)}};$("#env").onclick=()=>enviar(t.value);$("#mic").onclick=micToggle;setTimeout(()=>scrollTo(0,document.body.scrollHeight),30)}
+  const s=$("#q");if(s){s.oninput=()=>{FIL=s.value;const p=s.selectionStart;render();const n=$("#q");n.focus();n.setSelectionRange(p,p)}}}
+/* ---- vistas ---- */
+const EP={"Disponible":"ok","Reservada":"warn","Vendida":"bad","Alquilada":"bad","Retirada":""},EC={"Nuevo":"","En seguimiento":"warn","Visitó":"warn","Ofertó":"ok","Cerró":"ok","Perdido":"bad"},EO={"Reserva":"warn","Boleto":"warn","Escriturada / Firmado":"ok","Comisión cobrada":"ok","Caída":"bad"};
+const match=(o,q)=>!q||JSON.stringify(o).toLowerCase().includes(q.toLowerCase());
+function chips(list,cur){return`<div class="chips"><button data-fes="" aria-pressed="${!cur}">Todos</button>${list.map(x=>`<button data-fes="${esc(x)}" aria-pressed="${cur===x}">${esc(x)}</button>`).join("")}</div>`}
+function vProps(){const L=D.props.filter(p=>match(p,FIL)&&(!FES||p.estado===FES));
+  return`<div class="row" style="margin-bottom:12px"><h2 style="margin:0">Propiedades</h2><button class="btn sm" data-new="prop">＋ Nueva</button></div><input class="search" id="q" placeholder="Buscar dirección, barrio, dueño…" value="${esc(FIL)}">${chips(Object.keys(EP),FES)}
+  <div class="lst">${L.map(p=>`<div class="card" data-ed="prop:${p.id}"><div class="row"><div class="big">${esc(p.tit||p.dir||"Propiedad")}</div><span class="tag ${EP[p.estado]||""}">${esc(p.estado||"Disponible")}</span></div>
+  <div class="sub">${esc([p.op,p.tipo,p.barrio,p.amb?p.amb+" amb":"",p.m2?fmt(p.m2)+" m²":""].filter(Boolean).join(" · "))}</div><div class="row" style="margin-top:6px"><b>${money(p.precio,p.mon)}</b><span class="sub">${esc(p.dueno||"")}</span></div></div>`).join("")||`<div class="empty">Todavía no hay propiedades. Cargalas con ＋ o pedíselo al asistente.</div>`}</div>`}
+function vCli(){const L=D.clientes.filter(c=>match(c,FIL)&&(!FES||c.estado===FES));
+  return`<div class="row" style="margin-bottom:12px"><h2 style="margin:0">Clientes</h2><button class="btn sm" data-new="cli">＋ Nuevo</button></div><input class="search" id="q" placeholder="Buscar nombre, qué busca…" value="${esc(FIL)}">${chips(Object.keys(EC),FES)}
+  <div class="lst">${L.map(c=>`<div class="card" data-ed="cli:${c.id}"><div class="row"><div class="big">${esc(c.nom||"Cliente")}</div><span class="tag ${EC[c.estado]||""}">${esc(c.estado||"Nuevo")}</span></div>
+  <div class="sub">${esc(c.busca||"")}${num(c.presu)?" · hasta "+money(c.presu,c.mon):""}</div>${c.tel?`<div class="sub">📞 ${esc(c.tel)}</div>`:""}</div>`).join("")||`<div class="empty">Todavía no hay clientes.</div>`}</div>`}
+function vAg(){const A=D.agenda.slice().sort((a,b)=>(a.f+(a.h||"")).localeCompare(b.f+(b.h||""))),h=hoy(),prox=A.filter(a=>!a.hecho&&a.f>=h),pas=A.filter(a=>a.hecho||a.f<h).reverse().slice(0,30);
+  const it=a=>`<div class="card" data-ed="ag:${a.id}"><div class="row"><div><div class="big" style="font-size:17px">${esc(a.tit||"Evento")}</div><div class="sub">${fFec(a.f)}${a.h?" · "+esc(a.h):""}${a.lugar?" · "+esc(a.lugar):""}</div></div>${a.hecho?'<span class="tag ok">Hecho</span>':a.f===h?'<span class="tag warn">Hoy</span>':""}</div>${a.nota?`<div class="sub" style="margin-top:4px">${esc(a.nota)}</div>`:""}</div>`;
+  return`<div class="row" style="margin-bottom:12px"><h2 style="margin:0">Agenda</h2><button class="btn sm" data-new="ag">＋ Evento</button></div><h3 class="sub" style="font-family:Inter;margin:6px 0">Próximos</h3>${prox.map(it).join("")||'<div class="empty">Nada agendado.</div>'}${pas.length?`<h3 class="sub" style="font-family:Inter;margin:16px 0 6px">Anteriores</h3>`+pas.map(it).join(""):""}`}
+function vOps(){const L=D.ops.filter(o=>match(o,FIL)&&(!FES||o.estado===FES));const com=o=>num(o.monto)*num(o.pct)/100;
+  const cob=D.ops.filter(o=>o.estado==="Comisión cobrada"),pen=D.ops.filter(o=>!["Comisión cobrada","Caída"].includes(o.estado));
+  const sum=(a,m)=>a.filter(o=>(o.mon||"U$s")===m).reduce((s,o)=>s+com(o),0);
+  return`<div class="row" style="margin-bottom:12px"><h2 style="margin:0">Operaciones</h2><button class="btn sm" data-new="op">＋ Nueva</button></div>
+  <div class="kpis"><div class="kpi"><span class="sub">Comisiones por cobrar</span><b>U$s ${fmt(sum(pen,"U$s"))}</b>${sum(pen,"$")?`<span class="sub">+ $ ${fmt(sum(pen,"$"))}</span>`:""}</div><div class="kpi"><span class="sub">Comisiones cobradas</span><b>U$s ${fmt(sum(cob,"U$s"))}</b>${sum(cob,"$")?`<span class="sub">+ $ ${fmt(sum(cob,"$"))}</span>`:""}</div></div>
+  <input class="search" id="q" placeholder="Buscar…" value="${esc(FIL)}">${chips(Object.keys(EO),FES)}
+  <div class="lst">${L.map(o=>`<div class="card" data-ed="op:${o.id}"><div class="row"><div class="big" style="font-size:17px">${esc(o.prop||"Operación")}</div><span class="tag ${EO[o.estado]||""}">${esc(o.estado||"Reserva")}</span></div>
+  <div class="sub">${esc([o.tipo,o.cli,o.f?fFec(o.f):""].filter(Boolean).join(" · "))}</div><div class="row" style="margin-top:6px"><span>${money(o.monto,o.mon)}</span><b>Comisión ${num(o.pct)?num(o.pct)+"% = ":""}${money(com(o),o.mon)}</b></div></div>`).join("")||'<div class="empty">Sin operaciones cargadas.</div>'}</div>`}
+function vChat(){const v=D.chat.slice(-60);
+  return`<div class="vozbar"><button class="btn sm ${D.perfil.hablar?"":"sec"}" id="bhab">${D.perfil.hablar?"🔊 Contesta hablando":"🔇 Voz apagada"}</button><button class="btn sm ${D.perfil.manejando?"":"sec"}" id="bman">${D.perfil.manejando?"🚗 Manejando: activo":"🚗 Modo manejando"}</button>${D.chat.length?'<button class="btn sm sec" id="bclr">Limpiar chat</button>':""}</div>
+  <div class="chat">${v.length?v.map(m=>`<div class="msg ${m.r==="u"?"u":"a"}">${esc(m.t)}${(m.wa||[]).map(w=>`<br><a class="wa" target="_blank" rel="noopener" href="https://wa.me/${esc(w.tel)}?text=${encodeURIComponent(w.txt)}">WhatsApp a ${esc(w.a||w.tel)}</a>`).join("")}${m.acc?`<div class="acc">✓ ${esc(m.acc)}</div>`:""}</div>`).join(""):`<div class="card"><div class="big">Hola ${esc(D.perfil.nombre)} 👋</div><div class="sub" style="margin-top:6px">Hablame o escribime. Puedo cargar propiedades, clientes, visitas y operaciones, decirte qué tenés hoy, cruzar qué propiedades le sirven a cada cliente, redactar avisos y preparar mensajes de WhatsApp.<br><br>Probá: "Cargá un 3 ambientes en Palermo, venta, 180 mil dólares, dueña Laura" o "¿Qué tengo mañana?".</div></div>`}</div>`}
+/* ---- acciones de tarjetas ---- */
+document.addEventListener("click",e=>{const t=e.target;
+  if(t.closest("#bhab")){D.perfil.hablar=!D.perfil.hablar;save();if(!D.perfil.hablar)callar();render();return}
+  if(t.closest("#bman")){D.perfil.manejando=!D.perfil.manejando;if(D.perfil.manejando)D.perfil.hablar=true;save();render();if(D.perfil.manejando&&!escuchando)micToggle();return}
+  if(t.closest("#bclr")){if(confirmar("¿Borrar la conversación? Los datos cargados no se borran.")){D.chat=[];save();render()}return}
+  const f=t.closest("[data-fes]");if(f){FES=f.dataset.fes;render();return}
+  const n=t.closest("[data-new]");if(n){form(n.dataset.new,null);return}
+  const ed=t.closest("[data-ed]");if(ed){const[k,id]=ed.dataset.ed.split(":");form(k,id);return}});
+function confirmar(m){return window.confirm(m)}
+/* ---- formularios ---- */
+const SCH={
+ prop:{col:"props",tit:"Propiedad",f:[["tit","Título (ej: 3 amb. con balcón)"],["op","Operación",["Venta","Alquiler","Alquiler temporario"]],["tipo","Tipo",["Departamento","Casa","PH","Lote","Local","Oficina","Cochera","Otro"]],["dir","Dirección"],["barrio","Barrio / zona"],["precio","Precio","money"],["mon","Moneda",["U$s","$"]],["amb","Ambientes","n"],["m2","m² totales","n"],["dueno","Dueño/a"],["tel","Teléfono del dueño"],["estado","Estado",Object.keys(EP)],["notas","Notas","area"]]},
+ cli:{col:"clientes",tit:"Cliente",f:[["nom","Nombre"],["tel","Teléfono (WhatsApp)"],["mail","Email"],["busca","Qué busca (zona, ambientes, operación)","area"],["presu","Presupuesto máximo","money"],["mon","Moneda",["U$s","$"]],["estado","Estado",Object.keys(EC)],["notas","Notas","area"]]},
+ ag:{col:"agenda",tit:"Evento",f:[["tit","Qué es (visita, tasación, reunión…)"],["f","Fecha","date"],["h","Hora","time"],["lugar","Lugar / propiedad"],["cli","Con quién"],["nota","Notas","area"],["hecho","Estado",["Pendiente","Hecho"]]]},
+ op:{col:"ops",tit:"Operación",f:[["prop","Propiedad"],["cli","Cliente / comprador"],["tipo","Tipo",["Venta","Alquiler","Alquiler temporario"]],["monto","Monto de la operación","money"],["mon","Moneda",["U$s","$"]],["pct","Comisión %","n"],["estado","Estado",Object.keys(EO)],["f","Fecha","date"],["notas","Notas","area"]]}};
+function form(k,id){const S=SCH[k],arr=D[S.col],o=id?arr.find(x=>x.id===id):{};if(!o)return;
+  const val=(c)=>c==="hecho"?(o.hecho?"Hecho":"Pendiente"):o[c]??"";
+  const ov=document.createElement("div");ov.className="ov";ov.innerHTML=`<div class="sheet" role="dialog" aria-label="${S.tit}"><div class="row" style="margin-bottom:12px"><h2 style="margin:0">${id?"Editar":"Nuevo"}: ${S.tit}</h2><button class="ib" data-x aria-label="Cerrar">✕</button></div>
+  ${S.f.map(([c,l,t])=>`<div class="f"><label for="f_${c}">${l}</label>${Array.isArray(t)?`<select id="f_${c}">${t.map(x=>`<option${val(c)===x?" selected":""}>${x}</option>`).join("")}</select>`:t==="area"?`<textarea id="f_${c}" rows="3">${esc(val(c))}</textarea>`:`<input id="f_${c}" ${t==="date"?'type="date"':t==="time"?'type="time"':t==="money"||t==="n"?'inputmode="numeric"':""} ${t==="money"?'data-money':""} value="${esc(t==="money"&&val(c)!==""?fmt(val(c)):val(c))}">`}</div>`).join("")}
+  <div class="row" style="margin-top:14px">${id?'<button class="btn sec" data-del style="color:var(--bad)">Borrar</button>':"<span></span>"}<button class="btn" data-ok>Guardar</button></div></div>`;
+  document.body.appendChild(ov);
+  ov.querySelectorAll("[data-money]").forEach(i=>i.oninput=()=>{const n=i.value.replace(/\D/g,"");i.value=n?Number(n).toLocaleString("es-AR"):""});
+  ov.onclick=e=>{if(e.target===ov||e.target.closest("[data-x]"))ov.remove();
+    if(e.target.closest("[data-del]")&&confirmar("¿Borrar "+S.tit.toLowerCase()+"?")){D[S.col]=arr.filter(x=>x.id!==id);save();ov.remove();render()}
+    if(e.target.closest("[data-ok]")){const n=id?o:{id:uid()};S.f.forEach(([c,l,t])=>{let v=ov.querySelector("#f_"+c).value;if(t==="money"||t==="n")v=num(v);if(c==="hecho")v=v==="Hecho";n[c]=v});if(!id)arr.push(n);save();ov.remove();render()}}}
+/* ---- ajustes ---- */
+$("#bcfg").onclick=()=>{const P=D.perfil,ov=document.createElement("div");ov.className="ov";
+  ov.innerHTML=`<div class="sheet"><div class="row" style="margin-bottom:12px"><h2 style="margin:0">Ajustes</h2><button class="ib" data-x aria-label="Cerrar">✕</button></div>
+  <div class="f"><label>Tu nombre</label><input id="c_nom" value="${esc(P.nombre)}"></div><div class="f"><label>Nombre del asistente</label><input id="c_as" value="${esc(P.asist)}"></div>
+  <div class="f"><label>Voz del asistente (tocá una para escucharla)</label><div style="display:grid;gap:6px">${VOCES.map(([id,n])=>`<button class="btn sec" data-voz="${id}" style="text-align:left;${(P.voz||"")===id?"border:2px solid var(--gold)":""}">${(P.voz||"")===id?"✓ ":"▶ "}${n}</button>`).join("")}</div></div>
+  <div class="f"><label>Clave de 4 números</label><input id="c_pin" inputmode="numeric" maxlength="4" placeholder="Dejala vacía para no cambiarla"></div>
+  <button class="btn" data-ok style="width:100%;margin-top:6px">Guardar</button></div>`;
+  document.body.appendChild(ov);
+  ov.onclick=async e=>{if(e.target===ov||e.target.closest("[data-x]")){ov.remove();return}
+    const vz=e.target.closest("[data-voz]");if(vz){P.voz=vz.dataset.voz;save();ov.querySelectorAll("[data-voz]").forEach(b=>{const s=b.dataset.voz===P.voz;b.style.border=s?"2px solid var(--gold)":"";b.textContent=(s?"✓ ":"▶ ")+VOCES.find(x=>x[0]===b.dataset.voz)[1]});decir("Hola "+(P.nombre||"")+", soy tu asistente. ¿En qué te ayudo hoy?");return}
+    if(e.target.closest("[data-ok]")){P.nombre=ov.querySelector("#c_nom").value.trim()||"Nanina";P.asist=ov.querySelector("#c_as").value.trim()||"Asistente";const pn=ov.querySelector("#c_pin").value.trim();if(/^\d{4}$/.test(pn))D.pin=await sha(pn);save();ov.remove();render()}}};
+/* ---- voz: hablar ---- */
+let audio=null,hablando=false;
+function destrabar(){try{if(!audio)audio=new Audio();if(!hablando&&(!audio.src||audio.paused)){audio.src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";audio.play().catch(()=>{})}}catch{}}
+document.addEventListener("pointerdown",destrabar,{capture:true});document.addEventListener("touchend",destrabar,{capture:true});
+function callar(){hablando=false;try{audio&&audio.pause()}catch{}try{speechSynthesis.cancel()}catch{}}
+function paraVoz(t){return String(t).replace(/U\$s\s?([\d.]+)/g,(m,n)=>n+" dólares").replace(/\$\s?([\d.]+)/g,(m,n)=>n+" pesos").replace(/(\d{1,3}(?:\.\d{3})+)/g,m=>m.replace(/\./g,"")).replace(/m²/g," metros cuadrados").replace(/[*_#>`]/g,"").replace(/https?:\/\/\S+/g,"")}
+async function decir(t,alTerminar){if(!t)return alTerminar&&alTerminar();callar();hablando=true;const txt=paraVoz(t).slice(0,2400);
+  const fin=()=>{hablando=false;alTerminar&&alTerminar()};
+  try{const r=await fetch("/api/tts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(D.perfil.voz?{texto:txt,voz:D.perfil.voz}:{texto:txt})});if(!r.ok)throw 0;
+    const u=URL.createObjectURL(await r.blob());if(!audio)audio=new Audio();audio.src=u;audio.onended=fin;audio.onerror=fin;await audio.play();return}catch{}
+  try{const s=new SpeechSynthesisUtterance(txt);s.lang="es-AR";s.onend=fin;s.onerror=fin;speechSynthesis.speak(s)}catch{fin()}}
+/* ---- voz: escuchar ---- */
+let rec=null,escuchando=false,texto="",tEnv=null;
+function micToggle(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){alertaChat("Este navegador no permite dictar. Usá Safari o Chrome actualizados.");return}
+  if(escuchando){rec&&rec.stop();return}callar();texto="";rec=new SR();rec.lang="es-AR";rec.interimResults=true;rec.continuous=true;
+  rec.onresult=e=>{let s="";for(let i=0;i<e.results.length;i++)s+=e.results[i][0].transcript;texto=s;const t=$("#txt");if(t)t.value=s;clearTimeout(tEnv);tEnv=setTimeout(()=>rec&&rec.stop(),2500)};
+  rec.onend=()=>{escuchando=false;clearTimeout(tEnv);const m=$("#mic");m&&m.classList.remove("on");if(texto.trim())enviar(texto)};
+  rec.onerror=()=>{};try{rec.start();escuchando=true;const m=$("#mic");m&&m.classList.add("on")}catch{}}
+function alertaChat(t){D.chat.push({r:"a",t});save();render()}
+/* ---- IA ---- */
+function contexto(){const lim=a=>a.slice(-150);return JSON.stringify({hoy:hoy(),dia_semana:new Date().toLocaleDateString("es-AR",{weekday:"long"}),propiedades:lim(D.props),clientes:lim(D.clientes),agenda:lim(D.agenda.filter(a=>!a.hecho||a.f>=hoy())).concat([]),operaciones:lim(D.ops)})}
+function sistema(){return`Sos "${D.perfil.asist||"Asistente"}", la asistente personal de ${D.perfil.nombre||"Nanina"}, broker inmobiliaria en Argentina. Hablás en español rioplatense, cálida, práctica y breve: tus respuestas se escuchan en voz alta (a veces manejando), así que contestá en 1 a 4 oraciones, sin listas largas ni símbolos, salvo que te pida detalle.
+Tenés acceso completo a sus datos (propiedades, clientes, agenda y operaciones) en el JSON que te paso. Usalos para responder: qué tiene hoy, qué propiedades le sirven a un cliente (cruzá zona, ambientes, operación y presupuesto), comisiones por cobrar, a quién hacerle seguimiento, etc. También redactás avisos de propiedades, mensajes y respuestas a clientes.
+Montos: dólares se escriben "U$s 180.000"; pesos "$ 1.500.000"; sin decimales. Fechas en formato AAAA-MM-DD en las acciones.
+Para CARGAR o CAMBIAR datos, agregá al final una o más líneas así (una por acción), exactamente:
+<<ACCION>>{"tipo":"...","datos":{...}}<<FIN>>
+Tipos: "agregar_propiedad" (tit, op[Venta|Alquiler|Alquiler temporario], tipo, dir, barrio, precio número, mon[U$s|$], amb, m2, dueno, tel, estado[${Object.keys(EP).join("|")}], notas); "editar_propiedad" (id + campos a cambiar); "agregar_cliente" (nom, tel, mail, busca, presu, mon, estado[${Object.keys(EC).join("|")}], notas); "editar_cliente" (id + campos); "agendar" (tit, f, h "HH:MM", lugar, cli, nota); "editar_evento" (id + campos; hecho:true para marcar hecho); "agregar_operacion" (prop, cli, tipo, monto, mon, pct, estado[${Object.keys(EO).join("|")}], f, notas); "editar_operacion" (id + campos); "whatsapp" (tel con código de país sin + ni espacios, ej 5491155556666; a = nombre; txt = mensaje) para dejarle listo un mensaje que ella manda con un toque.
+Si falta un dato importante para cargar algo, cargalo igual con lo que haya y decile qué falta. Nunca inventes datos que no estén. Confirmá en una oración lo que hiciste.`}
+async function enviar(q){q=String(q||"").trim();if(!q)return;const t=$("#txt");if(t)t.value="";D.chat.push({r:"u",t:q});save();render();
+  const pend={r:"a",t:"…"};D.chat.push(pend);render();
+  const hist=D.chat.slice(-14,-1).filter(m=>m.t&&m.t!=="…").map(m=>({role:m.r==="u"?"user":"assistant",content:m.t}));
+  while(hist.length&&hist[0].role!=="user")hist.shift();
+  hist[hist.length-1]={role:"user",content:"DATOS (JSON):\n"+contexto()+"\n\nMENSAJE: "+q};
+  let out="";try{const r=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-5",max_tokens:1500,system:sistema(),messages:hist})});const j=await r.json();
+    out=(j.content||[]).filter(c=>c.type==="text").map(c=>c.text).join("\n").trim()||("No pude responder: "+(j.error&&j.error.message||"error"));}catch(e){out="No pude conectarme. Revisá internet y probá de nuevo."}
+  const hechos=[],wa=[];out=out.replace(/<<ACCION>>([\s\S]*?)<<FIN>>/g,(m,js)=>{try{const a=JSON.parse(js);const r=aplicar(a,wa);if(r)hechos.push(r)}catch{}return""}).trim();
+  pend.t=out||"Listo.";if(hechos.length)pend.acc=hechos.join(" · ");if(wa.length)pend.wa=wa;save();render();
+  if(D.perfil.hablar)decir(pend.t,()=>{if(D.perfil.manejando&&TAB==="chat"&&!escuchando)setTimeout(micToggle,400)});}
+function aplicar(a,wa){const d=a.datos||{},T=a.tipo;const fix=o=>{["precio","presu","monto","amb","m2","pct"].forEach(k=>{if(k in o)o[k]=num(o[k])});return o};
+  const add=(col,def,label)=>{const o=fix({id:uid(),...def,...d});delete o.id_;D[col].push(o);return label+": "+(o.tit||o.nom||o.prop||o.dir||"")};
+  const ed=(col,label)=>{const o=D[col].find(x=>x.id===d.id);if(!o)return null;Object.assign(o,fix({...d}));return label+" actualizado"};
+  if(T==="agregar_propiedad")return add("props",{estado:"Disponible",mon:"U$s"},"Propiedad cargada");
+  if(T==="editar_propiedad")return ed("props","Propiedad");
+  if(T==="agregar_cliente")return add("clientes",{estado:"Nuevo",mon:"U$s"},"Cliente cargado");
+  if(T==="editar_cliente")return ed("clientes","Cliente");
+  if(T==="agendar")return add("agenda",{f:hoy(),hecho:false},"Agendado");
+  if(T==="editar_evento")return ed("agenda","Evento");
+  if(T==="agregar_operacion")return add("ops",{estado:"Reserva",mon:"U$s"},"Operación cargada");
+  if(T==="editar_operacion")return ed("ops","Operación");
+  if(T==="whatsapp"&&d.txt){wa.push({tel:String(d.tel||"").replace(/\D/g,""),a:d.a||"",txt:d.txt});return null}
+  return null}
+/* ---- clave al entrar ---- */
+function pedirPin(){return new Promise(res=>{const p=document.createElement("div");p.className="pin";const nuevo=!D.pin;
+  p.innerHTML=`<h1 style="margin:0">${esc(D.perfil.asist||"Asistente")}</h1><div class="sub">${nuevo?"Elegí una clave de 4 números para proteger tus datos":"Ingresá tu clave"}</div><input id="pinin" inputmode="numeric" maxlength="4" type="password" autocomplete="off"><div class="sub" id="pinerr" style="color:var(--bad);min-height:18px"></div><button class="btn" id="pinok">${nuevo?"Guardar clave":"Entrar"}</button>`;
+  document.body.appendChild(p);const i=p.querySelector("#pinin");setTimeout(()=>i.focus(),50);
+  const ok=async()=>{const v=i.value.trim();if(!/^\d{4}$/.test(v)){p.querySelector("#pinerr").textContent="Tienen que ser 4 números";return}const h=await sha(v);
+    if(nuevo){D.pin=h;save();p.remove();res()}else if(h===D.pin){p.remove();res()}else{p.querySelector("#pinerr").textContent="Clave incorrecta";i.value=""}};
+  p.querySelector("#pinok").onclick=ok;i.onkeydown=e=>{if(e.key==="Enter")ok()}})}
+(async()=>{await load();tema();await pedirPin();render();
+  setInterval(async()=>{if(document.hidden||document.querySelector(".ov")||escuchando)return;const t0=D.t;try{const r=await fetch(SUPA_URL+"/rest/v1/bco_storage?key=eq."+KEY+"&select=value&limit=1",{headers:SH});const d=await r.json();if(d&&d[0]){const x=JSON.parse(d[0].value);if((x.t||0)>(t0||0)){D={...DEF,...x,perfil:{...DEF.perfil,...(x.perfil||{})}};render()}}}catch{}},20000)})();
+</script>
+<script src="/app-update.js" defer></script>
+</body></html>
