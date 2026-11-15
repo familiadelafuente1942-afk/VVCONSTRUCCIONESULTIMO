@@ -228,6 +228,50 @@ export default async function handler(req, res) {
       L.push("", "Para agregar: POST a este mismo /api/auditoria con JSON {k:<clave del enlace>, op:'plan_obj_add', t:'texto', fecha:'aaaa-mm-dd', area:'Contactos|Mi prima|Primo y socio|Edificio|Dinero|Para mí'}; op:'plan_obj_hecho' {id}; op:'plan_contacto_add' {n,d,f,q,r}. No borra nada.");
       res.setHeader("Content-Type", "text/plain; charset=utf-8"); res.status(200).send(L.join("\n")); return;
     }
+    if (q.costos !== undefined) {
+      // resumen en texto (liviano) del presupuesto, compras y pagos de las apps de costos
+      const APPS = { barracas: "barracas_db", paseo: "paseocolon_db", paseocolon: "paseocolon_db", casa: "casa_db", terralagos: "casa_db", canning: "casa_db" };
+      const k = APPS[String(q.costos || "barracas").toLowerCase()] || "barracas_db";
+      const cur = await leer(H, k); let D = null; try { D = cur && (typeof cur.v === "string" ? JSON.parse(cur.v) : cur.v); } catch { D = null; }
+      const obrasC = (D && Array.isArray(D.obras)) ? D.obras : [];
+      if (!obrasC.length) { res.status(404).send("No hay datos guardados en " + k + "."); return; }
+      const N = (v) => typeof v === "number" ? Math.round(v) || 0 : Math.round(Number(String(v ?? 0).replace(/\./g, "").replace(",", ".")) || 0);
+      const $ = (v) => "$" + N(v).toLocaleString("es-AR");
+      const KES = { p: "Pendiente", z: "Cotizando", o: "Pedido", c: "Comprado", t: "En tránsito", r: "Recibido en obra" };
+      const kTot = (x) => (x.var && x.var.length) ? x.var.reduce((a, v) => a + N(v.q) * N(v.pu), 0) : N(x.q) * N(x.pu);
+      const L = ["COSTOS · " + k.replace("_db", "").toUpperCase() + " (solo lectura) · actualizado " + (cur.t ? fechaLarga(Number(cur.t)) : "?"), ""];
+      const J = [];
+      for (const o of obrasC) {
+        const rub = Array.isArray(o.rub) ? o.rub : [], comp = Array.isArray(o.compras) ? o.compras : [];
+        L.push("=== OBRA: " + (o.nombre || "sin nombre") + " ===" + (o.cot ? " · cotización U$s " + N(o.cot).toLocaleString("es-AR") : ""));
+        let totMat = 0, totMo = 0, pagMo = 0;
+        L.push("", "PRESUPUESTO POR RUBRO (materiales = suma de Compras de ese rubro):");
+        const jr = [];
+        for (const r of rub) {
+          const mat = comp.filter((x) => x.r === r.n).reduce((a, x) => a + kTot(x), 0), mo = N(r.e);
+          const pg = Array.isArray(r.pg) ? r.pg : [], pag = pg.reduce((a, z) => a + (z.ok ? N(z.m) : 0), 0);
+          totMat += mat; totMo += mo; pagMo += pag;
+          L.push(`- ${r.n}: materiales ${$(mat)} · mano de obra ${$(mo)}${r.ct ? " (" + r.ct + ")" : ""} · total ${$(mat + mo)} · MO pagada ${$(pag)} · saldo MO ${$(mo - pag)}`);
+          pg.forEach((z) => L.push(`    · pago MO: ${z.c || ""} · ${z.f || "sin fecha"} · ${$(z.m)} · ${z.ok ? "pagado" : "a pagar"}`));
+          jr.push({ rubro: r.n, materiales: mat, mano_de_obra: mo, contratista: r.ct || "", mo_pagada: pag, pagos_mo: pg.map((z) => ({ concepto: z.c || "", fecha: z.f || "", monto: N(z.m), pagado: !!z.ok })) });
+        }
+        const sinR = comp.filter((x) => !rub.some((r) => r.n === x.r)).reduce((a, x) => a + kTot(x), 0);
+        if (sinR) L.push(`- Compras sin rubro: ${$(sinR)}`);
+        L.push(`TOTAL: materiales ${$(totMat + sinR)} · mano de obra ${$(totMo)} · total ${$(totMat + sinR + totMo)} · MO pagada ${$(pagMo)}`, "");
+        L.push("COMPRAS (" + comp.length + "):");
+        const jc = comp.map((x, i) => {
+          const t = kTot(x);
+          L.push(`${i + 1}. ${x.n || "?"} · ${x.q || 0} ${x.u || ""} · rubro ${x.r || "-"} · ${t ? $(t) : "sin precio"} · ${KES[x.es || "p"] || x.es} · proveedor ${x.prov || "-"} · en obra ${x.fn || "-"} · pago ${x.fp || "-"} · ${x.pg === "1" ? "PAGADO" : "no pagado"}`);
+          (x.var || []).forEach((v) => L.push(`     ${v.d || "modelo"}: ${v.q || 0} × ${$(v.pu)} = ${$(N(v.q) * N(v.pu))}`));
+          return { item: x.n, cantidad: x.q || 0, unidad: x.u || "", rubro: x.r || "", total: t, estado: KES[x.es || "p"] || x.es, proveedor: x.prov || "", necesario_en_obra: x.fn || "", fecha_pago: x.fp || "", pagado: x.pg === "1", variantes: (x.var || []).map((v) => ({ modelo: v.d, cantidad: v.q, precio_unit: N(v.pu) })) };
+        });
+        if (!comp.length) L.push("(sin compras cargadas)");
+        L.push("");
+        J.push({ obra: o.nombre, cotizacion_usd: o.cot || null, rubros: jr, compras: jc, totales: { materiales: totMat + sinR, mano_de_obra: totMo, total: totMat + sinR + totMo, mo_pagada: pagMo } });
+      }
+      if (f === "json") { res.status(200).json({ base: k, obras: J }); return; }
+      res.setHeader("Content-Type", "text/plain; charset=utf-8"); res.status(200).send(L.join("\n")); return;
+    }
     if (q.todo !== undefined) {
       // acceso de lectura a todo el entorno (solo consulta): índice, una sección completa o búsqueda de texto
       const PROHIBIDO = /^(codigos|cfg|asist_cfg|seg_cfg|seg_flags)$|^audfot_|^audtrash_|token|hash|sesion/i;
@@ -260,9 +304,9 @@ export default async function handler(req, res) {
         res.setHeader("Content-Type", "application/json; charset=utf-8"); res.status(200).send(JSON.stringify({ busqueda: q.q, resultados: hits }, null, 1)); return;
       }
       const L = ["ENTORNO COMPLETO (solo lectura)\n", "Cada sección se pide con: " + enlace(rev) + "&todo=1&s=<sección>", "Buscar texto en todo: " + enlace(rev) + "&todo=1&q=<palabra>\n",
-        "Guía: barracas_db = app de costos de Barracas (presupuesto, compras, cash flow, obras); paseocolon_db = Paseo Colón; casa_db = Terralagos Canning (casa). seg_obras, seg_tareas, seg_personal, seg_gastos, seg_sueldos, seg_agenda, seg_hitos, seg_registros, seg_adicionales = app de Seguimiento. snap_<obra> = estado de NEXO 2 (avance, tarjetas, planos). informes_<obra> = informes semanales y avances. audreg_<obra> = actas de auditoría. gestion_<obra> = registros de gestión de NEXO 2. adic_<obra> = certificados de tareas adicionales. edif_proyecto = edificio propio.\n", "SECCIONES:"];
+        "Guía: RESUMEN LIVIANO de costos: &costos=barracas | &costos=paseo | &costos=casa (agregá &f=json si lo querés en JSON). barracas_db = app de costos de Barracas (presupuesto, compras, cash flow, obras); paseocolon_db = Paseo Colón; casa_db = Terralagos Canning (casa). seg_obras, seg_tareas, seg_personal, seg_gastos, seg_sueldos, seg_agenda, seg_hitos, seg_registros, seg_adicionales = app de Seguimiento. snap_<obra> = estado de NEXO 2 (avance, tarjetas, planos). informes_<obra> = informes semanales y avances. audreg_<obra> = actas de auditoría. gestion_<obra> = registros de gestión de NEXO 2. adic_<obra> = certificados de tareas adicionales. edif_proyecto = edificio propio.\n", "SECCIONES:"];
       claves.forEach((r) => L.push(`- ${r.clave} (actualizado ${fechaLarga(Date.parse(r.actualizado))})`));
-      L.push("\nTambién: &plan=1 (Plan 90 días del edificio, con permiso para agregar objetivos y contactos), &hoy=1 (lo cargado hoy), &obra=<nombre> (PDF de acta).");
+      L.push("\nTambién: &costos=barracas (presupuesto, compras y pagos en texto), &plan=1 (Plan 90 días del edificio, con permiso para agregar objetivos y contactos), &hoy=1 (lo cargado hoy), &obra=<nombre> (PDF de acta).");
       res.setHeader("Content-Type", "text/plain; charset=utf-8"); res.status(200).send(L.join("\n")); return;
     }
     if (q.hoy !== undefined || q.fecha) {
