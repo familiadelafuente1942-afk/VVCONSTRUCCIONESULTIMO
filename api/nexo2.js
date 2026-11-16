@@ -253,6 +253,18 @@ export default async function handler(req, res) {
 
     // ===== Paseo Colón · presupuesto y cronograma sincronizados entre dispositivos (último cambio gana) =====
     const pcKey = b.app === "barracas" ? "barracas_db" : b.app === "casa" ? "casa_db" : b.app === "canning" ? "canning_db" : b.app === "milanocasa" ? "milanocasa_db" : "paseocolon_db";
+    if (b.op === "pc_diag") {
+      // resumen (sin contenido) de las visitas guardadas en la base, sus copias y los archivos subidos, para diagnosticar pérdidas
+      const res1 = (d) => { try { const n = JSON.parse(d.v); return { t: d.t, kb: Math.round(d.v.length / 1024), visDel: (n.obras || []).map((o) => o.visDel || []), vis: (n.obras || []).map((o) => (o.vis || []).map((v) => [v.id, v.f, String(v.notas || "").length + String(v.tar || "").length + String(v.dem || "").length + String(v.cons || "").length + String(v.tec || "").length, (v.fotos || []).length, (v.aud || []).length, (v.videos || []).length, (v.del || []).length])) }; } catch (e) { return { err: e.message }; } };
+      const out = {};
+      for (const k of [pcKey, pcKey + "_prev", ...Array.from({ length: 24 }, (_, h) => pcKey + "_h" + h)]) { const d = await leer(H, k).catch(() => null); if (d && d.v) out[k] = res1(d); }
+      for (const pre of [b.app + "/", b.app]) {
+        const r = await fetch(`${URL_BASE}/storage/v1/object/list/nexo2-fotos`, { method: "POST", headers: H, body: JSON.stringify({ prefix: pre, limit: 1000, offset: 0, sortBy: { column: "created_at", order: "desc" } }) });
+        const j = await r.json().catch(() => null);
+        out["st_" + pre] = { s: r.status, n: Array.isArray(j) ? j.length : j, top: Array.isArray(j) ? j.slice(0, 60).map((x) => x.name) : null };
+      }
+      res.status(200).json(out); return;
+    }
     if (b.op === "pc_get") {
       let v = await leer(H, pcKey);
       // una sola vez: recupera visitas, fotos, audios y videos que un equipo desactualizado haya pisado
