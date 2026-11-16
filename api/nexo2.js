@@ -555,12 +555,16 @@ export default async function handler(req, res) {
       let quien = "", ct = null;
       if (b.op === "ct_login") {
         const n = norm(b.codigo);
-        const x = n ? lista.find((c) => norm(c.cod) === n) : null;
+        const xs = n ? lista.filter((c) => norm(c.cod) === n) : [];
+        const x = xs[0];
         if (!x) { await pausa(600); res.status(200).json({ ok: false }); return; }
-        res.status(200).json({ ok: true, ct: { id: x.id, obra: x.obra, obraNombre: x.obraNombre, nombre: x.nombre, rubro: x.rubro, jw: ((reg.jw || {})[x.obra]) || "" } }); return;
+        // un mismo contratista puede tener acceso a varias obras (mismo código): devuelve todas
+        const obras = xs.map((c) => ({ id: c.obra, nombre: c.obraNombre, jw: ((reg.jw || {})[c.obra]) || "" }));
+        res.status(200).json({ ok: true, ct: { id: x.id, obra: x.obra, obraNombre: x.obraNombre, nombre: x.nombre, rubro: x.rubro, jw: ((reg.jw || {})[x.obra]) || "", obras } }); return;
       }
       const obraAll = String(b.obra || "");
-      if (cr.rol === "ct") { const n = norm(cr.codigo); ct = n ? lista.find((c) => norm(c.cod) === n) : null; if (ct) quien = "ct"; }
+      let misCt = [];
+      if (cr.rol === "ct") { const n = norm(cr.codigo); misCt = n ? lista.filter((c) => norm(c.cod) === n) : []; ct = misCt.find((c) => c.obra === obraAll) || misCt[0] || null; if (ct) quien = "ct"; }
       else if (cr.rol === "dir" && dirOk(cr.codigo)) quien = "dir";
       else if (cr.rol === "jefe" && norm(cr.codigo) && /^[A-Za-z0-9_-]{1,40}$/.test(obraAll) && norm((cods.obras[obraAll] || {}).j) === norm(cr.codigo)) quien = "jefe";
       if (!quien) { await pausa(600); res.status(403).json({ error: "Volvé a ingresar tu código." }); return; }
@@ -587,8 +591,11 @@ export default async function handler(req, res) {
       }
       if (b.op === "ct_mine") {
         if (quien !== "ct") { res.status(403).json({ error: "Solo para contratistas" }); return; }
-        const v = await leer(H, clave);
-        res.status(200).json({ ok: true, jw: ((reg.jw || {})[ct.obra]) || "", items: ((v && v.items) || []).filter((x) => x.ctId === ct.id) }); return;
+        // todas las obras donde tiene acceso, cada reclamo con su obra
+        const ids = new Set(misCt.map((c) => c.id));
+        const porObra = await Promise.all(misCt.map(async (c) => { const v = await leer(H, "ctrec_" + c.obra); return ((v && v.items) || []).filter((x) => ids.has(x.ctId)).map((x) => ({ ...x, obraNombre: c.obraNombre })); }));
+        const obras = misCt.map((c) => ({ id: c.obra, nombre: c.obraNombre, jw: ((reg.jw || {})[c.obra]) || "" }));
+        res.status(200).json({ ok: true, jw: ((reg.jw || {})[ct.obra]) || "", obras, items: porObra.flat() }); return;
       }
       if (b.op === "ct_new") {
         if (quien !== "ct") { res.status(403).json({ error: "Solo para contratistas" }); return; }
@@ -665,6 +672,16 @@ export default async function handler(req, res) {
       }
       if (b.op === "ct_cod_save") {
         if (quien !== "dir") { res.status(403).json({ error: "Solo Dirección" }); return; }
+        // sumarle esta obra a un contratista que ya tiene código (mismo código para todas sus obras)
+        if (b.cod) {
+          const base = lista.find((c) => norm(c.cod) === norm(b.cod));
+          if (!base) { res.status(400).json({ error: "No existe ese contratista" }); return; }
+          if (lista.some((c) => norm(c.cod) === norm(b.cod) && c.obra === obra)) { res.status(400).json({ error: "Ya tiene acceso a esa obra" }); return; }
+          const x = { id: "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 4), obra, obraNombre: str(b.obraNombre, 120), nombre: base.nombre, rubro: str(b.rubro, 60).trim() || base.rubro, cod: base.cod, creado: Date.now() };
+          lista.push(x);
+          await escribir(H, "ctcods", { ...reg, items: lista });
+          res.status(200).json({ ok: true, ct: x }); return;
+        }
         const nombre = str(b.nombre, 80).trim(), rubro = str(b.rubro, 60).trim();
         if (!nombre) { res.status(400).json({ error: "Poné el nombre del contratista" }); return; }
         const usados = new Set([norm(dirVigente(cods)), ...lista.map((c) => norm(c.cod))]);
