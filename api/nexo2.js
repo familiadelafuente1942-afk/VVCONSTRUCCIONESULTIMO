@@ -281,6 +281,15 @@ export default async function handler(req, res) {
           await escribir(H, pcKey, nv); v = nv;
         } catch {}
       }
+      // una sola vez: saca la visita de prueba del 15/11 que la recuperación había vuelto a traer (ya estaba borrada)
+      if (v && v.v && pcKey === "barracas_db" && !String(v.v).includes('"_fixVr":1')) {
+        try {
+          const n = JSON.parse(v.v);
+          (n.obras || []).forEach((o) => { const fu = (o.vis || []).filter((x) => /^vr\d{8}$/.test(x.id || "") && (x.fotos || []).concat(x.aud || [], x.videos || []).every((y) => /^[fav]r\d+$/.test(y.id || ""))); if (fu.length) { o.visDel = [...new Set([...(o.visDel || []), ...fu.map((x) => x.id)])]; o.vis = o.vis.filter((x) => !fu.includes(x)); } });
+          n._fixVr = 1; const nv = { t: Date.now(), v: JSON.stringify(n) };
+          await escribir(H, pcKey + "_prev", v); await escribir(H, pcKey, nv); v = nv;
+        } catch {}
+      }
       res.status(200).json({ ok: true, doc: v || null }); return;
     }
     if (b.op === "pc_put") {
