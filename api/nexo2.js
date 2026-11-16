@@ -547,7 +547,7 @@ export default async function handler(req, res) {
       const num = (x, lo, hi) => Math.min(hi, Math.max(lo, Number(x) || 0));
       const idOk = (x) => String(x || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
       const TIPOS = ["material", "definicion", "retraso", "adicional", "otro", "presupuesto", "materiales", "auditoria"];
-      const DOC = (t) => t === "presupuesto" || t === "materiales" || t === "auditoria";
+      const DOC = (t) => t === "presupuesto" || t === "materiales"; // la auditoría entra como un reclamo más (se responde y cuenta en los tiempos)
       const ESTADOS = ["abierto", "gestion", "resuelto", "rechazado", "cerrado", "recibido"];
       const reg = (await leer(H, "ctcods")) || { items: [] };
       const lista = Array.isArray(reg.items) ? reg.items : [];
@@ -666,6 +666,16 @@ export default async function handler(req, res) {
         it.editado = t;
         await escribir(H, clave, { items });
         res.status(200).json({ ok: true, rec: it }); return;
+      }
+      if (b.op === "ct_pdf") {
+        // el contratista armó el PDF del reclamo / auditoría: queda guardado para que lo vean Dirección y Jefatura
+        if (quien !== "ct") { res.status(403).json({ error: "No autorizado" }); return; }
+        const u = String(b.url || ""); if (!pubOk(u)) { res.status(400).json({ error: "PDF inválido" }); return; }
+        const v = await leer(H, clave); const items = ((v && v.items) || []); const it = items.find((x) => x.id === idOk(b.id));
+        if (!it) { res.status(404).json({ error: "No existe" }); return; }
+        if (it.ctId !== ct.id) { res.status(403).json({ error: "No es tuyo" }); return; }
+        it.pdf = u; await escribir(H, clave, { items });
+        res.status(200).json({ ok: true }); return;
       }
       if (b.op === "ct_del") {
         if (quien !== "ct") { res.status(403).json({ error: "Solo el contratista puede borrar lo que cargó" }); return; }
