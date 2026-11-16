@@ -3819,20 +3819,29 @@ SUBMIT.ctEnc=async f=>{const n=val('cten-nom').trim(),t=val('cten-tel').replace(
 A.ctEncDel=async ds=>{if(!confirm('¿Quitar este encargado?'))return;try{const r=await codApi({op:'ct_enc_set',obra:(OBRAS[0]||{}).id,enc:(CTALL.enc||[]).filter(e=>e.id!==ds.e),cred:{rol:'dir',codigo:dirAuthGet()}});if(!r.ok)throw new Error(r.error||'error');CTALL.enc=r.enc;draw()}catch(e){toast('No se pudo quitar: '+e.message)}};
 /* asignar el reclamo a 2 encargados y avisarles por WhatsApp */
 function ctWaTxt(o,r,e){return `${e?e.nombre+', te escribo desde la App de Belfast haciéndole llegar un nuevo reclamo desde un Contratista.\n\n':''}*Reclamo${r.num?' N° '+r.num:''} · ${o.nombre}*${r.tipo==='auditoria'?' (Auditoría de obra)':''}\nDe: ${r.ctNombre}${r.rubro?' ('+r.rubro+')':''}\n${r.tipo==='auditoria'?r.titulo:(CT_TIPO[r.tipo]||'Aviso')+': '+r.titulo}${r.desc&&r.tipo!=='auditoria'?'\n'+r.desc:''}${r.tipo==='auditoria'&&r.aud&&r.aud.concl?'\n\nConclusión: '+r.aud.concl:''}`}
-const ctWaBtns=(o,r)=>(r.asig||[]).map(e=>r.pdf?`<button class="btn sm" style="background:#25D366;color:#fff;border:0" type="button" data-act="ctPdfShare" data-o="${o.id}" data-id="${r.id}" data-e="${esc(e.id)}">📲 Mandar a ${esc(e.nombre)} (mensaje + PDF)</button>`
+const ctWaBtns=(o,r)=>(r.asig||[]).map(e=>r.pdf?`<button class="btn sm" style="background:#25D366;color:#fff;border:0" type="button" data-act="ctPdfShare" data-o="${o.id}" data-id="${r.id}" data-e="${esc(e.id)}">📲 Mandar a ${esc(e.nombre)} (PDF con el mensaje)</button>`
   :`<a class="btn sm" style="background:#25D366;color:#fff;border:0;text-decoration:none" href="https://wa.me/${esc(e.tel)}?text=${encodeURIComponent(ctWaTxt(o,r,e))}" target="_blank" rel="noopener">📲 Mandar a ${esc(e.nombre)}</a>`).join('')+(r.pdf?'':'<p class="muted small" style="margin:4px 0 0">Todavía sin PDF (aparece cuando el contratista lo arma): por ahora sale solo el mensaje.</p>');
-/* un solo toque: mensaje + PDF como ARCHIVO (nunca link) */
+/* un solo toque: el saludo y el resumen van ADENTRO del PDF (primera hoja), así llega todo en un solo mensaje */
+function ctCargarJs(src){return new Promise((ok,ko)=>{if(document.querySelector('script[src="'+src+'"]')){ok();return}const x=document.createElement('script');x.src=src;x.onload=ok;x.onerror=ko;document.head.appendChild(x)})}
+async function ctPdfConSaludo(bytes,txt){await ctCargarJs('/vendor/pdf-lib/pdf-lib.min.js');const {PDFDocument,StandardFonts,rgb}=window.PDFLib;const d=await PDFDocument.load(bytes);
+  const pg=d.insertPage(0,[595.28,841.89]),f=await d.embedFont(StandardFonts.Helvetica),fb=await d.embedFont(StandardFonts.HelveticaBold),W=595.28,M=48;
+  pg.drawRectangle({x:0,y:841.89-70,width:W,height:70,color:rgb(.09,.094,.11)});pg.drawText('BELFAST · NUEVO RECLAMO DE CONTRATISTA',{x:M,y:841.89-42,size:11,font:fb,color:rgb(.72,.57,.35)});
+  const limpio=t=>String(t).replace(/[*_]/g,'').replace(/[^\x20-\x7E\xA0-\xFF\n°·]/g,'').replace(/·/g,'-').replace(/°/g,'º');
+  let y=841.89-110;const wrap=(t,font,size)=>{const out=[];String(t).split('\n').forEach(par=>{if(!par.trim()){out.push('');return}let l='';par.split(' ').forEach(w=>{const c=l?l+' '+w:w;if(font.widthOfTextAtSize(c,size)>W-2*M){out.push(l);l=w}else l=c});out.push(l)});return out};
+  const L=limpio(txt).split('\n');const primera=L.shift();
+  wrap(primera,fb,14).forEach(l=>{pg.drawText(l,{x:M,y,size:14,font:fb,color:rgb(.1,.1,.1)});y-=20});y-=8;
+  wrap(L.join('\n'),f,11.5).forEach(l=>{if(l)pg.drawText(l,{x:M,y,size:11.5,font:f,color:rgb(.15,.15,.15)});y-=17});
+  y-=10;pg.drawText('En las hojas siguientes está el detalle completo del reclamo.',{x:M,y,size:10,font:f,color:rgb(.45,.45,.45)});
+  return await d.save()}
 A.ctPdfShare=async ds=>{const o=findO(ds.o),r=((CTR[o.id]||{}).items||[]).find(x=>x.id===ds.id);if(!r||!r.pdf)return;const e=(r.asig||[]).find(x=>x.id===ds.e)||(r.asig||[])[0]||null;
   const txt=ctWaTxt(o,r,e);
   let puede=false;try{puede=!!(navigator.canShare&&navigator.canShare({files:[new File(['x'],'x.pdf',{type:'application/pdf'})]}))}catch(_){}
   const w=(!puede&&e)?window.open('about:blank','_blank'):null; /* se abre ya (dentro del toque) para que el navegador no la bloquee */
-  try{toast('Preparando el PDF…');const bl=await (await fetch(r.pdf)).blob();const nom=('Reclamo '+(r.num?'N '+r.num+' ':'')+o.nombre+' - '+(r.ctNombre||'')).replace(/[\\/:*?"<>|]+/g,'-').trim()+'.pdf';const f=new File([bl],nom,{type:'application/pdf'});
-    try{await navigator.clipboard.writeText(txt)}catch(_){}
-    if(navigator.canShare&&navigator.canShare({files:[f],text:txt})){await navigator.share({files:[f],text:txt});return}
-    if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f]});toast('El mensaje quedó copiado: pegalo en el chat');return}
-    /* PC sin "compartir": baja el PDF y abre el chat con el mensaje; arrastrás el PDF al chat */
+  try{toast('Preparando el PDF…');const orig=await (await fetch(r.pdf)).arrayBuffer();let bytes=orig;try{bytes=await ctPdfConSaludo(orig,txt)}catch(_){}
+    const nom=('Reclamo '+(r.num?'N '+r.num+' ':'')+o.nombre+(e?' - '+e.nombre:'')).replace(/[\\/:*?"<>|]+/g,'-').trim()+'.pdf';const f=new File([bytes],nom,{type:'application/pdf'});
+    if(puede){await navigator.share({files:[f]});return}  /* solo el archivo: el mensaje ya va adentro → llega todo junto */
     const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=nom;document.body.appendChild(a);a.click();a.remove();
-    const u='https://wa.me/'+(e?e.tel:'')+'?text='+encodeURIComponent(txt);if(w)w.location.href=u;else window.open(u,'_blank');toast('Se abrió el chat con el mensaje y se bajó el PDF: arrastralo al chat (o 📎)')}catch(er){if(er&&er.name!=='AbortError'){if(w)w.close();toast('No se pudo preparar el PDF: '+(er.message||'revisá la conexión'))}}};
+    const u='https://wa.me/'+(e?e.tel:'');if(w)w.location.href=u;else window.open(u,'_blank');toast('Se abrió el chat y se bajó el PDF (con el mensaje adentro): arrastralo al chat o adjuntalo con 📎')}catch(er){if(w)w.close();if(er&&er.name!=='AbortError')toast('No se pudo preparar el PDF: '+(er.message||'revisá la conexión'))}};
 A.ctAsig=ds=>{const o=findO(ds.o),r=((CTR[o.id]||{}).items||[]).find(x=>x.id===ds.id);if(!r)return;if(!CTALL.t)ctLoadAll(true);const E=CTALL.enc||[],sel=new Set((r.asig||[]).map(e=>e.id));
   openSheet(`<span class="eyebrow">${esc(o.nombre)} · Reclamo${r.num?' N° '+esc(r.num):''}</span><h2>Asignar encargados</h2><p class="muted small">${esc(r.titulo)}</p>${E.length?`<form data-submit="ctAsigOk" data-o="${o.id}" data-id="${r.id}">${E.map(e=>`<label class="f" style="display:flex;gap:10px;align-items:center"><input type="checkbox" name="enc" value="${esc(e.id)}" ${sel.has(e.id)?'checked':''} style="width:22px;height:22px"> <span><b>${esc(e.nombre)}</b> <span class="muted small">+${esc(e.tel)}</span></span></label>`).join('')}<p class="muted small">Hasta 2 personas.</p><button class="btn gold" type="submit">Asignar</button></form>`:`<p class="muted">Primero cargá los encargados en Más → Contratistas y sus códigos.</p><button class="btn" data-act="ctAdmin">Ir a cargar encargados</button>`}`)};
 SUBMIT.ctAsigOk=async f=>{const ids=[...f.querySelectorAll('input[name=enc]:checked')].map(x=>x.value);if(ids.length>2){toast('Elegí hasta 2 personas');return}const o=findO(f.dataset.o);
@@ -4884,7 +4893,7 @@ const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearIn
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261116-223412';
+const NEXO_BUILD='20261116-224331';
 {let aviso=null;const ocupado=()=>document.querySelector('#layer .sheet,input:focus,textarea:focus');
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 const barra=()=>{if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
