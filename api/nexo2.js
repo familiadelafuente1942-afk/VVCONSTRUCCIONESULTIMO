@@ -575,7 +575,10 @@ export default async function handler(req, res) {
       }
       const obraAll = String(b.obra || "");
       let misCt = [];
-      if (cr.rol === "ct") { const n = norm(cr.codigo); misCt = misAccesos(n); ct = misCt.find((c) => c.obra === obraAll) || misCt[0] || null; if (ct) quien = "ct"; }
+      if (cr.rol === "ct") {
+        // puede tener varios códigos guardados en su app (uno por obra): junta todas sus obras
+        const cods = [cr.codigo, ...(Array.isArray(cr.codigos) ? cr.codigos : [])].map(norm).filter(Boolean).slice(0, 30);
+        const vistos = new Set(); misCt = cods.flatMap(misAccesos).filter((c) => (vistos.has(c.obra) ? false : (vistos.add(c.obra), true))); ct = misCt.find((c) => c.obra === obraAll) || misCt[0] || null; if (ct) quien = "ct"; }
       else if (cr.rol === "dir" && dirOk(cr.codigo)) quien = "dir";
       else if (cr.rol === "jefe" && norm(cr.codigo) && /^[A-Za-z0-9_-]{1,40}$/.test(obraAll) && norm((cods.obras[obraAll] || {}).j) === norm(cr.codigo)) quien = "jefe";
       if (!quien) { await pausa(600); res.status(403).json({ error: "Volvé a ingresar tu código." }); return; }
