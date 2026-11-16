@@ -1,6 +1,6 @@
 <!doctype html>
-<html lang="es"><head><meta name="app-build" content="20261116-221128"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Nexo · Contratistas</title><meta name="theme-color" content="#0d0e10"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Contratistas"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<html lang="es"><head><meta name="app-build" content="20261116-221353"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Nexo · Contratistas</title><meta name="theme-color" content="#0d0e10"><script>/* tema claro/oscuro antes de dibujar (sin parpadeo); por defecto sigue al equipo */(function(){var p="";try{p=localStorage.getItem("ct_tema")||""}catch(e){}var t=p||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"claro":"oscuro");document.documentElement.setAttribute("data-tema",t);var m=document.querySelector("meta[name=theme-color]");if(m)m.setAttribute("content",t==="claro"?"#eceef3":"#0d0e10")})()</script><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Contratistas"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
 @font-face{font-family:'Barlow Condensed';font-weight:500;font-display:swap;src:url(/fonts/barlow-condensed-latin-500-normal.woff2) format('woff2')}
 @font-face{font-family:'Barlow Condensed';font-weight:600;font-display:swap;src:url(/fonts/barlow-condensed-latin-600-normal.woff2) format('woff2')}
@@ -8,7 +8,11 @@
 @font-face{font-family:'Barlow';font-weight:400;font-display:swap;src:url(/fonts/barlow-latin-400-normal.woff2) format('woff2')}
 @font-face{font-family:'Barlow';font-weight:500;font-display:swap;src:url(/fonts/barlow-latin-500-normal.woff2) format('woff2')}
 @font-face{font-family:'Barlow';font-weight:600;font-display:swap;src:url(/fonts/barlow-latin-600-normal.woff2) format('woff2')}
-:root{--bg:#0d0e10;--card:#17181c;--line:#2a2c31;--ink:#f1ede4;--mut:#a29c90;--gold:#b8915a;--ok:#4fa86f;--warn:#e0894f;--bad:#d9605a}
+:root{--bg:#0d0e10;--card:#17181c;--line:#2a2c31;--ink:#f1ede4;--mut:#a29c90;--gold:#b8915a;--ok:#4fa86f;--warn:#e0894f;--bad:#d9605a;--in:#0d0e10;--btn:#202228;--on:#2a2418;--onfg:#f0d9a8;--goldfg:#16120b;--bar:#111216;color-scheme:dark}
+/* tema claro: igual que NEXO 2 (lo blanco pasa a negro y al revés; todo se sigue leyendo) */
+:root[data-tema="claro"]{--bg:#eceef3;--card:#ffffff;--line:#d8dbe3;--ink:#17181c;--mut:#6a6e77;--gold:#97692a;--ok:#1f8a4c;--warn:#c8620f;--bad:#d03a2f;--in:#ffffff;--btn:#f3f4f8;--on:#f6ecd9;--onfg:#6b4a14;--goldfg:#2a1c05;--bar:#ffffff;color-scheme:light}
+#tema{position:fixed;top:calc(12px + env(safe-area-inset-top));right:14px;z-index:20;width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:18px;display:grid;place-items:center;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.top{padding-right:52px}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 Barlow,system-ui,sans-serif}
 body{padding:calc(14px + env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom));max-width:640px;margin:0 auto}
@@ -19,23 +23,23 @@ h1{font-size:30px;line-height:1.05}h2{font-size:22px}
 .mut{color:var(--mut)}.sm{font-size:13px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:10px 0}
 label{display:block;font-size:13px;color:var(--mut);margin:12px 0 4px}
-input,select,textarea{width:100%;background:#0d0e10;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit;font-size:16px}
+input,select,textarea{width:100%;background:var(--in);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit;font-size:16px}
 textarea{min-height:90px;resize:vertical}
 button{font:inherit;cursor:pointer}
-.btn{display:inline-block;border:1px solid var(--line);background:#202228;color:var(--ink);border-radius:12px;padding:13px 16px;font-weight:600;text-align:center}
-.btn.gold{background:var(--gold);border-color:var(--gold);color:#16120b}
+.btn{display:inline-block;border:1px solid var(--line);background:var(--btn);color:var(--ink);border-radius:12px;padding:13px 16px;font-weight:600;text-align:center}
+.btn.gold{background:var(--gold);border-color:var(--gold);color:var(--goldfg)}:root[data-tema="claro"] .btn.gold{background:linear-gradient(180deg,#e2b96f,#b98a41);border-color:#b98a41}
 .btn.full{width:100%}.btn.ghost{background:transparent}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .pill{display:inline-block;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;border:1px solid}
 .p-recibido{color:#6fa8e0;border-color:#6fa8e0}.p-abierto{color:var(--warn);border-color:var(--warn)}.p-gestion{color:#6fa8e0;border-color:#6fa8e0}.p-resuelto{color:var(--ok);border-color:var(--ok)}.p-rechazado{color:var(--bad);border-color:var(--bad)}.p-cerrado{color:var(--mut);border-color:var(--mut)}
 .tipos{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.tipos button{padding:14px 8px;border-radius:12px;border:1px solid var(--line);background:#202228;color:var(--ink);font-weight:600}
-.tipos button.on{border-color:var(--gold);background:#2a2418;color:#f0d9a8}
+.tipos button{padding:14px 8px;border-radius:12px;border:1px solid var(--line);background:var(--btn);color:var(--ink);font-weight:600}
+.tipos button.on{border-color:var(--gold);background:var(--on);color:var(--onfg)}
 .fotos{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.fotos img{width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
 .hist{border-left:2px solid var(--line);margin:10px 0 0 6px;padding-left:12px}.hist div{margin:8px 0}
 .err{color:var(--bad);font-size:14px;margin-top:8px}
 .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
-#estado{position:fixed;left:0;right:0;bottom:0;text-align:center;font-size:12px;padding:6px;background:#111216;border-top:1px solid var(--line);color:var(--mut)}
+#estado{position:fixed;left:0;right:0;bottom:0;text-align:center;font-size:12px;padding:6px;background:var(--bar);border-top:1px solid var(--line);color:var(--mut)}
 
 /* listas desplegables: siempre letra oscura sobre fondo claro (se leen en modo claro y oscuro, PC y Apple) */
 select option,select optgroup{background-color:#fff!important;color:#16171a!important}
@@ -219,4 +223,6 @@ setInterval(estadoBarra,1000);setInterval(()=>{if(CT&&VISTA!=='nuevo')cargar(tru
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&CT)cargar(true)});window.addEventListener('online',()=>{if(CT)cargar(true)});
 try{const c=new URLSearchParams(location.search).get('c');if(c){history.replaceState(null,'',location.pathname);if(!CT||CT.codigo!==c.toUpperCase().replace(/\s+/g,''))CT=null}
  if(c&&!CT){draw();login(c)}else{draw();if(CT)cargar()}}catch(e){draw();if(CT)cargar()}
-</script><script src="/app-update.js"></script></body></html>
+</script><script src="/app-update.js"></script><button id="tema" type="button" aria-label="Cambiar a modo claro u oscuro" title="Claro / oscuro"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg></button>
+<script>document.getElementById('tema').onclick=function(){var t=document.documentElement.getAttribute('data-tema')==='claro'?'oscuro':'claro';document.documentElement.setAttribute('data-tema',t);try{localStorage.setItem('ct_tema',t)}catch(e){}var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',t==='claro'?'#eceef3':'#0d0e10')}</script>
+</body></html>
