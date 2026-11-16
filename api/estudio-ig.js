@@ -89,6 +89,20 @@ export default async function handler(req, res) {
       return res.status(200).json({ estado: "completed", url: `${SB}/storage/v1/object/public/nexo2-fotos/${path}` });
     }
 
+    if (op === "subir_url") {
+      // subida directa desde el navegador (Reels armados en la app)
+      const sk = process.env.SUPABASE_SERVICE_KEY;
+      if (!sk) return err(res, 500, "Falta SUPABASE_SERVICE_KEY.");
+      const ext = b.ext === "webm" ? "webm" : "mp4";
+      const path = "nanina/reels/" + Date.now() + "-" + Math.random().toString(36).slice(2, 7) + "." + ext;
+      const r = await fetch(`${SB}/storage/v1/object/upload/sign/nexo2-fotos/${path}`, { method: "POST", headers: { apikey: sk, Authorization: "Bearer " + sk, "Content-Type": "application/json" }, body: "{}" });
+      if (!r.ok) return err(res, 502, "No se pudo preparar la subida.");
+      const j = await r.json(); const rel = String(j.url || "");
+      const up = rel.startsWith("http") ? rel : rel ? `${SB}/storage/v1${rel.startsWith("/") ? "" : "/"}${rel}` : j.token ? `${SB}/storage/v1/object/upload/sign/nexo2-fotos/${path}?token=${j.token}` : "";
+      if (!up) return err(res, 502, "No se pudo preparar la subida.");
+      return res.status(200).json({ up, url: `${SB}/storage/v1/object/public/nexo2-fotos/${path}` });
+    }
+
     return err(res, 400, "Operación desconocida.");
   } catch (e) {
     return err(res, 500, (e && e.message) || "Error del estudio.");

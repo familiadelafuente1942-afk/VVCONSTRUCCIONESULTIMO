@@ -1,4 +1,4 @@
-<!doctype html><html lang="es"><head><meta name="app-build" content="20261116-034127"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#000000"><title>Mi Asistente · Nanina</title>
+<!doctype html><html lang="es"><head><meta name="app-build" content="20261116-034907"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#000000"><title>Mi Asistente · Nanina</title>
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Nanina">
 <link rel="icon" type="image/png" href="/nanina/icon-192.png"><link rel="apple-touch-icon" href="/nanina/icon-180.png"><link rel="manifest" href="/nanina/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -243,15 +243,15 @@ function achicar(file,max,w,h){return new Promise((ok,no)=>{const fr=new FileRea
 async function aDataURL(src){if(src.startsWith("data:"))return src;const b=await (await fetch(src)).blob();return await achicar(new File([b],"x.jpg",{type:b.type}),1536)}
 function vInsta(){const E=D.estudio||[];
   return`<div style="${S.card()}"><div style="font-size:10.5px;color:${BRASS};font-weight:700;letter-spacing:.18em;text-transform:uppercase;margin-bottom:8px">Estudio para Instagram</div>
-  <div style="font-size:13px;color:${T.sub};line-height:1.45;margin-bottom:12px">Subí una foto (de la propiedad, tuya o de lo que quieras), escribí qué querés y la IA te arma una imagen o un Reel vertical listo para subir.</div>
+  <div style="font-size:13px;color:${T.sub};line-height:1.45;margin-bottom:12px">Subí una foto (de la propiedad, tuya o de lo que quieras), escribí qué querés y la IA te arma una imagen nueva, o un Reel vertical con tus fotos en movimiento, títulos, voz y música, listo para subir.</div>
   <input type="file" id="ig_f" accept="image/*" multiple style="display:none">
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${REFS.map((r,i)=>`<div style="position:relative"><img src="${r}" alt="" style="width:74px;height:98px;object-fit:cover;border-radius:10px;border:1px solid ${T.border};display:block"><button data-qref="${i}" aria-label="Quitar foto" style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:0;background:#e2493e;color:#fff;font-size:12px;cursor:pointer">✕</button></div>`).join("")}
   ${REFS.length<4?`<button id="ig_add" style="width:74px;height:98px;border-radius:10px;border:1px dashed ${BRASS};background:transparent;color:${BRASS};font-size:12px;font-weight:700;cursor:pointer">＋ Foto</button>`:""}</div>
   <div style="${S.lbl()}">¿Qué querés que haga la IA?</div>
   <textarea id="ig_p" rows="3" placeholder="Ej: este living con luz cálida de atardecer, estilo revista de decoración" style="${S.inp()};resize:vertical">${esc(PROMPT)}</textarea>
   <div style="display:flex;gap:8px;margin-top:4px"><button id="ig_img" ${GEN?"disabled":""} style="flex:1;background:${T.accent};color:#fff;border:none;border-radius:11px;padding:13px 8px;font-size:14px;font-weight:700;cursor:pointer;opacity:${GEN?.5:1}">${GEN==="img"?"Generando imagen…":"✨ Generar imagen"}</button>
-  <button id="ig_vid" ${GEN?"disabled":""} style="flex:1;${S.sec()};opacity:${GEN?.5:1}">${GEN==="vid"?"Enviando…":"🎬 Generar Reel"}</button></div>
-  <div style="display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap"><span style="font-size:12px;color:${T.sub}">Duración del Reel:</span>${["4","8","12"].map(x=>`<button data-seg="${x}" style="${S.chip(SEG===x)}">${x} seg</button>`).join("")}</div>
+  <button id="ig_vid" ${GEN?"disabled":""} style="flex:1;${S.sec()};opacity:${GEN?.5:1}">${GEN==="vid"?"Armando Reel…":"🎬 Generar Reel"}</button></div>
+  <div style="display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap"><span style="font-size:12px;color:${T.sub}">Duración mínima del Reel:</span>${["4","8","12"].map(x=>`<button data-seg="${x}" style="${S.chip(SEG===x)}">${x} seg</button>`).join("")}</div>
   <div id="ig_msg" style="font-size:12.5px;color:${T.sub};margin-top:10px;line-height:1.4"></div></div>
   ${E.length?`<div style="${S.lbl()};margin-top:6px">Tus creaciones</div>`:""}
   ${E.map(x=>`<div style="${S.card()}">${x.tipo==="video"?(x.url?`<video src="${esc(x.url)}" controls playsinline style="width:100%;max-height:70vh;border-radius:10px;background:#000;display:block"></video>`:`<div style="aspect-ratio:9/16;max-height:50vh;margin:0 auto;border-radius:10px;border:1px dashed ${T.border};display:flex;align-items:center;justify-content:center;text-align:center;padding:16px;color:${x.estado==="failed"?"#e2493e":T.sub};font-size:13px">${x.estado==="failed"?"No se pudo hacer: "+esc(x.error||""):"🎬 Haciendo el Reel… "+(x.progreso?x.progreso+"%":"")+"<br>Tarda unos minutos. Podés seguir usando la app."}</div>`)
@@ -268,12 +268,55 @@ async function igImagen(){PROMPT=($("#ig_p")||{}).value||PROMPT;if(!PROMPT.trim(
     D.estudio.unshift({id:uid(),tipo:"imagen",url:j.url||j.imagen,prompt:PROMPT,f:hoy()});if(!j.url)igAviso="La imagen no quedó guardada en la nube: bajala si la querés conservar.";GEN="";save();render()}
   catch(e){GEN="";render();igMsg("No se pudo: "+e.message)}}
 let igAviso="";
-async function igVideo(base){PROMPT=($("#ig_p")||{}).value||PROMPT;if(!PROMPT.trim()){igMsg("Escribí qué querés que pase en el Reel.");return}
-  GEN="vid";render();igMsg("Enviando a la IA de video…");
-  try{let ref=base||REFS[0]||null;if(ref){const b=await (await fetch(ref)).blob();ref=await achicar(new File([b],"r.jpg",{type:b.type}),0,720,1280)}
-    const j=await igPost({op:"video_crear",prompt:PROMPT+"\nVideo vertical tipo Reel de Instagram, movimiento de cámara suave y profesional.",segundos:SEG,imagen:ref});
-    D.estudio.unshift({id:uid(),tipo:"video",job:j.id,estado:j.estado,prompt:PROMPT,f:hoy()});GEN="";save();render();igMsg("Listo, el Reel se está haciendo. Tarda unos minutos.");igPoll()}
-  catch(e){GEN="";render();igMsg("No se pudo: "+e.message)}}
+/* Reel armado en el celular: fotos con movimiento + títulos + voz (ElevenLabs) + música suave. Sale en MP4 vertical 720x1280. */
+function igMime(){const c=["video/mp4;codecs=avc1.42E01E,mp4a.40.2","video/mp4;codecs=avc1,mp4a","video/mp4","video/webm;codecs=vp9,opus","video/webm"];for(const m of c){try{if(window.MediaRecorder&&MediaRecorder.isTypeSupported(m))return m}catch{}}return""}
+function cargarImg(src){return new Promise((ok,no)=>{const im=new Image();im.crossOrigin="anonymous";im.onload=()=>ok(im);im.onerror=no;im.src=src})}
+function musica(ac,dest,dur,estilo){const t0=ac.currentTime+.05,master=ac.createGain();master.gain.setValueAtTime(0,t0);master.gain.linearRampToValueAtTime(estilo==="alegre"?.16:.13,t0+1.2);master.gain.setValueAtTime(estilo==="alegre"?.16:.13,t0+dur-1.5);master.gain.linearRampToValueAtTime(0,t0+dur);master.connect(dest);
+  const lp=ac.createBiquadFilter();lp.type="lowpass";lp.frequency.value=1800;lp.connect(master);
+  const prog=estilo==="alegre"?[[60,64,67,72],[67,71,74,79],[69,72,76,81],[65,69,72,77]]:[[57,60,64,67],[53,57,60,64],[48,52,55,59],[55,59,62,65]];
+  const hz=m=>440*Math.pow(2,(m-69)/12),bar=estilo==="alegre"?2:2.6;
+  for(let t=0,i=0;t<dur;t+=bar,i++){const ch=prog[i%prog.length];ch.forEach((m,k)=>{["sine","triangle"].forEach((w,wi)=>{const o=ac.createOscillator(),g=ac.createGain();o.type=w;o.frequency.value=hz(m-(k===0?12:0));o.detune.value=wi?6:-6;
+      g.gain.setValueAtTime(0,t0+t);g.gain.linearRampToValueAtTime(k===0?.22:.12,t0+t+.35);g.gain.linearRampToValueAtTime(0,t0+t+bar+.3);o.connect(g);g.connect(lp);o.start(t0+t);o.stop(t0+t+bar+.4)})});
+    for(let b=0;b<4;b++){const tt=t0+t+b*bar/4,o=ac.createOscillator(),g=ac.createGain();o.type="sine";o.frequency.value=hz(ch[(b+1)%4]+12);g.gain.setValueAtTime(0,tt);g.gain.linearRampToValueAtTime(estilo==="alegre"?.09:.05,tt+.02);g.gain.exponentialRampToValueAtTime(.0001,tt+bar/4);o.connect(g);g.connect(lp);o.start(tt);o.stop(tt+bar/4+.05)}}}
+async function igGuion(n,seg){try{const r=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-5",max_tokens:700,system:"Sos guionista de Reels inmobiliarios en Argentina. Respondés SOLO JSON válido.",messages:[{role:"user",content:`Pedido de ${D.perfil.nombre||"Nanina"} (broker inmobiliaria): "${PROMPT}". Hay ${n} foto(s). Devolvé JSON: {"voz":"narración en español rioplatense, cálida y vendedora, de unas ${Math.round(seg*2.2)} palabras, que termine invitando a escribir por mensaje directo","titulos":[${n} títulos MUY cortos (máx 5 palabras), uno por foto],"cierre":"frase final corta para la última pantalla","musica":"elegante" o "alegre"}`}]})});
+  const j=await r.json(),t=(j.content||[]).filter(c=>c.type==="text").map(c=>c.text).join("");return JSON.parse(t.slice(t.indexOf("{"),t.lastIndexOf("}")+1))}catch{return{voz:"",titulos:[],cierre:"Consultame por mensaje directo",musica:"elegante"}}}
+async function igVideo(base){PROMPT=($("#ig_p")||{}).value||PROMPT;const fotos=base?[base]:REFS.slice();
+  if(!fotos.length){igMsg("Subí al menos una foto para armar el Reel.");return}
+  const mime=igMime();if(!mime||!HTMLCanvasElement.prototype.captureStream){igMsg("Este navegador no puede armar videos. Probá con Safari o Chrome actualizados.");return}
+  const AC=window.AudioContext||window.webkitAudioContext,ac=new AC();try{await ac.resume()}catch{}   // dentro del toque, para que el iPhone deje sonar
+  GEN="vid";render();const seg=+SEG;
+  try{igMsg("1/3 · Escribiendo el guion y los títulos…");const g=await igGuion(fotos.length,seg);
+    igMsg("2/3 · Grabando la voz…");let vozBuf=null;
+    if(g.voz){try{const r=await fetch("/api/tts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(D.perfil.voz?{texto:paraVoz(g.voz),voz:D.perfil.voz}:{texto:paraVoz(g.voz)})});if(r.ok)vozBuf=await ac.decodeAudioData(await (await r.blob()).arrayBuffer())}catch{}}
+    const dur=Math.min(60,Math.max(seg,vozBuf?vozBuf.duration+1.6:seg))+2.2; // +2,2 s de cierre
+    const ims=[];for(const f of fotos)ims.push(await cargarImg(f));
+    const W=720,H=1280,cv=document.createElement("canvas");cv.width=W;cv.height=H;const cx=cv.getContext("2d");
+    const dest=ac.createMediaStreamDestination(),mix=ac.createGain();mix.connect(dest);
+    musica(ac,mix,dur,g.musica==="alegre"?"alegre":"elegante");
+    if(vozBuf){const s=ac.createBufferSource();s.buffer=vozBuf;const gv=ac.createGain();gv.gain.value=1;s.connect(gv);gv.connect(mix);s.start(ac.currentTime+.6)}
+    const st=new MediaStream([...cv.captureStream(30).getVideoTracks(),...dest.stream.getAudioTracks()]);
+    const rec=new MediaRecorder(st,{mimeType:mime,videoBitsPerSecond:5e6}),partes=[];rec.ondataavailable=e=>{if(e.data&&e.data.size)partes.push(e.data)};
+    const fin=new Promise(ok=>rec.onstop=ok);
+    const cuerpo=dur-2.2,porFoto=cuerpo/ims.length,fade=.6,t0=performance.now();
+    const dibujarFoto=(im,p,k,alpha)=>{const z=1.08+.12*p,sc=Math.max(W/im.width,H/im.height)*z,dw=im.width*sc,dh=im.height*sc,dx=(W-dw)/2+(k%2?-1:1)*(p-.5)*40,dy=(H-dh)/2+(k%3-1)*(p-.5)*30;cx.globalAlpha=alpha;cx.drawImage(im,dx,dy,dw,dh);cx.globalAlpha=1};
+    const texto=(t,y,size,alpha)=>{if(!t)return;cx.globalAlpha=alpha;cx.font=`700 ${size}px "Playfair Display",Georgia,serif`;cx.textAlign="center";cx.fillStyle="#fff";cx.shadowColor="rgba(0,0,0,.6)";cx.shadowBlur=14;
+      const pal=String(t).split(" "),ls=[];let l="";pal.forEach(w=>{if(cx.measureText(l+" "+w).width>W-120&&l){ls.push(l);l=w}else l=(l?l+" ":"")+w});ls.push(l);ls.forEach((x,i)=>cx.fillText(x,W/2,y+i*size*1.15));cx.shadowBlur=0;cx.globalAlpha=1};
+    const marca=a=>{cx.globalAlpha=a;cx.font='700 22px "Playfair Display",Georgia,serif';cx.textAlign="center";cx.fillStyle="#D8B06A";cx.fillText(((D.perfil.nombre||"Nanina")+" · Broker inmobiliaria").toUpperCase(),W/2,H-70);cx.globalAlpha=1};
+    rec.start(250);
+    await new Promise(ok=>{const paso=()=>{const t=(performance.now()-t0)/1000;cx.fillStyle="#000";cx.fillRect(0,0,W,H);
+      if(t<cuerpo){const k=Math.min(ims.length-1,Math.floor(t/porFoto)),p=(t-k*porFoto)/porFoto;dibujarFoto(ims[k],p,k,1);
+        if(k<ims.length-1&&t>(k+1)*porFoto-fade){const q=(t-((k+1)*porFoto-fade))/fade;dibujarFoto(ims[k+1],0,k+1,q)}
+        const gr=cx.createLinearGradient(0,H*.55,0,H);gr.addColorStop(0,"rgba(0,0,0,0)");gr.addColorStop(1,"rgba(0,0,0,.72)");cx.fillStyle=gr;cx.fillRect(0,H*.55,W,H*.45);
+        const ta=Math.min(1,(t-k*porFoto)/.5,(k*porFoto+porFoto-t)/.4);texto((g.titulos||[])[k]||"",H-260,54,Math.max(0,ta));marca(.9)}
+      else{const q=Math.min(1,(t-cuerpo)/.6),last=ims[ims.length-1];dibujarFoto(last,1,ims.length-1,1);cx.fillStyle=`rgba(10,10,12,${.78*q})`;cx.fillRect(0,0,W,H);
+        texto(g.cierre||"Consultame por mensaje directo",H/2-40,58,q);marca(q)}
+      if(t<dur){igMsg(`3/3 · Armando el Reel… ${Math.min(99,Math.round(t/dur*100))}% (no cierres la app)`);requestAnimationFrame(paso)}else ok()};paso()});
+    rec.stop();await fin;try{ac.close()}catch{}
+    const tipo=mime.split(";")[0],blob=new Blob(partes,{type:tipo}),ext=tipo.includes("mp4")?"mp4":"webm",local=URL.createObjectURL(blob);
+    const item={id:uid(),tipo:"video",url:local,prompt:PROMPT,f:hoy(),texto:""};D.estudio.unshift(item);GEN="";render();igMsg("Subiendo el Reel a la nube…");
+    try{const u=await igPost({op:"subir_url",ext});const r=await fetch(u.up,{method:"PUT",headers:{"Content-Type":tipo},body:blob});if(r.ok){item.url=u.url;save();render();igMsg(ext==="webm"?"Listo. Ojo: este navegador lo hizo en WebM; para Instagram armalo desde el iPhone/iPad (Safari) que sale en MP4.":"¡Listo! Tocá 📲 Compartir en Instagram.")}else throw 0}
+    catch{igMsg("El Reel está listo pero no se guardó en la nube: compartilo o bajalo ahora.")}}
+  catch(e){GEN="";try{ac.close()}catch{}render();igMsg("No se pudo armar el Reel: "+(e&&e.message||e))}}
 let igT=null;
 async function igPoll(){clearTimeout(igT);const pend=(D.estudio||[]).filter(x=>x.tipo==="video"&&!x.url&&x.estado!=="failed"&&x.job);if(!pend.length)return;let cambio=false;
   for(const x of pend){try{const j=await igPost({op:"video_estado",id:x.job});if(j.estado==="completed"&&j.url){x.url=j.url;x.estado="completed";cambio=true}else if(j.estado==="failed"){x.estado="failed";x.error=j.error;cambio=true}else if(j.progreso!==x.progreso){x.progreso=j.progreso;if(VISTA==="insta")cambio=true}}catch(e){}}
