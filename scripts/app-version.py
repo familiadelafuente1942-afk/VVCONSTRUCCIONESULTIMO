@@ -16,5 +16,7 @@ for a in L:
     tag='<meta name="app-build" content="%s">'%v
     if '<meta name="app-build"' in s: s=re.sub(r'<meta name="app-build" content="[^"]*">',tag,s,count=1)
     else: s=s.replace('<head>','<head>'+tag,1) if '<head>' in s else re.sub(r'(<head[^>]*>)',r'\1'+tag,s,count=1)
-    if '/app-update.js' not in s: s=s.replace('</body>','<script src="/app-update.js"></script></body>',1)
+    if '/app-update.js' not in s:
+        i=s.rfind('</body>')  # el ÚLTIMO </body>: puede haber </body> dentro de textos de JavaScript (ej. PDFs armados en la página)
+        if i>=0: s=s[:i]+'<script src="/app-update.js"></script>'+s[i:]
     p.write_text(s,encoding='utf-8');print(a,v)
