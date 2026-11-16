@@ -311,6 +311,8 @@ export default async function handler(req, res) {
           const VT = { d: "Se demuele", m: "Se mantiene", n: "No va / se retira", t: "Técnico", o: "Otro" };
           const fotos = Array.isArray(v.fotos) ? v.fotos : [];
           if (fotos.length) { L.push(`Fotos (${fotos.length}) — cada link abre la foto:`); fotos.forEach((x, j) => { const u = String((x && x.u) || ""); if (!u || /^data:/.test(u)) return; L.push(`  Foto ${j + 1} [${VT[x.tag] || x.tag || "sin etiqueta"}]${x.n ? " " + x.n : ""}: ${absU(u)}`); if (fdesc[absU(u)]) L.push(`    Qué se ve: ${fdesc[absU(u)]}`); }); }
+          const vids = Array.isArray(v.videos) ? v.videos : [];
+          if (vids.length) { L.push(`Videos (${vids.length}) — cada link abre el video:`); vids.forEach((x, j) => { if (x && x.u) L.push(`  Video ${j + 1}${x.n ? " · " + x.n : ""}: ${absU(String(x.u))}`); }); }
           if (v.inf) {
             const inf = v.inf, txt = (y) => (typeof y === "string" ? y : JSON.stringify(y));
             L.push(`Informe IA de la visita (${inf.ts ? fechaLarga(Number(inf.ts)) : ""}):`);
