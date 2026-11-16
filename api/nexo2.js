@@ -612,7 +612,7 @@ export default async function handler(req, res) {
         const ids = new Set(misCt.map((c) => c.id));
         const porObra = await Promise.all(misCt.map(async (c) => { const v = await leer(H, "ctrec_" + c.obra); return ((v && v.items) || []).filter((x) => ids.has(x.ctId)).map((x) => ({ ...x, obraNombre: c.obraNombre })); }));
         const obras = misCt.map((c) => ({ id: c.obra, nombre: c.obraNombre, jw: ((reg.jw || {})[c.obra]) || "" }));
-        res.status(200).json({ ok: true, jw: ((reg.jw || {})[ct.obra]) || "", obras, items: porObra.flat() }); return;
+        res.status(200).json({ ok: true, jw: ((reg.jw || {})[ct.obra]) || "", obras, yo: { nombre: ct.nombre, rubro: ct.rubro }, items: porObra.flat() }); return;
       }
       if (b.op === "ct_new") {
         if (quien !== "ct") { res.status(403).json({ error: "Solo para contratistas" }); return; }
@@ -720,6 +720,18 @@ export default async function handler(req, res) {
         const out = {};
         await Promise.all(ids.map(async (id) => { const v = await leer(H, "ctrec_" + id); if (v && v.items && v.items.length) out[id] = v.items; }));
         res.status(200).json({ ok: true, obras: out, cts: lista, jw: reg.jw || {} }); return;
+      }
+      if (b.op === "ct_cod_edit") {
+        // Dirección corrige el nombre de la empresa y el rubro de un contratista
+        if (quien !== "dir") { res.status(403).json({ error: "Solo Dirección" }); return; }
+        const x = lista.find((c) => c.id === idOk(b.id));
+        if (!x) { res.status(404).json({ error: "No existe" }); return; }
+        const nombre = str(b.nombre, 80).trim(), rubro = str(b.rubro, 60).trim();
+        if (!nombre) { res.status(400).json({ error: "Poné el nombre de la empresa" }); return; }
+        const viejo = x.nombre;
+        lista.forEach((c) => { if (c === x || (b.todas && norm(c.cod) === norm(x.cod)) || (b.todas && viejo && c.nombre === viejo)) { c.nombre = nombre; if (c === x || b.rubroTodas) c.rubro = rubro; } });
+        await escribir(H, "ctcods", { ...reg, items: lista });
+        res.status(200).json({ ok: true, cts: lista }); return;
       }
       if (b.op === "ct_jw_set") {
         // WhatsApp de la jefatura de cada obra: los contratistas le mandan el PDF del reclamo a ese número
