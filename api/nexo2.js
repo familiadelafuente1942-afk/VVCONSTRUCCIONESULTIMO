@@ -555,6 +555,9 @@ export default async function handler(req, res) {
       let quien = "", ct = null;
       // Todas las obras de un contratista: las que tienen su código y las cargadas con el mismo nombre (ej. "V+V" con un código distinto en cada obra)
       const nomN = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9+]/g, "");
+      // códigos vinculados entre sí (el contratista sumó otra obra con otro código): vale en todos sus equipos
+      const grupos = Array.isArray(reg.vinc) ? reg.vinc : [];
+      const conVinc = (cs) => { const out = new Set(cs); grupos.forEach((g) => { if (g.some((c) => out.has(c))) g.forEach((c) => out.add(c)); }); return [...out]; };
       const misAccesos = (n) => {
         if (!n) return [];
         const propios = lista.filter((c) => norm(c.cod) === n);
@@ -566,7 +569,7 @@ export default async function handler(req, res) {
       };
       if (b.op === "ct_login") {
         const n = norm(b.codigo);
-        const xs = misAccesos(n);
+        const vx = new Set(); const xs = n ? conVinc([n]).flatMap(misAccesos).filter((c) => (vx.has(c.obra) ? false : (vx.add(c.obra), true))) : [];
         const x = xs[0];
         if (!x) { await pausa(600); res.status(200).json({ ok: false }); return; }
         // un mismo contratista puede tener acceso a varias obras (mismo código): devuelve todas
@@ -576,8 +579,8 @@ export default async function handler(req, res) {
       const obraAll = String(b.obra || "");
       let misCt = [];
       if (cr.rol === "ct") {
-        // puede tener varios códigos guardados en su app (uno por obra): junta todas sus obras
-        const cods = [cr.codigo, ...(Array.isArray(cr.codigos) ? cr.codigos : [])].map(norm).filter(Boolean).slice(0, 30);
+        // puede tener varios códigos (uno por obra): junta todas sus obras
+        const cods = conVinc([cr.codigo, ...(Array.isArray(cr.codigos) ? cr.codigos : [])].map(norm).filter(Boolean)).slice(0, 40);
         const vistos = new Set(); misCt = cods.flatMap(misAccesos).filter((c) => (vistos.has(c.obra) ? false : (vistos.add(c.obra), true))); ct = misCt.find((c) => c.obra === obraAll) || misCt[0] || null; if (ct) quien = "ct"; }
       else if (cr.rol === "dir" && dirOk(cr.codigo)) quien = "dir";
       else if (cr.rol === "jefe" && norm(cr.codigo) && /^[A-Za-z0-9_-]{1,40}$/.test(obraAll) && norm((cods.obras[obraAll] || {}).j) === norm(cr.codigo)) quien = "jefe";
@@ -672,6 +675,18 @@ export default async function handler(req, res) {
         it.editado = t;
         await escribir(H, clave, { items });
         res.status(200).json({ ok: true, rec: it }); return;
+      }
+      if (b.op === "ct_vincular") {
+        // el contratista suma otra obra con otro código: queda guardado en el servidor para que la vea en la PC, el iPad y el celular
+        if (quien !== "ct") { res.status(403).json({ error: "No autorizado" }); return; }
+        const nuevo = norm(b.nuevo);
+        if (!nuevo || !lista.some((c) => norm(c.cod) === nuevo)) { await pausa(600); res.status(200).json({ ok: false, error: "Código incorrecto" }); return; }
+        const mios = conVinc([norm(cr.codigo), ...(Array.isArray(cr.codigos) ? cr.codigos : []).map(norm)].filter(Boolean)).filter((c) => lista.some((x) => norm(x.cod) === c));
+        const todos = new Set([...mios, nuevo]);
+        const resto = grupos.filter((g) => !g.some((c) => todos.has(c)));
+        grupos.filter((g) => g.some((c) => todos.has(c))).forEach((g) => g.forEach((c) => todos.add(c)));
+        await escribir(H, "ctcods", { ...reg, items: lista, vinc: [...resto, [...todos]] });
+        res.status(200).json({ ok: true }); return;
       }
       if (b.op === "ct_pdf") {
         // el contratista armó el PDF del reclamo / auditoría: queda guardado para que lo vean Dirección y Jefatura
