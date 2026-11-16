@@ -632,7 +632,7 @@ export default async function handler(req, res) {
           const EA = ["avanza", "material", "definicion", "otro", "terminado"];
           rec.aud = { fecha: str(a.fecha, 10), personal: num(a.personal, 0, 999), ociosos: num(a.ociosos, 0, 999), concl: str(a.concl, 3000),
             items: (Array.isArray(a.items) ? a.items : []).slice(0, 60).map((x) => ({ tarea: str(x.tarea, 200), est: EA.includes(x.est) ? x.est : "otro", falta: str(x.falta, 300), pedido: str(x.pedido, 10), nota: str(x.nota, 600), fotos: fts(x.fotos) })),
-            reclamos: (Array.isArray(a.reclamos) ? a.reclamos : []).slice(0, 40).map((r) => ({ titulo: str(r.titulo, 200), tipo: str(r.tipo, 40), dias: num(r.dias, 0, 9999) })) };
+            reclamos: (Array.isArray(a.reclamos) ? a.reclamos : []).slice(0, 40).map((r) => ({ id: idOk(r.id), num: str(r.num, 8), titulo: str(r.titulo, 200), tipo: str(r.tipo, 40), dias: num(r.dias, 0, 9999) })) };
         }
         // número correlativo para todos los reclamos (0001, 0002, …), desde el 16/11/2026
         const reg2 = (await leer(H, "ctcods")) || reg;
@@ -640,7 +640,13 @@ export default async function handler(req, res) {
         rec.num = String(nro).padStart(4, "0");
         await escribir(H, "ctcods", { ...reg2, nro });
         const v = await leer(H, clave);
-        const items = ((v && v.items) || []); items.push(rec);
+        const items = ((v && v.items) || []);
+        if (rec.aud) {
+          // los reclamos que el contratista incluyó en la auditoría quedan adentro de ella: llega un solo aviso
+          const ids = new Set(rec.aud.reclamos.map((r) => r.id).filter(Boolean));
+          items.forEach((x) => { if (ids.has(x.id) && x.ctId === ct.id && !x.doc) { x.enAud = rec.id; x.enAudNum = rec.num; } });
+        }
+        items.push(rec);
         await escribir(H, clave, { items: items.slice(-500) });
         res.status(200).json({ ok: true, rec }); return;
       }
