@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es"><head><meta name="app-build" content="20261116-191837"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<html lang="es"><head><meta name="app-build" content="20261116-193118"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Nexo · Contratistas</title><meta name="theme-color" content="#0d0e10"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Contratistas"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
 @font-face{font-family:'Barlow Condensed';font-weight:500;font-display:swap;src:url(/fonts/barlow-condensed-latin-500-normal.woff2) format('woff2')}
@@ -76,15 +76,19 @@ function dibujaNuevo(){const n=NEW,doc=n.tipo==='presupuesto'||n.tipo==='materia
 const PDFS={};let PDFERR='';
 const telJ=it=>{const o=it&&OBS().find(x=>x.id===it.obra),srv=o?o.jw:CT.jw,loc=(CT.jwLoc||{})[(it&&it.obra)||CT.obra];return String(loc||((CT.jwOffO||{})[(it&&it.obra)||CT.obra]?'':srv)||'').replace(/\D/g,'')};
 function pdfCard(it){const P=PDFS[it.id],tel=telJ(it);
- if(!P)return `<div class="card"><b>📄 Mandar este reclamo por PDF a la jefatura de obra</b><div class="mut sm" style="margin-top:4px">Se arma un PDF con todos los datos y las fotos, y se lo mandás por WhatsApp.</div>${PDFERR?`<div class="err">${esc(PDFERR)}</div>`:''}<button class="btn gold full" style="margin-top:10px" id="pdfgo">Armar PDF del reclamo</button></div>`;
- if(P.armando)return `<div class="card"><b>Armando el PDF…</b><div class="mut sm">Un momento.</div></div>`;
- const txt=`Reclamo de ${CT.nombre}${CT.rubro?' ('+CT.rubro+')':''} · ${it.obraNombre||obNom(it.obra)}\n${it.titulo}${P.url?'\nPDF del reclamo: '+P.url:''}`;
- if(!P.url&&!navigator.canShare)return `<div class="card"><b>PDF armado, pero no se pudo subir.</b><div class="mut sm">Revisá la conexión y probá de nuevo.</div><button class="btn gold full" style="margin-top:10px" id="pdfgo">Probar de nuevo</button></div>`;
- return `<div class="card"><b>PDF listo ✓</b>
-  ${tel?`<a class="btn gold full" style="margin-top:10px;text-decoration:none;display:block" href="https://wa.me/${tel}?text=${encodeURIComponent(txt)}" target="_blank" rel="noopener">📲 Mandar a la jefatura por WhatsApp</a><div class="mut sm" style="margin-top:4px">Se abre el chat de la jefatura (+${esc(tel)}) con el link al PDF.</div>`
-   :`<label>WhatsApp de la jefatura de obra (con código de país)</label><input id="jtel" inputmode="tel" placeholder="54 9 11 5555 6666"><button class="btn gold full" style="margin-top:8px" id="jtelok">Guardar número</button><div class="mut sm" style="margin-top:4px">Si no lo tenés, usá "Compartir el PDF" y elegí el chat de la jefatura en WhatsApp.</div>`}
-  ${navigator.canShare?`<button class="btn full" style="margin-top:8px" id="pdfsh">Compartir el archivo PDF (WhatsApp u otra app)</button>`:''}
-  <a class="btn ghost full" style="margin-top:8px;text-decoration:none;display:block" href="${esc(P.url||P.local)}" target="_blank" rel="noopener">Ver el PDF</a>${tel?`<button class="btn ghost sm" style="margin-top:8px" id="jtelch">Cambiar el número de la jefatura</button>`:''}</div>`}
+ if(!P){if(!PDFERR&&!AUTOPDF[it.id]){AUTOPDF[it.id]=1;setTimeout(()=>{if(SEL===it.id&&!PDFS[it.id])pdfGo(it)},50)}
+  return `<div class="card"><b>📲 Mandar por WhatsApp</b>${PDFERR?`<div class="err">${esc(PDFERR)}</div><button class="btn gold full" style="margin-top:10px" id="pdfgo">Probar de nuevo</button>`:`<div class="mut sm" style="margin-top:4px">Preparando el PDF del reclamo…</div>`}</div>`}
+ if(P.armando)return `<div class="card"><b>📲 Mandar por WhatsApp</b><div class="mut sm" style="margin-top:4px">Preparando el PDF del reclamo (datos y fotos)…</div></div>`;
+ const txt=`*Reclamo · ${it.obraNombre||obNom(it.obra)}*\nDe: ${CT.nombre}${CT.rubro?' ('+CT.rubro+')':''}\n${TIPOS[it.tipo]?TIPOS[it.tipo][0]+': ':''}${it.titulo}${it.desc?'\n'+it.desc:''}${P.url?'\n\n📄 PDF con fotos: '+P.url:''}`;
+ const wa=t=>`https://wa.me/${t||''}?text=${encodeURIComponent(txt)}`;
+ return `<div class="card"><b>📲 Mandar por WhatsApp</b>
+  <a class="btn gold full" style="margin-top:10px;text-decoration:none;display:block;text-align:center" href="${wa('')}" target="_blank" rel="noopener">📲 Elegir contacto en WhatsApp</a>
+  <div class="mut sm" style="margin-top:4px">Se abre WhatsApp, elegís el contacto o grupo y se manda el reclamo${P.url?' con el link al PDF':''}.</div>
+  ${navigator.canShare?`<button class="btn full" style="margin-top:10px" id="pdfsh">📄 Mandar el PDF como archivo</button><div class="mut sm" style="margin-top:4px">Elegí WhatsApp y después el contacto: le llega el archivo PDF.</div>`:''}
+  ${tel?`<a class="btn full" style="margin-top:10px;text-decoration:none;display:block;text-align:center" href="${wa(tel)}" target="_blank" rel="noopener">Directo a la jefatura de obra (+${esc(tel)})</a>`
+   :`<details style="margin-top:10px"><summary class="mut sm">Guardar el WhatsApp de la jefatura de esta obra</summary><input id="jtel" inputmode="tel" placeholder="54 9 11 5555 6666" style="margin-top:6px"><button class="btn full" style="margin-top:8px" id="jtelok">Guardar número</button></details>`}
+  <a class="btn ghost full" style="margin-top:10px;text-decoration:none;display:block;text-align:center" href="${esc(P.url||P.local)}" target="_blank" rel="noopener">Ver el PDF</a>${tel?`<button class="btn ghost sm" style="margin-top:8px" id="jtelch">Cambiar el número de la jefatura</button>`:''}</div>`}
+var AUTOPDF={};
 function cargarJs(src){return new Promise((ok,ko)=>{if(document.querySelector('script[src="'+src+'"]')){ok();return}const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=ko;document.head.appendChild(s)})}
 async function imgData(u){try{const b=await (await fetch(u)).blob();return await new Promise(ok=>{const r=new FileReader();r.onload=()=>{const i=new Image();i.onload=()=>{const M=1200,k=Math.min(1,M/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=Math.round(i.width*k);c.height=Math.round(i.height*k);c.getContext('2d').drawImage(i,0,0,c.width,c.height);ok({d:c.toDataURL('image/jpeg',.82),w:c.width,h:c.height})};i.onerror=()=>ok(null);i.src=r.result};r.readAsDataURL(b)})}catch(e){return null}}
 async function armarPDF(it){if(!window.jspdf)await cargarJs('/vendor/jspdf/jspdf.umd.min.js');const {jsPDF}=window.jspdf,d=new jsPDF({unit:'mm',format:'a4'}),W=210,M=16;let y=18;
