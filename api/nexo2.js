@@ -634,6 +634,11 @@ export default async function handler(req, res) {
             items: (Array.isArray(a.items) ? a.items : []).slice(0, 60).map((x) => ({ tarea: str(x.tarea, 200), est: EA.includes(x.est) ? x.est : "otro", falta: str(x.falta, 300), pedido: str(x.pedido, 10), nota: str(x.nota, 600), fotos: fts(x.fotos) })),
             reclamos: (Array.isArray(a.reclamos) ? a.reclamos : []).slice(0, 40).map((r) => ({ titulo: str(r.titulo, 200), tipo: str(r.tipo, 40), dias: num(r.dias, 0, 9999) })) };
         }
+        // número correlativo para todos los reclamos (0001, 0002, …), desde el 16/11/2026
+        const reg2 = (await leer(H, "ctcods")) || reg;
+        const nro = (Number(reg2.nro) || 0) + 1;
+        rec.num = String(nro).padStart(4, "0");
+        await escribir(H, "ctcods", { ...reg2, nro });
         const v = await leer(H, clave);
         const items = ((v && v.items) || []); items.push(rec);
         await escribir(H, clave, { items: items.slice(-500) });
