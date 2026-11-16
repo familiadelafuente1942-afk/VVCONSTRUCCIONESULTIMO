@@ -557,7 +557,7 @@ export default async function handler(req, res) {
         const n = norm(b.codigo);
         const x = n ? lista.find((c) => norm(c.cod) === n) : null;
         if (!x) { await pausa(600); res.status(200).json({ ok: false }); return; }
-        res.status(200).json({ ok: true, ct: { id: x.id, obra: x.obra, obraNombre: x.obraNombre, nombre: x.nombre, rubro: x.rubro } }); return;
+        res.status(200).json({ ok: true, ct: { id: x.id, obra: x.obra, obraNombre: x.obraNombre, nombre: x.nombre, rubro: x.rubro, jw: ((reg.jw || {})[x.obra]) || "" } }); return;
       }
       const obraAll = String(b.obra || "");
       if (cr.rol === "ct") { const n = norm(cr.codigo); ct = n ? lista.find((c) => norm(c.cod) === n) : null; if (ct) quien = "ct"; }
@@ -588,7 +588,7 @@ export default async function handler(req, res) {
       if (b.op === "ct_mine") {
         if (quien !== "ct") { res.status(403).json({ error: "Solo para contratistas" }); return; }
         const v = await leer(H, clave);
-        res.status(200).json({ ok: true, items: ((v && v.items) || []).filter((x) => x.ctId === ct.id) }); return;
+        res.status(200).json({ ok: true, jw: ((reg.jw || {})[ct.obra]) || "", items: ((v && v.items) || []).filter((x) => x.ctId === ct.id) }); return;
       }
       if (b.op === "ct_new") {
         if (quien !== "ct") { res.status(403).json({ error: "Solo para contratistas" }); return; }
@@ -653,7 +653,15 @@ export default async function handler(req, res) {
         const ids = Array.from(new Set([...Object.keys(cods.obras || {}), ...lista.map((c) => c.obra)]));
         const out = {};
         await Promise.all(ids.map(async (id) => { const v = await leer(H, "ctrec_" + id); if (v && v.items && v.items.length) out[id] = v.items; }));
-        res.status(200).json({ ok: true, obras: out, cts: lista }); return;
+        res.status(200).json({ ok: true, obras: out, cts: lista, jw: reg.jw || {} }); return;
+      }
+      if (b.op === "ct_jw_set") {
+        // WhatsApp de la jefatura de cada obra: los contratistas le mandan el PDF del reclamo a ese número
+        if (quien !== "dir") { res.status(403).json({ error: "Solo Dirección" }); return; }
+        const tel = String(b.tel || "").replace(/\D/g, "").slice(0, 16);
+        const jw = { ...(reg.jw || {}) }; if (tel) jw[obra] = tel; else delete jw[obra];
+        await escribir(H, "ctcods", { ...reg, items: lista, jw });
+        res.status(200).json({ ok: true, jw }); return;
       }
       if (b.op === "ct_cod_save") {
         if (quien !== "dir") { res.status(403).json({ error: "Solo Dirección" }); return; }
@@ -665,12 +673,12 @@ export default async function handler(req, res) {
         for (let k = 0; k < 50; k++) { cod = "CT-" + Array.from({ length: 5 }, () => AL[Math.floor(Math.random() * AL.length)]).join(""); if (!usados.has(norm(cod))) break; }
         const x = { id: "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 4), obra, obraNombre: str(b.obraNombre, 120), nombre, rubro, cod, creado: Date.now() };
         lista.push(x);
-        await escribir(H, "ctcods", { items: lista });
+        await escribir(H, "ctcods", { ...reg, items: lista });
         res.status(200).json({ ok: true, ct: x }); return;
       }
       if (b.op === "ct_cod_del") {
         if (quien !== "dir") { res.status(403).json({ error: "Solo Dirección" }); return; }
-        await escribir(H, "ctcods", { items: lista.filter((c) => c.id !== idOk(b.id)) });
+        await escribir(H, "ctcods", { ...reg, items: lista.filter((c) => c.id !== idOk(b.id)) });
         res.status(200).json({ ok: true }); return;
       }
       res.status(400).json({ error: "Operación desconocida" }); return;
