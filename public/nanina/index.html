@@ -1,4 +1,4 @@
-<!doctype html><html lang="es"><head><meta name="app-build" content="20261116-034907"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#000000"><title>Mi Asistente · Nanina</title>
+<!doctype html><html lang="es"><head><meta name="app-build" content="20261116-035511"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#000000"><title>Mi Asistente · Nanina</title>
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Nanina">
 <link rel="icon" type="image/png" href="/nanina/icon-192.png"><link rel="apple-touch-icon" href="/nanina/icon-180.png"><link rel="manifest" href="/nanina/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -235,7 +235,7 @@ function vGastos(){const cur=MES||mesHoy(),L=D.gastos.filter(x=>mesDe(x.f)===cur
   (L.map(x=>`<div style="${S.card()};cursor:pointer" data-ed="gasto:${x.id}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div style="font-size:15.5px;font-weight:600">${esc(x.c||"Gasto")}</div><b style="color:${BRASS};white-space:nowrap">${money(x.monto,x.mon||"$")}</b></div>
   <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:7px"><span style="font-size:12.5px;color:${T.sub}">${fFec(x.f)}${x.cat?" · "+esc(x.cat):""}</span>${deTag(x.de)}</div>${x.nota?`<div style="font-size:12.5px;color:${T.sub};margin-top:5px">${esc(x.nota)}</div>`:""}</div>`).join("")||`<div style="${S.vacio()}">Sin gastos ${cur===mesHoy()?"este mes":"en "+mesTxt(cur)}.<br>Desde el Chat podés decir: "anotá 45 mil de súper, gasto de la familia"</div>`)}
 /* ---- Estudio de Instagram: foto + prompt -> imagen o Reel con IA ---- */
-let REFS=[],PROMPT="",SEG="8",GEN="";
+let REFS=[],PROMPT="",SEG="8",GEN="",NARR=null,GRAB=null,GRABT=null,GRABS=0;
 function achicar(file,max,w,h){return new Promise((ok,no)=>{const fr=new FileReader();fr.onload=()=>{const im=new Image();im.onload=()=>{const c=document.createElement("canvas");
   if(w&&h){c.width=w;c.height=h;const k=Math.max(w/im.width,h/im.height),dw=im.width*k,dh=im.height*k;c.getContext("2d").drawImage(im,(w-dw)/2,(h-dh)/2,dw,dh)}
   else{const k=Math.min(1,max/Math.max(im.width,im.height));c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext("2d").drawImage(im,0,0,c.width,c.height)}
@@ -249,6 +249,11 @@ function vInsta(){const E=D.estudio||[];
   ${REFS.length<4?`<button id="ig_add" style="width:74px;height:98px;border-radius:10px;border:1px dashed ${BRASS};background:transparent;color:${BRASS};font-size:12px;font-weight:700;cursor:pointer">＋ Foto</button>`:""}</div>
   <div style="${S.lbl()}">¿Qué querés que haga la IA?</div>
   <textarea id="ig_p" rows="3" placeholder="Ej: este living con luz cálida de atardecer, estilo revista de decoración" style="${S.inp()};resize:vertical">${esc(PROMPT)}</textarea>
+  <div style="${S.lbl()};margin-top:4px">Voz del Reel</div>
+  ${GRAB?`<button id="ig_stop" style="width:100%;background:#e2493e;color:#fff;border:0;border-radius:11px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:10px">⏹ Terminar grabación · ${GRABS} seg</button>`
+   :NARR?`<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><audio src="${NARR.url}" controls style="flex:1;min-width:0;height:40px"></audio><button id="ig_qnarr" style="${S.chip(false)};color:#e2493e">Quitar</button></div><div style="font-size:12px;color:${T.sub};margin:-4px 0 10px">El Reel va a usar tu voz${NARR.dur?" ("+Math.round(NARR.dur)+" seg)":""}. La IA pone los títulos según lo que decís.</div>`
+   :`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"><button id="ig_rec" style="${S.chip(false)}">🎙 Grabar mi voz</button><button id="ig_aud" style="${S.chip(false)}">📎 Subir audio</button><span style="font-size:12px;color:${T.sub};align-self:center">Si no, habla la voz de la IA.</span></div>`}
+  <input type="file" id="ig_af" accept="audio/*,.m4a,.mp3,.wav,.aac,.ogg,.opus" style="display:none">
   <div style="display:flex;gap:8px;margin-top:4px"><button id="ig_img" ${GEN?"disabled":""} style="flex:1;background:${T.accent};color:#fff;border:none;border-radius:11px;padding:13px 8px;font-size:14px;font-weight:700;cursor:pointer;opacity:${GEN?.5:1}">${GEN==="img"?"Generando imagen…":"✨ Generar imagen"}</button>
   <button id="ig_vid" ${GEN?"disabled":""} style="flex:1;${S.sec()};opacity:${GEN?.5:1}">${GEN==="vid"?"Armando Reel…":"🎬 Generar Reel"}</button></div>
   <div style="display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap"><span style="font-size:12px;color:${T.sub}">Duración mínima del Reel:</span>${["4","8","12"].map(x=>`<button data-seg="${x}" style="${S.chip(SEG===x)}">${x} seg</button>`).join("")}</div>
@@ -261,6 +266,15 @@ function vInsta(){const E=D.estudio||[];
    ${x.url?`<div style="display:flex;gap:6px;flex-wrap:wrap"><button data-igsh="${x.id}" style="flex:1;min-width:130px;background:linear-gradient(90deg,#f58529,#dd2a7b,#8134af);color:#fff;border:0;border-radius:9px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">📲 Compartir en Instagram</button>
    <button data-igtx="${x.id}" style="${S.chip(false)}">${x.texto?"Copiar texto":"✍️ Texto del posteo"}</button>${x.tipo!=="video"?`<button data-igref="${x.id}" style="${S.chip(false)}">Usar de base</button><button data-iganim="${x.id}" style="${S.chip(false)}">🎬 Animar</button>`:""}<a href="${esc(x.url)}" download target="_blank" rel="noreferrer" style="${S.chip(false)};text-decoration:none">⬇ Bajar</a><button data-igdel="${x.id}" style="${S.chip(false)};color:#e2493e">Borrar</button></div>`:x.estado==="failed"?`<button data-igdel="${x.id}" style="${S.chip(false)};color:#e2493e">Quitar</button>`:""}</div>`).join("")}`}
 const igMsg=t=>{const m=$("#ig_msg");if(m)m.textContent=t};
+async function ponerNarr(blob,mime){let dur=0;try{const AC=window.AudioContext||window.webkitAudioContext,ac=new AC();dur=(await ac.decodeAudioData(await blob.arrayBuffer())).duration;ac.close()}catch{}
+  NARR={blob,mime,url:URL.createObjectURL(blob),dur};PROMPT=($("#ig_p")||{}).value||PROMPT;render();if(!dur)igMsg("Ojo: no pude leer ese audio en este dispositivo. Probá grabándolo con 🎙 o subilo en .m4a o .mp3.")}
+async function grabarVoz(){PROMPT=($("#ig_p")||{}).value||PROMPT;let st;try{st=await navigator.mediaDevices.getUserMedia({audio:true})}catch{igMsg("No me dieron permiso para usar el micrófono.");return}
+  const mm=["audio/mp4","audio/webm;codecs=opus","audio/webm"].find(m=>{try{return MediaRecorder.isTypeSupported(m)}catch{return false}})||"";
+  const r=new MediaRecorder(st,mm?{mimeType:mm}:{}),ch=[];r.ondataavailable=e=>{if(e.data&&e.data.size)ch.push(e.data)};
+  r.onstop=()=>{clearInterval(GRABT);st.getTracks().forEach(t=>t.stop());GRAB=null;const tp=(r.mimeType||mm||"audio/mp4").split(";")[0];if(ch.length)ponerNarr(new Blob(ch,{type:tp}),tp);else render()};
+  GRAB=r;GRABS=0;r.start(500);render();GRABT=setInterval(()=>{GRABS++;if(GRABS>=90){try{r.stop()}catch{}}const b=$("#ig_stop");if(b)b.textContent="⏹ Terminar grabación · "+GRABS+" seg"},1000)}
+async function transcribir(blob,mime){try{const b64=await new Promise(ok=>{const fr=new FileReader();fr.onload=()=>ok(String(fr.result).split(",")[1]);fr.readAsDataURL(blob)});
+  const r=await fetch("/api/transcribir",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({audio:b64,mime})});const j=await r.json();return j.text||""}catch{return""}}
 async function igPost(body){const r=await fetch("/api/estudio-ig",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});const j=await r.json().catch(()=>({}));if(!r.ok||j.error)throw new Error(j.error&&j.error.message||"Error "+r.status);return j}
 async function igImagen(){PROMPT=($("#ig_p")||{}).value||PROMPT;if(!PROMPT.trim()){igMsg("Escribí qué querés que haga la IA.");return}
   GEN="img";render();igMsg("La IA está armando la imagen (tarda hasta un minuto)…");
@@ -278,21 +292,23 @@ function musica(ac,dest,dur,estilo){const t0=ac.currentTime+.05,master=ac.create
   for(let t=0,i=0;t<dur;t+=bar,i++){const ch=prog[i%prog.length];ch.forEach((m,k)=>{["sine","triangle"].forEach((w,wi)=>{const o=ac.createOscillator(),g=ac.createGain();o.type=w;o.frequency.value=hz(m-(k===0?12:0));o.detune.value=wi?6:-6;
       g.gain.setValueAtTime(0,t0+t);g.gain.linearRampToValueAtTime(k===0?.22:.12,t0+t+.35);g.gain.linearRampToValueAtTime(0,t0+t+bar+.3);o.connect(g);g.connect(lp);o.start(t0+t);o.stop(t0+t+bar+.4)})});
     for(let b=0;b<4;b++){const tt=t0+t+b*bar/4,o=ac.createOscillator(),g=ac.createGain();o.type="sine";o.frequency.value=hz(ch[(b+1)%4]+12);g.gain.setValueAtTime(0,tt);g.gain.linearRampToValueAtTime(estilo==="alegre"?.09:.05,tt+.02);g.gain.exponentialRampToValueAtTime(.0001,tt+bar/4);o.connect(g);g.connect(lp);o.start(tt);o.stop(tt+bar/4+.05)}}}
-async function igGuion(n,seg){try{const r=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-5",max_tokens:700,system:"Sos guionista de Reels inmobiliarios en Argentina. Respondés SOLO JSON válido.",messages:[{role:"user",content:`Pedido de ${D.perfil.nombre||"Nanina"} (broker inmobiliaria): "${PROMPT}". Hay ${n} foto(s). Devolvé JSON: {"voz":"narración en español rioplatense, cálida y vendedora, de unas ${Math.round(seg*2.2)} palabras, que termine invitando a escribir por mensaje directo","titulos":[${n} títulos MUY cortos (máx 5 palabras), uno por foto],"cierre":"frase final corta para la última pantalla","musica":"elegante" o "alegre"}`}]})});
+async function igGuion(n,seg,dicho){try{const r=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-5",max_tokens:700,system:"Sos guionista de Reels inmobiliarios en Argentina. Respondés SOLO JSON válido.",messages:[{role:"user",content:`Pedido de ${D.perfil.nombre||"Nanina"} (broker inmobiliaria): "${PROMPT}". Hay ${n} foto(s).${dicho?` Ella ya grabó la narración con su voz y dice: "${dicho}". NO escribas narración ("voz" vacío) y armá los títulos siguiendo el orden de lo que dice.`:""} Devolvé JSON: {"voz":${dicho?'""':`"narración en español rioplatense, cálida y vendedora, de unas ${Math.round(seg*2.2)} palabras, que termine invitando a escribir por mensaje directo"`},"titulos":[${n} títulos MUY cortos (máx 5 palabras), uno por foto],"cierre":"frase final corta para la última pantalla","musica":"elegante" o "alegre"}`}]})});
   const j=await r.json(),t=(j.content||[]).filter(c=>c.type==="text").map(c=>c.text).join("");return JSON.parse(t.slice(t.indexOf("{"),t.lastIndexOf("}")+1))}catch{return{voz:"",titulos:[],cierre:"Consultame por mensaje directo",musica:"elegante"}}}
 async function igVideo(base){PROMPT=($("#ig_p")||{}).value||PROMPT;const fotos=base?[base]:REFS.slice();
   if(!fotos.length){igMsg("Subí al menos una foto para armar el Reel.");return}
   const mime=igMime();if(!mime||!HTMLCanvasElement.prototype.captureStream){igMsg("Este navegador no puede armar videos. Probá con Safari o Chrome actualizados.");return}
   const AC=window.AudioContext||window.webkitAudioContext,ac=new AC();try{await ac.resume()}catch{}   // dentro del toque, para que el iPhone deje sonar
   GEN="vid";render();const seg=+SEG;
-  try{igMsg("1/3 · Escribiendo el guion y los títulos…");const g=await igGuion(fotos.length,seg);
-    igMsg("2/3 · Grabando la voz…");let vozBuf=null;
-    if(g.voz){try{const r=await fetch("/api/tts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(D.perfil.voz?{texto:paraVoz(g.voz),voz:D.perfil.voz}:{texto:paraVoz(g.voz)})});if(r.ok)vozBuf=await ac.decodeAudioData(await (await r.blob()).arrayBuffer())}catch{}}
+  try{let vozBuf=null,dicho="";
+    if(NARR){igMsg("1/3 · Escuchando tu audio…");try{vozBuf=await ac.decodeAudioData(await NARR.blob.arrayBuffer())}catch{throw new Error("no pude leer el audio; grabalo con 🎙 o subilo en .m4a o .mp3")}dicho=await transcribir(NARR.blob,NARR.mime)}
+    igMsg(NARR?"2/3 · Armando los títulos según lo que dijiste…":"1/3 · Escribiendo el guion y los títulos…");const g=await igGuion(fotos.length,seg,dicho||(NARR?"(no se pudo transcribir)":""));
+    if(!NARR)igMsg("2/3 · Grabando la voz…");
+    if(!NARR&&g.voz){try{const r=await fetch("/api/tts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(D.perfil.voz?{texto:paraVoz(g.voz),voz:D.perfil.voz}:{texto:paraVoz(g.voz)})});if(r.ok)vozBuf=await ac.decodeAudioData(await (await r.blob()).arrayBuffer())}catch{}}
     const dur=Math.min(60,Math.max(seg,vozBuf?vozBuf.duration+1.6:seg))+2.2; // +2,2 s de cierre
     const ims=[];for(const f of fotos)ims.push(await cargarImg(f));
     const W=720,H=1280,cv=document.createElement("canvas");cv.width=W;cv.height=H;const cx=cv.getContext("2d");
     const dest=ac.createMediaStreamDestination(),mix=ac.createGain();mix.connect(dest);
-    musica(ac,mix,dur,g.musica==="alegre"?"alegre":"elegante");
+    musica(ac,mix,dur,g.musica==="alegre"?"alegre":"elegante");if(NARR)g.texto_dicho=dicho;
     if(vozBuf){const s=ac.createBufferSource();s.buffer=vozBuf;const gv=ac.createGain();gv.gain.value=1;s.connect(gv);gv.connect(mix);s.start(ac.currentTime+.6)}
     const st=new MediaStream([...cv.captureStream(30).getVideoTracks(),...dest.stream.getAudioTracks()]);
     const rec=new MediaRecorder(st,{mimeType:mime,videoBitsPerSecond:5e6}),partes=[];rec.ondataavailable=e=>{if(e.data&&e.data.size)partes.push(e.data)};
@@ -313,7 +329,7 @@ async function igVideo(base){PROMPT=($("#ig_p")||{}).value||PROMPT;const fotos=b
       if(t<dur){igMsg(`3/3 · Armando el Reel… ${Math.min(99,Math.round(t/dur*100))}% (no cierres la app)`);requestAnimationFrame(paso)}else ok()};paso()});
     rec.stop();await fin;try{ac.close()}catch{}
     const tipo=mime.split(";")[0],blob=new Blob(partes,{type:tipo}),ext=tipo.includes("mp4")?"mp4":"webm",local=URL.createObjectURL(blob);
-    const item={id:uid(),tipo:"video",url:local,prompt:PROMPT,f:hoy(),texto:""};D.estudio.unshift(item);GEN="";render();igMsg("Subiendo el Reel a la nube…");
+    const item={id:uid(),tipo:"video",url:local,prompt:PROMPT+(dicho?" · Lo que dice: "+dicho:""),f:hoy(),texto:""};D.estudio.unshift(item);GEN="";render();igMsg("Subiendo el Reel a la nube…");
     try{const u=await igPost({op:"subir_url",ext});const r=await fetch(u.up,{method:"PUT",headers:{"Content-Type":tipo},body:blob});if(r.ok){item.url=u.url;save();render();igMsg(ext==="webm"?"Listo. Ojo: este navegador lo hizo en WebM; para Instagram armalo desde el iPhone/iPad (Safari) que sale en MP4.":"¡Listo! Tocá 📲 Compartir en Instagram.")}else throw 0}
     catch{igMsg("El Reel está listo pero no se guardó en la nube: compartilo o bajalo ahora.")}}
   catch(e){GEN="";try{ac.close()}catch{}render();igMsg("No se pudo armar el Reel: "+(e&&e.message||e))}}
@@ -336,7 +352,10 @@ function vAjustes(){const P=D.perfil;
   <div style="display:flex;flex-direction:column;gap:8px">${VOCES.map(([id,n])=>`<button class="gbtn" data-voz="${id}" style="padding:12px 14px;justify-content:space-between;${(P.voz||"")===id?`box-shadow:inset 0 0 0 2px ${BRASS}`:""}"><span>${n}</span><span style="font-size:12px;color:${(P.voz||"")===id?BRASS:T.sub}">${(P.voz||"")===id?"✓ Elegida":"▶ Probar"}</span></button>`).join("")}</div></div>`}
 function bindVista(){if(VISTA==="insta"){const f=$("#ig_f"),ad=$("#ig_add"),p=$("#ig_p");if(ad)ad.onclick=()=>f.click();
     f.onchange=async()=>{for(const fl of [...f.files].slice(0,4-REFS.length)){try{REFS.push(await achicar(fl,1536))}catch{}}render()};
-    p.oninput=()=>{PROMPT=p.value};$("#ig_img").onclick=igImagen;$("#ig_vid").onclick=()=>igVideo();if(igAviso){igMsg(igAviso);igAviso=""}}
+    p.oninput=()=>{PROMPT=p.value};
+    const rb=$("#ig_rec"),ab=$("#ig_aud"),af=$("#ig_af"),sb=$("#ig_stop"),qn=$("#ig_qnarr");
+    if(rb)rb.onclick=grabarVoz;if(sb)sb.onclick=()=>{try{GRAB.stop()}catch{}};if(ab)ab.onclick=()=>af.click();
+    if(af)af.onchange=()=>{const f=af.files[0];if(f)ponerNarr(f,f.type||"audio/mp4")};if(qn)qn.onclick=()=>{NARR=null;render()};$("#ig_img").onclick=igImagen;$("#ig_vid").onclick=()=>igVideo();if(igAviso){igMsg(igAviso);igAviso=""}}
 const sm=$("#selmes");if(sm)sm.onchange=()=>{MES=sm.value;render()};const q=$("#q");if(q)q.oninput=()=>{FIL=q.value;const p=q.selectionStart;render();const n=$("#q");n.focus();n.setSelectionRange(p,p)};
   document.querySelectorAll("[data-money]").forEach(i=>i.oninput=()=>{const n=i.value.replace(/\D/g,"");i.value=n?Number(n).toLocaleString("es-AR"):""});
   const ok=$("#c_ok");if(ok)ok.onclick=async()=>{const P=D.perfil;P.nombre=$("#c_nom").value.trim()||"Nanina";P.asist=$("#c_as").value.trim()||"Mi Asistente";const pn=$("#c_pin").value.trim();if(/^\d{4}$/.test(pn))D.pin=await sha(pn);save();render();$("#c_msg").textContent="Guardado ✓"}}
