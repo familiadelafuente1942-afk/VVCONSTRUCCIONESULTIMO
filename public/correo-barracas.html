@@ -1,4 +1,4 @@
-<!doctype html><html lang="es"><head><meta name="app-build" content="20261116-153345"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0d0e10"><title>Belfast · Sucursal Barracas</title><link rel="icon" type="image/png" sizes="192x192" href="/barracas-icon-192.png"><link rel="apple-touch-icon" href="/barracas-icon-180.png"><link rel="manifest" href="/barracas.webmanifest"><meta name="apple-mobile-web-app-title" content="Belfast Barracas"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=Michroma&family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}.infph{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start}.infph .ph1{width:92px}.infph .ph1 span{position:relative;display:block;width:92px;height:72px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}.infph .ph1 img{width:100%;height:100%;object-fit:cover}.infph .ph1 button{position:absolute;top:2px;right:2px}.infph .fdi{width:92px;font-size:11px;padding:3px;margin-top:3px;min-width:0}.infph .addph{width:72px;height:72px}
+<!doctype html><html lang="es"><head><meta name="app-build" content="20261116-234218"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0d0e10"><title>Belfast · Sucursal Barracas</title><link rel="icon" type="image/png" sizes="192x192" href="/barracas-icon-192.png"><link rel="apple-touch-icon" href="/barracas-icon-180.png"><link rel="manifest" href="/barracas.webmanifest"><meta name="apple-mobile-web-app-title" content="Belfast Barracas"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=Michroma&family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}.infph{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start}.infph .ph1{width:92px}.infph .ph1 span{position:relative;display:block;width:92px;height:72px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}.infph .ph1 img{width:100%;height:100%;object-fit:cover}.infph .ph1 button{position:absolute;top:2px;right:2px}.infph .fdi{width:92px;font-size:11px;padding:3px;margin-top:3px;min-width:0}.infph .addph{width:72px;height:72px}
 .enm{width:100%;font:inherit;font-weight:600;padding:6px 8px;border:1px solid var(--line,#ddd);border-radius:8px;background:transparent;color:inherit;min-width:0}.ghdr .glabel{background:var(--surface2,rgba(127,127,127,.12));font-weight:700}.gb-agg{position:absolute;top:50%;transform:translateY(-50%);height:10px;border-radius:5px;background:#6b6f7a;overflow:hidden}.gb-agg i{display:block;height:100%;background:var(--gold,#b8915a)}.gavi{color:#e08a00}.pe-row{border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0;display:flex;flex-direction:column;gap:8px}.pe-et summary{cursor:pointer;padding:8px 0}.gman{opacity:.6;font-size:11px}.gnota{font-style:normal;font-size:10px;color:var(--gold)}.gpct{position:absolute;top:50%;transform:translateY(-50%);font-size:11px;font-weight:700;color:var(--tx,#334);white-space:nowrap;pointer-events:none;line-height:1}.grow.tall .gpct{top:15px;transform:none;line-height:14px}.gpct.done{color:#1f9d55}
 .acrow{display:grid;gap:4px;margin:2px 0 8px}.acrow>div{display:flex;gap:6px}.acrow input{flex:1;min-width:0}.acrow input:nth-child(2){max-width:80px}.acrow input:nth-child(3){max-width:130px}
 /* listas desplegables: siempre letra oscura sobre fondo claro (se leen en modo claro y oscuro, PC y Apple) */
@@ -1385,9 +1385,59 @@ if(rzReset(DB)){try{DB._t=Date.now();localStorage.setItem(KEY,JSON.stringify(DB)
 const O=()=>DB.obras[DB.act];
 const PCAPI='/api/nexo2';let _pcT=0,_pcBusy=0;
 const pcPost=b=>fetch(PCAPI,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...b,app:'barracas'})}).then(r=>r.json().then(j=>({s:r.status,j})));
-const pcPush=()=>{if(PANEL)return;clearTimeout(_pcT);_pcT=setTimeout(()=>{const g=document.getElementById('guard');pcPost({op:'pc_put',v:JSON.stringify(DB),t:DB._t}).then(({s,j})=>{if(s===200&&g)g.textContent='Guardado y sincronizado '+new Date().toLocaleTimeString('es-AR');else if(s===409&&j.doc)pcAdopt(j.doc);else if(g)g.textContent='Guardado en este equipo (sin conexión para sincronizar)'}).catch(()=>{const g=document.getElementById('guard');if(g)g.textContent='Guardado en este equipo (sin conexión para sincronizar)'})},700)};
+const pcPush=()=>{if(PANEL)return;clearTimeout(_pcT);_pcT=setTimeout(()=>{const g=document.getElementById('guard');const t0=DB._t;pcPost({op:'pc_put',v:JSON.stringify(DB),t:DB._t}).then(({s,j})=>{if(s===200&&j&&j.doc&&DB._t===t0){pcAdopt(j.doc)}if(s===200&&g)g.textContent='Guardado y sincronizado '+new Date().toLocaleTimeString('es-AR');else if(s===409&&j.doc)pcAdopt(j.doc);else if(g)g.textContent='Guardado en este equipo (sin conexión para sincronizar)'}).catch(()=>{const g=document.getElementById('guard');if(g)g.textContent='Guardado en este equipo (sin conexión para sincronizar)'})},700)};
 const save=()=>{if(PANEL)return;try{DB.obras.forEach(x=>{try{const r=calc(x);x.pub={tot:Math.round(r.tot),totU:Math.round(r.totU)}}catch(e){}});DB._t=Date.now();localStorage.setItem(KEY,JSON.stringify(DB));document.getElementById('guard').textContent='Guardado '+new Date().toLocaleTimeString('es-AR');pcPush()}catch(e){try{document.getElementById('guard').textContent='No se pudo guardar en este navegador: salí del modo privado'}catch(x){}}};
-function pcAdopt(doc){try{const n=JSON.parse(doc.v);if(!n||!n.obras)return;n._t=doc.t;n.act=Math.min(DB.act||0,n.obras.length-1);DB=n;if(rzReset(DB)){save();render();return}localStorage.setItem(KEY,JSON.stringify(DB));render();const g=document.getElementById('guard');if(g)g.textContent='Actualizado con los últimos cambios '+new Date().toLocaleTimeString('es-AR')}catch(e){}}
+/* visitas: se unen con lo de este equipo, nunca se pisan */
+const VCAMPOS = ["fotos", "aud", "videos"];
+function unirVisitas(base, otra) {
+  // devuelve true si "base" cambió
+  if (!base || !otra || !Array.isArray(base.obras) || !Array.isArray(otra.obras)) return false;
+  let ch = false;
+  otra.obras.forEach((oo, i) => {
+    if (!oo || !Array.isArray(oo.vis)) return;
+    const ob = base.obras.find((x) => x && x.nombre && x.nombre === oo.nombre) || base.obras[i];
+    if (!ob) return;
+    const del = new Set([...(ob.visDel || []), ...(oo.visDel || [])]);
+    if ((oo.visDel || []).some((d) => !(ob.visDel || []).includes(d))) { ob.visDel = [...del]; ch = true; }
+    ob.vis = Array.isArray(ob.vis) ? ob.vis : [];
+    const antes = ob.vis.length;
+    ob.vis = ob.vis.filter((v) => v && !del.has(v.id));
+    if (ob.vis.length !== antes) ch = true;
+    for (const vo of oo.vis) {
+      if (!vo || !vo.id || del.has(vo.id)) continue;
+      const vb = ob.vis.find((x) => x.id === vo.id);
+      if (!vb) { if (visConDatos(vo)) { ob.vis.push(JSON.parse(JSON.stringify(vo))); ch = true; } continue; }
+      const vdel = new Set([...(vb.del || []), ...(vo.del || [])]);
+      if ((vo.del || []).some((d) => !(vb.del || []).includes(d))) { vb.del = [...vdel]; ch = true; }
+      for (const c of VCAMPOS) {
+        const A = Array.isArray(vb[c]) ? vb[c] : [], B = Array.isArray(vo[c]) ? vo[c] : [];
+        const n0 = A.length; let L = A.filter((x) => x && !vdel.has(x.id));
+        for (const x of B) {
+          if (!x || vdel.has(x.id)) continue;
+          const y = L.find((z) => z.id === x.id);
+          if (!y) { L.push(x); ch = true; }
+          else if (c === "aud") { if (!y.u && x.u) { y.u = x.u; ch = true; } if (String(x.tx || "").length > String(y.tx || "").length) { y.tx = x.tx; ch = true; } }
+          else if (String(x.n || "").length > String(y.n || "").length) { y.n = x.n; ch = true; }
+        }
+        if (L.length !== n0 || A.length !== L.length) ch = true;
+        if (L.length || vb[c]) vb[c] = L;
+      }
+      for (const k of Object.keys(vo)) {
+        if (VCAMPOS.includes(k) || k === "del" || k === "id") continue;
+        const a = vb[k], b2 = vo[k];
+        if (typeof b2 === "string") { if (b2.length > String(a || "").length && (!a || k !== "f")) { vb[k] = b2; ch = true; } }
+        else if (k === "inf") { if (b2 && (!a || (b2.ts || 0) > (a.ts || 0))) { vb[k] = b2; ch = true; } }
+        else if (a == null && b2 != null) { vb[k] = b2; ch = true; }
+      }
+    }
+    if (ob.vis.length > 1) ob.vis.sort((a, b) => String(a.f || "").localeCompare(String(b.f || "")));
+  });
+  return ch;
+}
+function visConDatos(v) {
+  return !!(v && ((v.fotos || []).length || (v.aud || []).length || (v.videos || []).length || ["notas", "dem", "cons", "tec", "tar", "pres"].some((k) => String(v[k] || "").trim())));
+}
+function pcAdopt(doc){try{const n=JSON.parse(doc.v);if(!n||!n.obras)return;n._t=doc.t;n.act=Math.min(DB.act||0,n.obras.length-1);let extra=false;try{extra=unirVisitas(n,DB)}catch(e){}DB=n;if(rzReset(DB)||extra){save();render();return}localStorage.setItem(KEY,JSON.stringify(DB));render();const g=document.getElementById('guard');if(g)g.textContent='Actualizado con los últimos cambios '+new Date().toLocaleTimeString('es-AR')}catch(e){}}
 function panelSync(){if(_pcBusy)return;_pcBusy=1;pcPost({op:'bar_panel',k:PANEL}).then(({s,j})=>{const R=document.documentElement;if(s!==200||!j.db){R.classList.remove('ploading');R.classList.add('pfail');return}
  if(window._pt===j.t&&!R.classList.contains('ploading'))return;window._pt=j.t;window._rol=j.rol;const a=DB&&DB.act||0;DB=j.db;DB.act=Math.min(a,DB.obras.length-1);R.classList.add(j.rol==='cliente'?'rol-c':'rol-e');R.classList.remove('ploading','pfail');render()}).catch(()=>{}).finally(()=>{_pcBusy=0})}
 function pcSync(first){if(PANEL){if(first||!document.hidden)panelSync();return}if(_pcBusy)return;const a=document.activeElement;if(!first&&((a&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName))||window._dirty))return;_pcBusy=1;pcPost({op:'pc_get'}).then(({j})=>{const d=j&&j.doc;if(d&&Number(d.t)>(DB._t||0))pcAdopt(d);else if(!d){DB._t=Date.now();try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}pcPush()}else if(Number(d.t)<(DB._t||0))pcPush()}).catch(()=>{}).finally(()=>{_pcBusy=0})}
@@ -1673,7 +1723,8 @@ function finHtml(o,r){const k=finCalc(o,r),f=k.f;return `<div class="card"><b>Fi
 /* ===== Visita: notas, grabación y fotos ===== */
 const VTAG={d:['Se demuele','var(--rojo)'],m:['Se mantiene','var(--verde)'],n:['No va / se retira','var(--naranja)'],t:['Técnico','var(--azul)'],o:['Otro','var(--muted)']};
 window._vb=window._vb||{};
-function visInit(o){if(!o.vis||!o.vis.length)o.vis=[{id:'v1',f:'2026-11-16',lugar:'Sucursal N°10 Barracas · Herrera',pres:'',notas:'',dem:'',cons:'',tec:'',tar:'',aud:[],fotos:[]}];return o.vis}
+const vTomb=(v,x)=>{if(v&&x&&x.id)(v.del=v.del||[]).push(x.id)};
+function visInit(o){if(!o.vis||!o.vis.length)o.vis=[{id:'v1',f:new Date(Date.now()-108e5).toISOString().slice(0,10),lugar:'Sucursal N°10 Barracas · Herrera',pres:'',notas:'',dem:'',cons:'',tec:'',tar:'',aud:[],fotos:[]}];return o.vis}
 const vCur=o=>{const V=visInit(o);if(window._vi==null||window._vi>=V.length)window._vi=0;return window._vi};
 const vSt=(m,bad)=>{const e=document.getElementById('vst');if(e){e.textContent=m;e.style.color=bad?'var(--rojo)':'var(--verde)'}};
 const fmtT=sg=>{sg=Math.round(sg);return Math.floor(sg/60)+':'+String(sg%60).padStart(2,'0')};
@@ -1753,11 +1804,11 @@ function vResumen(o){const v=o.vis[vCur(o)],L=[`VISITA DE OBRA · ${o.nombre}`,`
 document.addEventListener('click',e=>{const t=e.target.closest('button,label');if(!t)return;const o=O();if(!o)return;const vi=window._vi||0;
  if(t.id==='vinf'){vInforme(o);return}if(t.id==='vinfo'){vInforme(o,1);return}if(t.id==='vrec'){vRec();return}if(t.id==='vstop'){vStop();return}
  if(t.id==='vnew'){visInit(o).push({id:'v'+Date.now(),f:hoyL(),lugar:'Sucursal N°10 Barracas · Herrera',pres:'',hi:new Date().toTimeString().slice(0,5),hf:'',notas:'',dem:'',cons:'',tec:'',tar:'',aud:[],fotos:[]});window._vi=o.vis.length-1;save();render();return}
- if(t.id==='vdel'){if(o.vis.length>1){if(confirm('¿Eliminar esta visita con todas sus notas, audios y fotos?')){o.vis.splice(vi,1);window._vi=0;save();render()}}else alert('Tiene que quedar al menos una visita.');return}
+ if(t.id==='vdel'){if(o.vis.length>1){if(confirm('¿Eliminar esta visita con todas sus notas, audios y fotos?')){(o.visDel=o.visDel||[]).push(o.vis[vi].id);o.vis.splice(vi,1);window._vi=0;save();render()}}else alert('Tiene que quedar al menos una visita.');return}
  if(t.id==='vcopy'){const x=vResumen(o);(navigator.clipboard?navigator.clipboard.writeText(x):Promise.reject()).then(()=>vSt('Resumen copiado')).catch(()=>{prompt('Copiá el resumen:',x)});return}
- const d=t.dataset;if(d.vdela!==undefined){if(confirm('¿Quitar este tramo de audio?')){o.vis[vi].aud.splice(+d.vdela,1);save();render()}return}
- if(d.vdelf!==undefined){if(confirm('¿Quitar esta foto?')){o.vis[vi].fotos.splice(+d.vdelf,1);save();render()}return}
- if(d.vdelv!==undefined){if(confirm('¿Quitar este video?')){o.vis[vi].videos.splice(+d.vdelv,1);save();render()}return}
+ const d=t.dataset;if(d.vdela!==undefined){if(confirm('¿Quitar este tramo de audio?')){vTomb(o.vis[vi],o.vis[vi].aud[+d.vdela]);o.vis[vi].aud.splice(+d.vdela,1);save();render()}return}
+ if(d.vdelf!==undefined){if(confirm('¿Quitar esta foto?')){vTomb(o.vis[vi],o.vis[vi].fotos[+d.vdelf]);o.vis[vi].fotos.splice(+d.vdelf,1);save();render()}return}
+ if(d.vdelv!==undefined){if(confirm('¿Quitar este video?')){vTomb(o.vis[vi],o.vis[vi].videos[+d.vdelv]);o.vis[vi].videos.splice(+d.vdelv,1);save();render()}return}
  if(d.vtx!==undefined){vTx(o.vis[vi].aud[+d.vtx]);return}if(d.vretry!==undefined){vAudUp(o.vis[vi].aud[+d.vretry]);return}
  if(d.vflt!==undefined){window._vft=d.vflt;render()}});
 document.addEventListener('change',e=>{const t=e.target,o=O();if(!o)return;

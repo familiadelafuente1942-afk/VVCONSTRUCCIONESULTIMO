@@ -69,6 +69,82 @@ function abrirTok(tok) {
     return JSON.parse(Buffer.from(p, "base64url").toString("utf8"));
   } catch { return null; }
 }
+// ===== Visitas de obra: nunca se pierden por un equipo desactualizado =====
+// Une las visitas de dos versiones (por id); dentro de cada visita une fotos, audios y videos (por id).
+// Lo borrado a propósito queda anotado (o.visDel / v.del) y no vuelve.
+const VCAMPOS = ["fotos", "aud", "videos"];
+function unirVisitas(base, otra) {
+  // devuelve true si "base" cambió
+  if (!base || !otra || !Array.isArray(base.obras) || !Array.isArray(otra.obras)) return false;
+  let ch = false;
+  otra.obras.forEach((oo, i) => {
+    if (!oo || !Array.isArray(oo.vis)) return;
+    const ob = base.obras.find((x) => x && x.nombre && x.nombre === oo.nombre) || base.obras[i];
+    if (!ob) return;
+    const del = new Set([...(ob.visDel || []), ...(oo.visDel || [])]);
+    if ((oo.visDel || []).some((d) => !(ob.visDel || []).includes(d))) { ob.visDel = [...del]; ch = true; }
+    ob.vis = Array.isArray(ob.vis) ? ob.vis : [];
+    const antes = ob.vis.length;
+    ob.vis = ob.vis.filter((v) => v && !del.has(v.id));
+    if (ob.vis.length !== antes) ch = true;
+    for (const vo of oo.vis) {
+      if (!vo || !vo.id || del.has(vo.id)) continue;
+      const vb = ob.vis.find((x) => x.id === vo.id);
+      if (!vb) { if (visConDatos(vo)) { ob.vis.push(JSON.parse(JSON.stringify(vo))); ch = true; } continue; }
+      const vdel = new Set([...(vb.del || []), ...(vo.del || [])]);
+      if ((vo.del || []).some((d) => !(vb.del || []).includes(d))) { vb.del = [...vdel]; ch = true; }
+      for (const c of VCAMPOS) {
+        const A = Array.isArray(vb[c]) ? vb[c] : [], B = Array.isArray(vo[c]) ? vo[c] : [];
+        const n0 = A.length; let L = A.filter((x) => x && !vdel.has(x.id));
+        for (const x of B) {
+          if (!x || vdel.has(x.id)) continue;
+          const y = L.find((z) => z.id === x.id);
+          if (!y) { L.push(x); ch = true; }
+          else if (c === "aud") { if (!y.u && x.u) { y.u = x.u; ch = true; } if (String(x.tx || "").length > String(y.tx || "").length) { y.tx = x.tx; ch = true; } }
+          else if (String(x.n || "").length > String(y.n || "").length) { y.n = x.n; ch = true; }
+        }
+        if (L.length !== n0 || A.length !== L.length) ch = true;
+        if (L.length || vb[c]) vb[c] = L;
+      }
+      for (const k of Object.keys(vo)) {
+        if (VCAMPOS.includes(k) || k === "del" || k === "id") continue;
+        const a = vb[k], b2 = vo[k];
+        if (typeof b2 === "string") { if (b2.length > String(a || "").length && (!a || k !== "f")) { vb[k] = b2; ch = true; } }
+        else if (k === "inf") { if (b2 && (!a || (b2.ts || 0) > (a.ts || 0))) { vb[k] = b2; ch = true; } }
+        else if (a == null && b2 != null) { vb[k] = b2; ch = true; }
+      }
+    }
+    if (ob.vis.length > 1) ob.vis.sort((a, b) => String(a.f || "").localeCompare(String(b.f || "")));
+  });
+  return ch;
+}
+function visConDatos(v) {
+  return !!(v && ((v.fotos || []).length || (v.aud || []).length || (v.videos || []).length || ["notas", "dem", "cons", "tec", "tar", "pres"].some((k) => String(v[k] || "").trim())));
+}
+// Fotos, audios y videos subidos a la visita que quedaron sin anotar en la base (p. ej. un equipo pisó los datos): se vuelven a colgar en la visita de su día.
+async function recuperarArchivos(H, app, doc) {
+  const r = await fetch(`${URL_BASE}/storage/v1/object/list/nexo2-fotos`, { method: "POST", headers: H, body: JSON.stringify({ prefix: app + "/", limit: 1000, offset: 0, sortBy: { column: "created_at", order: "desc" } }) });
+  if (!r.ok) return 0;
+  const L = await r.json(); if (!Array.isArray(L)) return 0;
+  const o = (doc.obras || [])[0]; if (!o) return 0;
+  const txt = JSON.stringify(doc); let n = 0; const lim = Date.now() - 4 * 864e5;
+  for (const f of L) {
+    const m = /^(fot|aud|vid)-(\d{13})-[a-z0-9]+\.(\w+)$/.exec(f && f.name || ""); if (!m) continue;
+    const ts = Number(m[2]); if (ts < lim || txt.includes(f.name)) continue;
+    const u = NEW_PUB + app + "/" + f.name, dia = new Date(ts - 108e5).toISOString().slice(0, 10);
+    o.vis = Array.isArray(o.vis) ? o.vis : [];
+    let v = o.vis.filter((x) => x.f === dia).pop();
+    if (!v) { v = { id: "vr" + dia.replace(/-/g, ""), f: dia, lugar: (o.vis[0] && o.vis[0].lugar) || "", pres: "", notas: "", dem: "", cons: "", tec: "", tar: "", aud: [], fotos: [] }; o.vis.push(v); }
+    const id = m[1][0] + "r" + ts;
+    if (m[1] === "fot") (v.fotos = v.fotos || []).push({ id, u, tag: "o", n: "", ts });
+    else if (m[1] === "aud") (v.aud = v.aud || []).push({ id, d: 0, ts, u, tx: "" });
+    else (v.videos = v.videos || []).push({ id, u, n: "", ts });
+    n++;
+  }
+  if (n) o.vis.sort((a, b) => String(a.f || "").localeCompare(String(b.f || "")));
+  return n;
+}
+
 function leerSes(req) {
   const m = String(req.headers.cookie || "").match(new RegExp("(?:^|;\\s*)" + COOKIE + "=([^;]+)"));
   const d = m && abrirTok(decodeURIComponent(m[1]));
@@ -177,14 +253,39 @@ export default async function handler(req, res) {
 
     // ===== Paseo Colón · presupuesto y cronograma sincronizados entre dispositivos (último cambio gana) =====
     const pcKey = b.app === "barracas" ? "barracas_db" : b.app === "casa" ? "casa_db" : b.app === "canning" ? "canning_db" : b.app === "milanocasa" ? "milanocasa_db" : "paseocolon_db";
-    if (b.op === "pc_get") { const v = await leer(H, pcKey); res.status(200).json({ ok: true, doc: v || null }); return; }
+    if (b.op === "pc_get") {
+      let v = await leer(H, pcKey);
+      // una sola vez: recupera visitas, fotos, audios y videos que un equipo desactualizado haya pisado
+      if (v && v.v && pcKey === "barracas_db" && !String(v.v).includes('"_recVis":2')) {
+        try {
+          const n = JSON.parse(v.v); let ch = false;
+          const fuentes = [await leer(H, pcKey + "_prev")];
+          for (let h = 0; h < 24; h++) fuentes.push(await leer(H, pcKey + "_h" + h).catch(() => null));
+          for (const f of fuentes) { if (f && f.v) { try { if (unirVisitas(n, JSON.parse(f.v))) ch = true; } catch {} } }
+          if (await recuperarArchivos(H, "barracas", n).catch(() => 0)) ch = true;
+          n._recVis = 2; const t = ch ? Date.now() : Number(v.t) || Date.now();
+          const nv = { t, v: JSON.stringify(n) };
+          if (ch) await escribir(H, pcKey + "_prev", v);
+          await escribir(H, pcKey, nv); v = nv;
+        } catch {}
+      }
+      res.status(200).json({ ok: true, doc: v || null }); return;
+    }
     if (b.op === "pc_put") {
-      if (typeof b.v !== "string" || b.v.length > 1_500_000 || typeof b.t !== "number") { res.status(400).json({ error: "Datos inválidos" }); return; }
+      if (typeof b.v !== "string" || b.v.length > 4_000_000 || typeof b.t !== "number") { res.status(400).json({ error: "Datos inválidos" }); return; }
       const cur = await leer(H, pcKey);
       if (cur && Number(cur.t) > b.t) { res.status(409).json({ error: "Hay una versión más nueva", doc: cur }); return; }
-      if (cur && cur.v && cur.v !== b.v) await escribir(H, pcKey + "_prev", cur);
-      await escribir(H, pcKey, { t: b.t, v: b.v });
-      res.status(200).json({ ok: true }); return;
+      let v = b.v, t = b.t, unido = false;
+      // lo que viene nunca borra visitas, fotos, audios ni videos que ya estaban (salvo los que se borraron a propósito)
+      if (cur && cur.v && cur.v !== b.v) {
+        try { const n = JSON.parse(b.v); if (unirVisitas(n, JSON.parse(cur.v))) { v = JSON.stringify(n); t = Date.now(); unido = true; } } catch {}
+        await escribir(H, pcKey + "_prev", cur);
+        // copia por hora (las últimas 24 horas) para poder volver atrás
+        const hs = "_h" + new Date().getUTCHours(); const hc = await leer(H, pcKey + hs).catch(() => null);
+        if (!hc || Date.now() - Number(hc.t || 0) > 3600e3) await escribir(H, pcKey + hs, cur).catch(() => {});
+      }
+      await escribir(H, pcKey, { t, v });
+      res.status(200).json(unido ? { ok: true, doc: { t, v } } : { ok: true }); return;
     }
 
     // ===== Pedidos de cotización a proveedores (link público "Cotizador Belfast") =====
