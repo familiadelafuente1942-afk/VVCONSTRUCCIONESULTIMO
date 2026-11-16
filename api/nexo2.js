@@ -610,7 +610,7 @@ export default async function handler(req, res) {
         if (quien !== "ct") { res.status(403).json({ error: "Solo para contratistas" }); return; }
         // todas las obras donde tiene acceso, cada reclamo con su obra
         const ids = new Set(misCt.map((c) => c.id));
-        const porObra = await Promise.all(misCt.map(async (c) => { const v = await leer(H, "ctrec_" + c.obra); return ((v && v.items) || []).filter((x) => ids.has(x.ctId)).map((x) => ({ ...x, obraNombre: c.obraNombre })); }));
+        const porObra = await Promise.all(misCt.map(async (c) => { const v = await leer(H, "ctrec_" + c.obra); return ((v && v.items) || []).filter((x) => ids.has(x.ctId)).map((x) => ({ ...x, asig: undefined, hist: (x.hist || []).filter((h) => !h.interno), obraNombre: c.obraNombre })); }));
         const obras = misCt.map((c) => ({ id: c.obra, nombre: c.obraNombre, jw: ((reg.jw || {})[c.obra]) || "" }));
         res.status(200).json({ ok: true, jw: ((reg.jw || {})[ct.obra]) || "", obras, yo: { nombre: ct.nombre, rubro: ct.rubro }, items: porObra.flat() }); return;
       }
@@ -676,6 +676,26 @@ export default async function handler(req, res) {
         await escribir(H, clave, { items });
         res.status(200).json({ ok: true, rec: it }); return;
       }
+      if (b.op === "ct_enc_set") {
+        // personas encargadas (nombre + WhatsApp) a las que la Dirección les asigna reclamos
+        if (quien !== "dir") { res.status(403).json({ error: "Solo Dirección" }); return; }
+        const enc = (Array.isArray(b.enc) ? b.enc : []).slice(0, 30).map((e) => ({ id: idOk(e.id) || ("e" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5)), nombre: str(e.nombre, 60).trim(), tel: String(e.tel || "").replace(/\D/g, "").slice(0, 16) })).filter((e) => e.nombre && e.tel.length >= 10);
+        await escribir(H, "ctcods", { ...reg, items: lista, enc });
+        res.status(200).json({ ok: true, enc }); return;
+      }
+      if (b.op === "ct_asignar") {
+        // la Dirección asigna el reclamo a hasta 2 encargados (queda registrado; el WhatsApp se manda desde NEXO 2)
+        if (quien !== "dir") { res.status(403).json({ error: "Solo Dirección" }); return; }
+        const v = await leer(H, clave); const items = ((v && v.items) || []); const it = items.find((x) => x.id === idOk(b.id));
+        if (!it) { res.status(404).json({ error: "No existe ese reclamo" }); return; }
+        const E = Array.isArray(reg.enc) ? reg.enc : [];
+        const asig = (Array.isArray(b.ids) ? b.ids : []).map((i) => E.find((e) => e.id === i)).filter(Boolean).slice(0, 2).map((e) => ({ id: e.id, nombre: e.nombre, tel: e.tel }));
+        const t = Date.now();
+        it.asig = asig; it.editado = t;
+        it.hist = (Array.isArray(it.hist) ? it.hist : []).concat([{ t, por: "dir", nom: "Dirección", tx: asig.length ? "Asignado a " + asig.map((e) => e.nombre).join(" y ") : "Sin encargados asignados", interno: true }]).slice(-100);
+        await escribir(H, clave, { items });
+        res.status(200).json({ ok: true, rec: it }); return;
+      }
       if (b.op === "ct_vincular") {
         // el contratista suma otra obra con otro código: queda guardado en el servidor para que la vea en la PC, el iPad y el celular
         if (quien !== "ct") { res.status(403).json({ error: "No autorizado" }); return; }
@@ -719,7 +739,7 @@ export default async function handler(req, res) {
         const ids = Array.from(new Set([...Object.keys(cods.obras || {}), ...lista.map((c) => c.obra)]));
         const out = {};
         await Promise.all(ids.map(async (id) => { const v = await leer(H, "ctrec_" + id); if (v && v.items && v.items.length) out[id] = v.items; }));
-        res.status(200).json({ ok: true, obras: out, cts: lista, jw: reg.jw || {} }); return;
+        res.status(200).json({ ok: true, obras: out, cts: lista, jw: reg.jw || {}, enc: reg.enc || [] }); return;
       }
       if (b.op === "ct_cod_edit") {
         // Dirección corrige el nombre de la empresa y el rubro de un contratista
