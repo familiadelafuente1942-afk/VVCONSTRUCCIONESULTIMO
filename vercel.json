@@ -31,6 +31,9 @@
     },
     "api/claude.js": {
       "maxDuration": 60
+    },
+    "api/estudio-ig.js": {
+      "maxDuration": 60
     }
   },
   "crons": [

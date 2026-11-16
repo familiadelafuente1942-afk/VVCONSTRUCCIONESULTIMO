@@ -1,4 +1,4 @@
-<!doctype html><html lang="es"><head><meta name="app-build" content="20261115-230905"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#000000"><title>Mi Asistente · Nanina</title>
+<!doctype html><html lang="es"><head><meta name="app-build" content="20261116-034127"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#000000"><title>Mi Asistente · Nanina</title>
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Nanina">
 <link rel="icon" type="image/png" href="/nanina/icon-192.png"><link rel="apple-touch-icon" href="/nanina/icon-180.png"><link rel="manifest" href="/nanina/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -110,7 +110,7 @@ html,body{background:radial-gradient(120% 46% at 92% -4%,rgba(184,145,90,.2),tra
 const SUPA_URL="https://bxhjgxzvayszfqwlwinq.supabase.co",SUPA_KEY="sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5",KEY="nanina_db";
 const SH={"Content-Type":"application/json",apikey:SUPA_KEY,Authorization:"Bearer "+SUPA_KEY};
 const VOCES=[["","Voz estándar"],["KoIf2KgeJA8uoGcgKIao","Marcela · alegre y melódica"],["SmgKjOvC1aIujLWcMzqq","Alisson · cálida"],["J4vZAFDEcpenkMp3f3R9","Valentina · de amiga"],["VmejBeYhbrcTPwDniox7","Lina · fresca"],["b2htR0pMe28pYwCY9gnP","Sofía · conversada"]];
-const DEF={perfil:{nombre:"Nanina",asist:"Mi Asistente",voz:"",tema:"oscuro",manejando:false,hablar:true},pin:"",props:[],clientes:[],agenda:[],ops:[],pagos:[],gastos:[],chat:[],t:0};
+const DEF={perfil:{nombre:"Nanina",asist:"Mi Asistente",voz:"",tema:"oscuro",manejando:false,hablar:true},pin:"",props:[],clientes:[],agenda:[],ops:[],pagos:[],gastos:[],estudio:[],chat:[],t:0};
 let D=JSON.parse(JSON.stringify(DEF)),VISTA="chat",FIL="",FES="",FORM=null,MAS=false,BUSY=false;
 let T={},BRASS="#D8B06A",CARD="";
 const $=s=>document.querySelector(s),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -133,6 +133,7 @@ const IC={chat:'<path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3
  auto:'<path d="M5 17h14M6 17l1.5-6h9L18 17"/><circle cx="7.5" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/><path d="M8 11l1.2-3.5h5.6L16 11"/>',
  pagos:'<line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
  gastos:'<polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/>',
+ insta:'<rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1"/>',
  mas:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>'};
 const ico=(n,s=20)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:block">${IC[n]||""}</svg>`;
 /* ---- tema: mismos colores que Mi Asistente ---- */
@@ -158,7 +159,7 @@ const S={
  chip:(on)=>`background:${on?T.navy:"transparent"};color:${on?"#fff":T.sub};border:1px solid ${on?BRASS:T.border};border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer`,
  vacio:()=>`text-align:center;color:${T.muted};font-size:13.5px;line-height:1.6;padding:40px 20px`};
 /* ---- cabecera y navegación ---- */
-const NAV_PRINC=[["chat","Chat"],["props","Propiedades"],["clientes","Clientes"],["agenda","Agenda"]],NAV_MAS=[["ops","Operaciones"],["pagos","Pagos"],["gastos","Gastos"],["ajustes","Ajustes"]];
+const NAV_PRINC=[["chat","Chat"],["props","Propiedades"],["clientes","Clientes"],["agenda","Agenda"]],NAV_MAS=[["insta","Instagram"],["ops","Operaciones"],["pagos","Pagos"],["gastos","Gastos"],["ajustes","Ajustes"]];
 function hdr(){const claro=D.perfil.tema==="claro";
   $("#hdr").setAttribute("style",`background:${T.navy};color:#fff;padding:16px 18px 12px;padding-top:max(16px, env(safe-area-inset-top));border-bottom:1px solid ${BRASS}`);
   $("#hdr").innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:9.5px;font-weight:700;color:${BRASS};letter-spacing:.22em;text-transform:uppercase">Privado · ${esc(D.perfil.nombre||"Nanina")} · Broker inmobiliaria</div><div style="font-size:22px;font-weight:600;letter-spacing:.01em;margin-top:2px">${esc(D.perfil.asist||"Mi Asistente")}</div></div>
@@ -176,7 +177,7 @@ document.addEventListener("click",e=>{const v=e.target.closest("[data-v]");if(v)
 /* ---- render ---- */
 function render(){tema();hdr();navR();const m=$("#main");
   if(VISTA==="chat"){m.innerHTML=vChat();bindChat();return}
-  m.innerHTML=`<div style="flex:1;overflow-y:auto;padding:14px 16px 24px">${VISTA==="props"?vProps():VISTA==="clientes"?vCli():VISTA==="agenda"?vAg():VISTA==="ops"?vOps():VISTA==="pagos"?vPagos():VISTA==="gastos"?vGastos():vAjustes()}</div>`;
+  m.innerHTML=`<div style="flex:1;overflow-y:auto;padding:14px 16px 24px">${VISTA==="props"?vProps():VISTA==="clientes"?vCli():VISTA==="agenda"?vAg():VISTA==="ops"?vOps():VISTA==="pagos"?vPagos():VISTA==="gastos"?vGastos():VISTA==="insta"?vInsta():vAjustes()}</div>`;
   bindVista()}
 const EP={"Disponible":"#3fa66b","Reservada":"#e0b43a","Vendida":"#e2493e","Alquilada":"#e2493e","Retirada":"#8c8c8c"},EC={"Nuevo":"#8c8c8c","En seguimiento":"#e0b43a","Visitó":"#e0b43a","Ofertó":"#3fa66b","Cerró":"#3fa66b","Perdido":"#e2493e"},EO={"Reserva":"#e0b43a","Boleto":"#e0b43a","Escriturada / Firmado":"#3fa66b","Comisión cobrada":"#3fa66b","Caída":"#e2493e"};
 const tag=(t,c)=>`<span style="font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:${c};border:1px solid ${c};border-radius:999px;padding:3px 9px;white-space:nowrap">${esc(t)}</span>`;
@@ -233,16 +234,78 @@ function vGastos(){const cur=MES||mesHoy(),L=D.gastos.filter(x=>mesDe(x.f)===cur
   return bloqueForm("gasto","Cargar gasto")+selMes(D.gastos)+filtroDe()+`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">${kpiBox("Gastos propios",totTxt(pr))}${kpiBox("Gastos de la familia",totTxt(fa),"#5b8fd6")}</div>`+
   (L.map(x=>`<div style="${S.card()};cursor:pointer" data-ed="gasto:${x.id}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div style="font-size:15.5px;font-weight:600">${esc(x.c||"Gasto")}</div><b style="color:${BRASS};white-space:nowrap">${money(x.monto,x.mon||"$")}</b></div>
   <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:7px"><span style="font-size:12.5px;color:${T.sub}">${fFec(x.f)}${x.cat?" · "+esc(x.cat):""}</span>${deTag(x.de)}</div>${x.nota?`<div style="font-size:12.5px;color:${T.sub};margin-top:5px">${esc(x.nota)}</div>`:""}</div>`).join("")||`<div style="${S.vacio()}">Sin gastos ${cur===mesHoy()?"este mes":"en "+mesTxt(cur)}.<br>Desde el Chat podés decir: "anotá 45 mil de súper, gasto de la familia"</div>`)}
+/* ---- Estudio de Instagram: foto + prompt -> imagen o Reel con IA ---- */
+let REFS=[],PROMPT="",SEG="8",GEN="";
+function achicar(file,max,w,h){return new Promise((ok,no)=>{const fr=new FileReader();fr.onload=()=>{const im=new Image();im.onload=()=>{const c=document.createElement("canvas");
+  if(w&&h){c.width=w;c.height=h;const k=Math.max(w/im.width,h/im.height),dw=im.width*k,dh=im.height*k;c.getContext("2d").drawImage(im,(w-dw)/2,(h-dh)/2,dw,dh)}
+  else{const k=Math.min(1,max/Math.max(im.width,im.height));c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext("2d").drawImage(im,0,0,c.width,c.height)}
+  ok(c.toDataURL("image/jpeg",.86))};im.onerror=no;im.src=fr.result};fr.onerror=no;fr.readAsDataURL(file)})}
+async function aDataURL(src){if(src.startsWith("data:"))return src;const b=await (await fetch(src)).blob();return await achicar(new File([b],"x.jpg",{type:b.type}),1536)}
+function vInsta(){const E=D.estudio||[];
+  return`<div style="${S.card()}"><div style="font-size:10.5px;color:${BRASS};font-weight:700;letter-spacing:.18em;text-transform:uppercase;margin-bottom:8px">Estudio para Instagram</div>
+  <div style="font-size:13px;color:${T.sub};line-height:1.45;margin-bottom:12px">Subí una foto (de la propiedad, tuya o de lo que quieras), escribí qué querés y la IA te arma una imagen o un Reel vertical listo para subir.</div>
+  <input type="file" id="ig_f" accept="image/*" multiple style="display:none">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${REFS.map((r,i)=>`<div style="position:relative"><img src="${r}" alt="" style="width:74px;height:98px;object-fit:cover;border-radius:10px;border:1px solid ${T.border};display:block"><button data-qref="${i}" aria-label="Quitar foto" style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:0;background:#e2493e;color:#fff;font-size:12px;cursor:pointer">✕</button></div>`).join("")}
+  ${REFS.length<4?`<button id="ig_add" style="width:74px;height:98px;border-radius:10px;border:1px dashed ${BRASS};background:transparent;color:${BRASS};font-size:12px;font-weight:700;cursor:pointer">＋ Foto</button>`:""}</div>
+  <div style="${S.lbl()}">¿Qué querés que haga la IA?</div>
+  <textarea id="ig_p" rows="3" placeholder="Ej: este living con luz cálida de atardecer, estilo revista de decoración" style="${S.inp()};resize:vertical">${esc(PROMPT)}</textarea>
+  <div style="display:flex;gap:8px;margin-top:4px"><button id="ig_img" ${GEN?"disabled":""} style="flex:1;background:${T.accent};color:#fff;border:none;border-radius:11px;padding:13px 8px;font-size:14px;font-weight:700;cursor:pointer;opacity:${GEN?.5:1}">${GEN==="img"?"Generando imagen…":"✨ Generar imagen"}</button>
+  <button id="ig_vid" ${GEN?"disabled":""} style="flex:1;${S.sec()};opacity:${GEN?.5:1}">${GEN==="vid"?"Enviando…":"🎬 Generar Reel"}</button></div>
+  <div style="display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap"><span style="font-size:12px;color:${T.sub}">Duración del Reel:</span>${["4","8","12"].map(x=>`<button data-seg="${x}" style="${S.chip(SEG===x)}">${x} seg</button>`).join("")}</div>
+  <div id="ig_msg" style="font-size:12.5px;color:${T.sub};margin-top:10px;line-height:1.4"></div></div>
+  ${E.length?`<div style="${S.lbl()};margin-top:6px">Tus creaciones</div>`:""}
+  ${E.map(x=>`<div style="${S.card()}">${x.tipo==="video"?(x.url?`<video src="${esc(x.url)}" controls playsinline style="width:100%;max-height:70vh;border-radius:10px;background:#000;display:block"></video>`:`<div style="aspect-ratio:9/16;max-height:50vh;margin:0 auto;border-radius:10px;border:1px dashed ${T.border};display:flex;align-items:center;justify-content:center;text-align:center;padding:16px;color:${x.estado==="failed"?"#e2493e":T.sub};font-size:13px">${x.estado==="failed"?"No se pudo hacer: "+esc(x.error||""):"🎬 Haciendo el Reel… "+(x.progreso?x.progreso+"%":"")+"<br>Tarda unos minutos. Podés seguir usando la app."}</div>`)
+   :`<img src="${esc(x.url)}" alt="" style="width:100%;border-radius:10px;display:block">`}
+   <div style="font-size:12.5px;color:${T.sub};margin:8px 0">${esc(x.prompt||"")} · ${fFec(x.f)}</div>
+   ${x.texto?`<div style="font-size:13px;white-space:pre-wrap;background:${T.al};border-radius:9px;padding:10px;margin-bottom:8px">${esc(x.texto)}</div>`:""}
+   ${x.url?`<div style="display:flex;gap:6px;flex-wrap:wrap"><button data-igsh="${x.id}" style="flex:1;min-width:130px;background:linear-gradient(90deg,#f58529,#dd2a7b,#8134af);color:#fff;border:0;border-radius:9px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">📲 Compartir en Instagram</button>
+   <button data-igtx="${x.id}" style="${S.chip(false)}">${x.texto?"Copiar texto":"✍️ Texto del posteo"}</button>${x.tipo!=="video"?`<button data-igref="${x.id}" style="${S.chip(false)}">Usar de base</button><button data-iganim="${x.id}" style="${S.chip(false)}">🎬 Animar</button>`:""}<a href="${esc(x.url)}" download target="_blank" rel="noreferrer" style="${S.chip(false)};text-decoration:none">⬇ Bajar</a><button data-igdel="${x.id}" style="${S.chip(false)};color:#e2493e">Borrar</button></div>`:x.estado==="failed"?`<button data-igdel="${x.id}" style="${S.chip(false)};color:#e2493e">Quitar</button>`:""}</div>`).join("")}`}
+const igMsg=t=>{const m=$("#ig_msg");if(m)m.textContent=t};
+async function igPost(body){const r=await fetch("/api/estudio-ig",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});const j=await r.json().catch(()=>({}));if(!r.ok||j.error)throw new Error(j.error&&j.error.message||"Error "+r.status);return j}
+async function igImagen(){PROMPT=($("#ig_p")||{}).value||PROMPT;if(!PROMPT.trim()){igMsg("Escribí qué querés que haga la IA.");return}
+  GEN="img";render();igMsg("La IA está armando la imagen (tarda hasta un minuto)…");
+  try{const j=await igPost({op:"imagen",prompt:PROMPT+"\nFormato vertical para Instagram, fotorrealista, calidad profesional.",imagenes:REFS});
+    D.estudio.unshift({id:uid(),tipo:"imagen",url:j.url||j.imagen,prompt:PROMPT,f:hoy()});if(!j.url)igAviso="La imagen no quedó guardada en la nube: bajala si la querés conservar.";GEN="";save();render()}
+  catch(e){GEN="";render();igMsg("No se pudo: "+e.message)}}
+let igAviso="";
+async function igVideo(base){PROMPT=($("#ig_p")||{}).value||PROMPT;if(!PROMPT.trim()){igMsg("Escribí qué querés que pase en el Reel.");return}
+  GEN="vid";render();igMsg("Enviando a la IA de video…");
+  try{let ref=base||REFS[0]||null;if(ref){const b=await (await fetch(ref)).blob();ref=await achicar(new File([b],"r.jpg",{type:b.type}),0,720,1280)}
+    const j=await igPost({op:"video_crear",prompt:PROMPT+"\nVideo vertical tipo Reel de Instagram, movimiento de cámara suave y profesional.",segundos:SEG,imagen:ref});
+    D.estudio.unshift({id:uid(),tipo:"video",job:j.id,estado:j.estado,prompt:PROMPT,f:hoy()});GEN="";save();render();igMsg("Listo, el Reel se está haciendo. Tarda unos minutos.");igPoll()}
+  catch(e){GEN="";render();igMsg("No se pudo: "+e.message)}}
+let igT=null;
+async function igPoll(){clearTimeout(igT);const pend=(D.estudio||[]).filter(x=>x.tipo==="video"&&!x.url&&x.estado!=="failed"&&x.job);if(!pend.length)return;let cambio=false;
+  for(const x of pend){try{const j=await igPost({op:"video_estado",id:x.job});if(j.estado==="completed"&&j.url){x.url=j.url;x.estado="completed";cambio=true}else if(j.estado==="failed"){x.estado="failed";x.error=j.error;cambio=true}else if(j.progreso!==x.progreso){x.progreso=j.progreso;if(VISTA==="insta")cambio=true}}catch(e){}}
+  if(cambio){save();if(VISTA==="insta")render()}igT=setTimeout(igPoll,10000)}
+async function igCompartir(x){try{const b=await (await fetch(x.url)).blob(),f=new File([b],x.tipo==="video"?"reel.mp4":"posteo.jpg",{type:b.type||(x.tipo==="video"?"video/mp4":"image/jpeg")});
+  if(x.texto)try{await navigator.clipboard.writeText(x.texto)}catch{}
+  if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f]});return}
+  const a=document.createElement("a");a.href=URL.createObjectURL(f);a.download=f.name;a.click();alert("Lo bajé a tu dispositivo. Abrí Instagram, tocá ＋ y elegilo de la galería.")}catch(e){if(e&&e.name!=="AbortError")alert("No se pudo compartir: "+e.message)}}
+async function igTexto(x){if(x.texto){try{await navigator.clipboard.writeText(x.texto);alert("Texto copiado. Pegalo en Instagram.")}catch{}return}
+  try{const r=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-5",max_tokens:600,system:"Sos community manager de "+(D.perfil.nombre||"Nanina")+", broker inmobiliaria en Argentina. Escribís en español rioplatense.",messages:[{role:"user",content:"Escribí el texto para un posteo de Instagram ("+(x.tipo==="video"?"Reel":"foto")+") sobre esto: "+(x.prompt||"")+". 2 a 4 líneas atractivas, un llamado a la acción para consultar por mensaje directo, y al final 8 a 12 hashtags inmobiliarios relevantes de Argentina. Solo el texto, sin comillas ni explicación."}]})});
+    const j=await r.json();x.texto=(j.content||[]).filter(c=>c.type==="text").map(c=>c.text).join("\n").trim();if(x.texto){save();render()}}catch{alert("No pude escribir el texto ahora.")}}
 function vAjustes(){const P=D.perfil;
   return`<div style="${S.card()}"><div style="font-size:10.5px;color:${BRASS};font-weight:700;letter-spacing:.18em;text-transform:uppercase;margin-bottom:10px">Perfil</div>
   <div style="${S.lbl()}">Tu nombre</div><input id="c_nom" value="${esc(P.nombre)}" style="${S.inp()}"><div style="${S.lbl()}">Nombre del asistente</div><input id="c_as" value="${esc(P.asist)}" style="${S.inp()}">
   <div style="${S.lbl()}">Cambiar clave (4 números)</div><input id="c_pin" inputmode="numeric" maxlength="4" placeholder="Dejala vacía para no cambiarla" style="${S.inp()}"><button id="c_ok" style="${S.prim()};margin:6px 0 0">Guardar</button><div id="c_msg" style="font-size:12.5px;color:${T.sub};margin-top:8px"></div></div>
   <div style="${S.card()}"><div style="font-size:10.5px;color:${BRASS};font-weight:700;letter-spacing:.18em;text-transform:uppercase">Voz del asistente</div><div style="font-size:13px;color:${T.sub};margin:6px 0 12px;line-height:1.4">Tocá una para escucharla y queda elegida.</div>
   <div style="display:flex;flex-direction:column;gap:8px">${VOCES.map(([id,n])=>`<button class="gbtn" data-voz="${id}" style="padding:12px 14px;justify-content:space-between;${(P.voz||"")===id?`box-shadow:inset 0 0 0 2px ${BRASS}`:""}"><span>${n}</span><span style="font-size:12px;color:${(P.voz||"")===id?BRASS:T.sub}">${(P.voz||"")===id?"✓ Elegida":"▶ Probar"}</span></button>`).join("")}</div></div>`}
-function bindVista(){const sm=$("#selmes");if(sm)sm.onchange=()=>{MES=sm.value;render()};const q=$("#q");if(q)q.oninput=()=>{FIL=q.value;const p=q.selectionStart;render();const n=$("#q");n.focus();n.setSelectionRange(p,p)};
+function bindVista(){if(VISTA==="insta"){const f=$("#ig_f"),ad=$("#ig_add"),p=$("#ig_p");if(ad)ad.onclick=()=>f.click();
+    f.onchange=async()=>{for(const fl of [...f.files].slice(0,4-REFS.length)){try{REFS.push(await achicar(fl,1536))}catch{}}render()};
+    p.oninput=()=>{PROMPT=p.value};$("#ig_img").onclick=igImagen;$("#ig_vid").onclick=()=>igVideo();if(igAviso){igMsg(igAviso);igAviso=""}}
+const sm=$("#selmes");if(sm)sm.onchange=()=>{MES=sm.value;render()};const q=$("#q");if(q)q.oninput=()=>{FIL=q.value;const p=q.selectionStart;render();const n=$("#q");n.focus();n.setSelectionRange(p,p)};
   document.querySelectorAll("[data-money]").forEach(i=>i.oninput=()=>{const n=i.value.replace(/\D/g,"");i.value=n?Number(n).toLocaleString("es-AR"):""});
   const ok=$("#c_ok");if(ok)ok.onclick=async()=>{const P=D.perfil;P.nombre=$("#c_nom").value.trim()||"Nanina";P.asist=$("#c_as").value.trim()||"Mi Asistente";const pn=$("#c_pin").value.trim();if(/^\d{4}$/.test(pn))D.pin=await sha(pn);save();render();$("#c_msg").textContent="Guardado ✓"}}
 document.addEventListener("click",async e=>{const t=e.target;
+  const qr=t.closest("[data-qref]");if(qr){REFS.splice(+qr.dataset.qref,1);render();return}
+  const sg=t.closest("[data-seg]");if(sg){PROMPT=($("#ig_p")||{}).value||PROMPT;SEG=sg.dataset.seg;render();return}
+  const igx=id=>(D.estudio||[]).find(x=>x.id===id);
+  const ish=t.closest("[data-igsh]");if(ish){igCompartir(igx(ish.dataset.igsh));return}
+  const itx=t.closest("[data-igtx]");if(itx){igTexto(igx(itx.dataset.igtx));return}
+  const irf=t.closest("[data-igref]");if(irf){const x=igx(irf.dataset.igref);try{REFS=[await aDataURL(x.url)]}catch{REFS=[]}render();$("#main>div").scrollTop=0;return}
+  const ian=t.closest("[data-iganim]");if(ian){const x=igx(ian.dataset.iganim);PROMPT=($("#ig_p")||{}).value||PROMPT||"Movimiento de cámara suave recorriendo el ambiente";igVideo(x.url);return}
+  const idl=t.closest("[data-igdel]");if(idl){if(confirm("¿Borrar esta creación?")){D.estudio=D.estudio.filter(x=>x.id!==idl.dataset.igdel);save();render()}return}
   const dq=t.closest("[data-deq]");if(dq){DEQ=dq.dataset.deq;render();return}
   const pg=t.closest("[data-pagar]");if(pg){const x=D.pagos.find(y=>y.id===pg.dataset.pagar);if(x){x.estado="Pagado";save();render()}return}
   const f=t.closest("[data-fes]");if(f){FES=f.dataset.fes;render();return}
@@ -308,7 +371,7 @@ Montos: dólares "U$s 180.000"; pesos "$ 1.500.000"; sin decimales. Fechas AAAA-
 Para CARGAR o CAMBIAR datos agregá al final una línea por acción, exactamente así:
 <<ACCION>>{"tipo":"...","datos":{...}}<<FIN>>
 Tipos: "agregar_propiedad" (tit, op[Venta|Alquiler|Alquiler temporario], tipo, dir, barrio, precio número, mon[U$s|$], amb, m2, dueno, tel, estado[${Object.keys(EP).join("|")}], notas); "editar_propiedad" (id + campos); "agregar_cliente" (nom, tel, mail, busca, presu, mon, estado[${Object.keys(EC).join("|")}], notas); "editar_cliente" (id + campos); "agendar" (tit, f, h "HH:MM", lugar, cli, nota); "editar_evento" (id + campos; hecho:true para marcarlo hecho); "agregar_operacion" (prop, cli, tipo, monto, mon, pct, estado[${Object.keys(EO).join("|")}], f, notas); "editar_operacion" (id + campos); "cargar_pago" (a, monto, mon[$|U$s], f, de[Propio|Familia], estado[Pendiente|Pagado], metodo, nota) para cuentas a pagar o ya pagadas; "editar_pago" (id + campos; estado:"Pagado" para marcarlo pagado); "cargar_gasto" (c = en qué, monto, mon, f, de[Propio|Familia], cat, nota) para gastos del día a día; "editar_gasto" (id + campos). Cada pago o gasto es "Propio" (de ella) o "Familia": si no lo dice, preguntale o usá Propio y aclaráselo. "whatsapp" (tel con código de país sin + ni espacios, ej 5491155556666; a = nombre; txt = mensaje) para dejarle listo un mensaje que ella manda con un toque.
-Si falta un dato, cargá igual lo que haya y decile qué falta. Nunca inventes datos. Confirmá en una oración lo que hiciste.`}
+En "Más → Instagram" tiene un estudio: sube una foto, escribe qué quiere y la IA le arma una imagen o un Reel vertical para compartir en Instagram; si te pide algo de Instagram, guiala ahí y ayudala a escribir el prompt o el texto del posteo con hashtags. Si falta un dato, cargá igual lo que haya y decile qué falta. Nunca inventes datos. Confirmá en una oración lo que hiciste.`}
 async function enviar(q){q=String(q||"").trim();if(!q||BUSY)return;borrador="";texto="";D.chat.push({r:"u",t:q});BUSY=true;save();render();
   const hist=D.chat.slice(-14).filter(m=>m.t).map(m=>({role:m.r==="u"?"user":"assistant",content:m.t}));while(hist.length&&hist[0].role!=="user")hist.shift();
   hist[hist.length-1]={role:"user",content:"DATOS (JSON):\n"+contexto()+"\n\nMENSAJE: "+q};
@@ -336,7 +399,7 @@ function pedirPin(){return new Promise(res=>{const nuevo=!D.pin,p=document.creat
   const ok=async()=>{const v=i.value.trim();if(!/^\d{4}$/.test(v)){p.querySelector("#pinerr").textContent="Tienen que ser 4 números";return}const h=await sha(v);
     if(nuevo){D.pin=h;save();p.remove();res()}else if(h===D.pin){p.remove();res()}else{p.querySelector("#pinerr").textContent="PIN incorrecto";i.value=""}};
   p.querySelector("#pinok").onclick=ok;i.onkeydown=e=>{if(e.key==="Enter")ok()}})}
-(async()=>{await load();tema();await pedirPin();render();
+(async()=>{await load();tema();await pedirPin();render();igPoll();
   setInterval(async()=>{if(document.hidden||FORM||escuchando||BUSY||document.activeElement&&/INPUT|TEXTAREA/.test(document.activeElement.tagName))return;try{const r=await fetch(SUPA_URL+"/rest/v1/bco_storage?key=eq."+KEY+"&select=value&limit=1",{headers:SH});const d=await r.json();if(d&&d[0]){const x=JSON.parse(d[0].value);if((x.t||0)>(D.t||0)){D=mezclar(x);render()}}}catch{}},20000)})();
 
 </script>
