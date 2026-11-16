@@ -546,8 +546,8 @@ export default async function handler(req, res) {
       const str = (x, n) => String(x == null ? "" : x).slice(0, n);
       const num = (x, lo, hi) => Math.min(hi, Math.max(lo, Number(x) || 0));
       const idOk = (x) => String(x || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
-      const TIPOS = ["material", "definicion", "retraso", "adicional", "otro", "presupuesto", "materiales"];
-      const DOC = (t) => t === "presupuesto" || t === "materiales";
+      const TIPOS = ["material", "definicion", "retraso", "adicional", "otro", "presupuesto", "materiales", "auditoria"];
+      const DOC = (t) => t === "presupuesto" || t === "materiales" || t === "auditoria";
       const ESTADOS = ["abierto", "gestion", "resuelto", "rechazado", "cerrado", "recibido"];
       const reg = (await leer(H, "ctcods")) || { items: [] };
       const lista = Array.isArray(reg.items) ? reg.items : [];
@@ -617,14 +617,23 @@ export default async function handler(req, res) {
         const tipo = TIPOS.includes(q.tipo) ? q.tipo : "otro";
         const esDoc = DOC(tipo);
         if (!esDoc && !str(q.titulo, 200).trim()) { res.status(400).json({ error: "Escribí qué pasa" }); return; }
-        if (esDoc && !str(q.desc, 3000).trim() && !arch(q.archivos).length && !num(q.monto, 0, 1e12)) { res.status(400).json({ error: "Adjuntá el archivo o escribí el detalle" }); return; }
+        if (tipo === "auditoria" && !(q.aud && Array.isArray(q.aud.items) && q.aud.items.length)) { res.status(400).json({ error: "Cargá al menos una tarea en la auditoría" }); return; }
+        if (esDoc && tipo !== "auditoria" && !str(q.desc, 3000).trim() && !arch(q.archivos).length && !num(q.monto, 0, 1e12)) { res.status(400).json({ error: "Adjuntá el archivo o escribí el detalle" }); return; }
         const t = Date.now();
         const rec = {
           id: "r" + t.toString(36) + Math.random().toString(36).slice(2, 5), obra, ctId: ct.id, ctNombre: ct.nombre, rubro: ct.rubro,
-          tipo, titulo: str(q.titulo, 200).trim() || (tipo === "presupuesto" ? "Presupuesto" : "Listado de materiales"), desc: str(q.desc, 3000), tarea: str(q.tarea, 200), diasRetraso: esDoc ? 0 : num(q.diasRetraso, 0, 999),
+          tipo, titulo: str(q.titulo, 200).trim() || (tipo === "presupuesto" ? "Presupuesto" : tipo === "auditoria" ? "Auditoría de obra" : "Listado de materiales"), desc: str(q.desc, tipo === "auditoria" ? 8000 : 3000), tarea: str(q.tarea, 200), diasRetraso: esDoc ? 0 : num(q.diasRetraso, 0, 999),
           monto: num(q.monto, 0, 1e12), fotos: fts(q.fotos), archivos: arch(q.archivos), doc: esDoc, estado: esDoc ? "recibido" : "abierto", creado: t, editado: t,
-          hist: [{ t, por: "ct", nom: ct.nombre, tx: esDoc ? (tipo === "presupuesto" ? "Presupuesto enviado" : "Listado de materiales enviado") : "Reclamo cargado" }],
+          hist: [{ t, por: "ct", nom: ct.nombre, tx: esDoc ? (tipo === "presupuesto" ? "Presupuesto enviado" : tipo === "auditoria" ? "Auditoría de obra enviada" : "Listado de materiales enviado") : "Reclamo cargado" }],
         };
+        if (tipo === "auditoria") {
+          // auditoría del estado de la obra: qué se puede avanzar y qué no (y por qué), con la gente que hay
+          const a = q.aud || {};
+          const EA = ["avanza", "material", "definicion", "otro", "terminado"];
+          rec.aud = { fecha: str(a.fecha, 10), personal: num(a.personal, 0, 999), ociosos: num(a.ociosos, 0, 999), concl: str(a.concl, 3000),
+            items: (Array.isArray(a.items) ? a.items : []).slice(0, 60).map((x) => ({ tarea: str(x.tarea, 200), est: EA.includes(x.est) ? x.est : "otro", falta: str(x.falta, 300), pedido: str(x.pedido, 10), nota: str(x.nota, 600), fotos: fts(x.fotos) })),
+            reclamos: (Array.isArray(a.reclamos) ? a.reclamos : []).slice(0, 40).map((r) => ({ titulo: str(r.titulo, 200), tipo: str(r.tipo, 40), dias: num(r.dias, 0, 9999) })) };
+        }
         const v = await leer(H, clave);
         const items = ((v && v.items) || []); items.push(rec);
         await escribir(H, clave, { items: items.slice(-500) });
