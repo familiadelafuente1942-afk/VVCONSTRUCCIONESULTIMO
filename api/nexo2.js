@@ -553,9 +553,20 @@ export default async function handler(req, res) {
       const lista = Array.isArray(reg.items) ? reg.items : [];
       const cr = b.cred || {};
       let quien = "", ct = null;
+      // Todas las obras de un contratista: las que tienen su código y las cargadas con el mismo nombre (ej. "V+V" con un código distinto en cada obra)
+      const nomN = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9+]/g, "");
+      const misAccesos = (n) => {
+        if (!n) return [];
+        const propios = lista.filter((c) => norm(c.cod) === n);
+        if (!propios.length) return [];
+        const noms = new Set(propios.map((c) => nomN(c.nombre)).filter(Boolean));
+        const todos = lista.filter((c) => norm(c.cod) === n || noms.has(nomN(c.nombre)));
+        const vistos = new Set(); // una entrada por obra (primero la de su propio código)
+        return [...propios, ...todos.filter((c) => !propios.includes(c))].filter((c) => (vistos.has(c.obra) ? false : (vistos.add(c.obra), true)));
+      };
       if (b.op === "ct_login") {
         const n = norm(b.codigo);
-        const xs = n ? lista.filter((c) => norm(c.cod) === n) : [];
+        const xs = misAccesos(n);
         const x = xs[0];
         if (!x) { await pausa(600); res.status(200).json({ ok: false }); return; }
         // un mismo contratista puede tener acceso a varias obras (mismo código): devuelve todas
@@ -564,7 +575,7 @@ export default async function handler(req, res) {
       }
       const obraAll = String(b.obra || "");
       let misCt = [];
-      if (cr.rol === "ct") { const n = norm(cr.codigo); misCt = n ? lista.filter((c) => norm(c.cod) === n) : []; ct = misCt.find((c) => c.obra === obraAll) || misCt[0] || null; if (ct) quien = "ct"; }
+      if (cr.rol === "ct") { const n = norm(cr.codigo); misCt = misAccesos(n); ct = misCt.find((c) => c.obra === obraAll) || misCt[0] || null; if (ct) quien = "ct"; }
       else if (cr.rol === "dir" && dirOk(cr.codigo)) quien = "dir";
       else if (cr.rol === "jefe" && norm(cr.codigo) && /^[A-Za-z0-9_-]{1,40}$/.test(obraAll) && norm((cods.obras[obraAll] || {}).j) === norm(cr.codigo)) quien = "jefe";
       if (!quien) { await pausa(600); res.status(403).json({ error: "Volvé a ingresar tu código." }); return; }
