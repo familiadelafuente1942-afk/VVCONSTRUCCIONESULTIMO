@@ -756,8 +756,9 @@ export default async function handler(req, res) {
           const a = q.aud || {};
           const EA = ["avanza", "material", "definicion", "otro", "terminado"];
           rec.aud = { fecha: str(a.fecha, 10), personal: num(a.personal, 0, 999), ociosos: num(a.ociosos, 0, 999), concl: str(a.concl, 3000),
-            items: (Array.isArray(a.items) ? a.items : []).slice(0, 60).map((x) => ({ tarea: str(x.tarea, 200), est: EA.includes(x.est) ? x.est : "otro", falta: str(x.falta, 300), pedido: str(x.pedido, 10), gente: num(x.gente, 0, 999), fin: str(x.fin, 10), nota: str(x.nota, 600), fotos: fts(x.fotos) })),
+            items: (Array.isArray(a.items) ? a.items : []).slice(0, 80).map((x) => ({ n: num(x.n, 0, 999) || undefined, tarea: str(x.tarea, 300), est: EA.includes(x.est) ? x.est : "otro", falta: str(x.falta, 300), pedido: str(x.pedido, 10), gente: num(x.gente, 0, 999), fin: str(x.fin, 10), nota: str(x.nota, 600), fotos: fts(x.fotos) })),
             reclamos: (Array.isArray(a.reclamos) ? a.reclamos : []).slice(0, 40).map((r) => ({ id: idOk(r.id), num: str(r.num, 8), titulo: str(r.titulo, 200), tipo: str(r.tipo, 40), dias: num(r.dias, 0, 9999) })),
+            inf: a.inf && typeof a.inf === "object" ? { semana: str(a.inf.semana, 160), resp: str(a.inf.resp, 120), obraTxt: str(a.inf.obraTxt, 120), u: pubOk(a.inf.u) ? a.inf.u : "", n: str(a.inf.n, 120), total: num(a.inf.total, 0, 999) } : undefined,
             fotosP: (Array.isArray(a.fotosP) ? a.fotosP : []).filter((f) => f && pubOk(f.u)).slice(0, 12).map((f) => ({ u: f.u, n: str(f.n, 400) })) };
         }
         // número correlativo para todos los reclamos (0001, 0002, …), desde el 16/11/2026
@@ -818,6 +819,27 @@ export default async function handler(req, res) {
         it.hist = (Array.isArray(it.hist) ? it.hist : []).concat([{ t, por: "dir", nom: "Dirección", tx: asig.length ? "Asignado a " + asig.map((e) => e.nombre).join(" y ") : "Sin encargados asignados", interno: true }]).slice(-100);
         await escribir(H, clave, { items });
         res.status(200).json({ ok: true, rec: it }); return;
+      }
+      if (b.op === "ct_leer_informe") {
+        // lee el Informe Diario / Semanal que manda la jefatura (PDF o foto) y devuelve los pedidos con su gremio
+        if (quien !== "ct") { res.status(403).json({ error: "No autorizado" }); return; }
+        const key = process.env.ANTHROPIC_API_KEY; if (!key) { res.status(500).json({ error: "Falta la IA en el servidor" }); return; }
+        if (!pubOk(b.url)) { res.status(400).json({ error: "Archivo inválido" }); return; }
+        const f = await fetch(b.url); if (!f.ok) { res.status(400).json({ error: "No pude abrir el archivo" }); return; }
+        const buf = Buffer.from(await f.arrayBuffer()); if (buf.length > 20e6) { res.status(400).json({ error: "El archivo es muy pesado" }); return; }
+        const ct0 = (f.headers.get("content-type") || "").toLowerCase(), esPdf = ct0.includes("pdf") || /\.pdf($|\?)/i.test(b.url) || buf.slice(0, 4).toString() === "%PDF";
+        const mt = esPdf ? "application/pdf" : (/png/.test(ct0) ? "image/png" : /webp/.test(ct0) ? "image/webp" : "image/jpeg");
+        const bloque = esPdf ? { type: "document", source: { type: "base64", media_type: mt, data: buf.toString("base64") } } : { type: "image", source: { type: "base64", media_type: mt, data: buf.toString("base64") } };
+        const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+          body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 3000,
+            system: "Leés informes de obra (Informe Diario / Semanal de la jefatura de obra) y devolvés SOLO un JSON válido, sin texto extra ni ```.",
+            messages: [{ role: "user", content: [bloque, { type: "text", text: 'Extraé del informe: {"obra":"nombre de la obra","semana":"ej: Semana 69. Del 16 al 20 de Noviembre","responsable":"nombre","tareas":[{"n":1,"texto":"texto exacto de la tarea","gremio":"gremio o persona asignada tal como figura (ej: V+V, Cesar)"}]}. Incluí TODAS las tareas numeradas, en orden, con el texto completo. Si un dato no está, dejalo vacío.' }] }] }) });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) { res.status(502).json({ error: (d.error && d.error.message) || "La IA no pudo leer el informe" }); return; }
+        const txt = ((d.content || []).find((c) => c.type === "text") || {}).text || "";
+        let j = null; try { j = JSON.parse(txt.slice(txt.indexOf("{"), txt.lastIndexOf("}") + 1)); } catch {}
+        if (!j || !Array.isArray(j.tareas) || !j.tareas.length) { res.status(200).json({ ok: false, error: "No encontré tareas en el informe. Probá con el PDF original o una foto más nítida." }); return; }
+        res.status(200).json({ ok: true, inf: { obra: str(j.obra, 120), semana: str(j.semana, 160), responsable: str(j.responsable, 120), tareas: j.tareas.slice(0, 80).map((t, i) => ({ n: num(t.n, 0, 999) || i + 1, texto: str(t.texto, 300), gremio: str(t.gremio, 80) })).filter((t) => t.texto) } }); return;
       }
       if (b.op === "ct_borr_get" || b.op === "ct_borr_set" || b.op === "ct_borr_del") {
         // auditorías en borrador: se precargan en un equipo y se terminan en la obra desde otro
