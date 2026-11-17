@@ -818,6 +818,22 @@ export default async function handler(req, res) {
         await escribir(H, clave, { items });
         res.status(200).json({ ok: true, rec: it }); return;
       }
+      if (b.op === "ct_borr_get" || b.op === "ct_borr_set" || b.op === "ct_borr_del") {
+        // auditorías en borrador: se precargan en un equipo y se terminan en la obra desde otro
+        if (quien !== "ct") { res.status(403).json({ error: "No autorizado" }); return; }
+        const kb = "ctborr_" + (norm(ct.nombre).slice(0, 40) || norm(ct.id));
+        const cur = (await leer(H, kb)) || { items: [] }; let L = Array.isArray(cur.items) ? cur.items : [];
+        if (b.op === "ct_borr_set") {
+          const x = b.borr; const raw = JSON.stringify(x || null);
+          if (!x || typeof x !== "object" || !/^b\d{6,16}$/.test(String(x.id || "")) || raw.length > 200000) { res.status(400).json({ error: "Borrador inválido" }); return; }
+          const y = JSON.parse(raw); y.t = Date.now(); delete y.enviando; delete y.subiendo;
+          L = [...L.filter((z) => z.id !== y.id), y].slice(-20);
+          await escribir(H, kb, { items: L });
+          res.status(200).json({ ok: true, t: y.t }); return;
+        }
+        if (b.op === "ct_borr_del") { L = L.filter((z) => z.id !== String(b.id || "")); await escribir(H, kb, { items: L }); }
+        res.status(200).json({ ok: true, items: L }); return;
+      }
       if (b.op === "ct_vincular") {
         // el contratista suma otra obra con otro código: queda guardado en el servidor para que la vea en la PC, el iPad y el celular
         if (quien !== "ct") { res.status(403).json({ error: "No autorizado" }); return; }
