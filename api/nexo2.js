@@ -430,7 +430,18 @@ export default async function handler(req, res) {
         } catch { /* si no se puede leer, no bloquea */ }
       }
       const t = Math.max(Date.now(), (prev && Number(prev.t) || 0) + 1);
-      await escribir(H, "cfg", { t, v: b.v });
+      // ningún aparato (ni con una versión vieja de la app) puede borrar obras nuevas: solo se van las que Dirección eliminó a propósito (delN)
+      let vOut = b.v;
+      try {
+        if (prev && typeof prev.v === "string") {
+          const P = JSON.parse(prev.v), N = JSON.parse(b.v); N.nuevas = Array.isArray(N.nuevas) ? N.nuevas : [];
+          const dn = new Set([...(P.delN || []), ...(N.delN || [])]); let ch = false;
+          for (const x of (P.nuevas || [])) if (x && x.id && !dn.has(x.id) && !N.nuevas.some((y) => y && y.id === x.id)) { N.nuevas.push(x); ch = true; }
+          if (dn.size && JSON.stringify([...dn]) !== JSON.stringify(N.delN || [])) { N.delN = [...dn].slice(-300); ch = true; }
+          if (ch) { vOut = JSON.stringify(N); await escribir(H, "cfg_prev", prev); }
+        }
+      } catch { /* si no se puede leer, se guarda como vino */ }
+      await escribir(H, "cfg", { t, v: vOut });
       res.status(200).json({ ok: true, t });
       return;
     }
@@ -506,6 +517,7 @@ export default async function handler(req, res) {
         const c = cand.get(id); if (!c) continue;
         if (c.tipo === "nueva") { C.nuevas.push(c.cfg); n++; }
         else if (c.tipo === "base") { C.del = C.del.filter((x) => x !== id); n++; }
+        else if (c.tipo === "solo_nombre" && b.min && typeof b.min === "object") { C.nuevas.push({ ...b.min, id, nombre: c.nombre, recuperada: Date.now() }); n++; }
         C.delN = C.delN.filter((x) => x !== id);
       }
       if (n) { if (cur) await escribir(H, "cfg_prev", cur); const t = Math.max(Date.now(), (cur && Number(cur.t) || 0) + 1); await escribir(H, "cfg", { t, v: JSON.stringify(C) }); }
