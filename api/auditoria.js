@@ -219,7 +219,7 @@ export default async function handler(req, res) {
     // Atajo para lectores web que solo respetan k: la vista va pegada a la clave (k=<clave>-barracas, -paseo, -casa; -json para JSON)
     if (typeof q.k === "string" && /^[0-9a-f]{20,}[-_.]/i.test(q.k)) {
       const [kk, ...ext] = q.k.split(/[-_.]/); q.k = kk;
-      for (const e of ext.map((x) => x.toLowerCase())) { if (e === "json") q.f = "json"; else if (["barracas", "paseo", "paseocolon", "casa", "terralagos", "canning"].includes(e)) q.costos = e; else if (e === "todo") q.todo = "1"; else if (e === "plan") q.plan = "1"; else if (e === "hoy") q.hoy = "1"; }
+      for (const e of ext.map((x) => x.toLowerCase())) { if (e === "obrasnx") q.nx = "obras"; else if (e === "json") q.f = "json"; else if (["barracas", "paseo", "paseocolon", "casa", "terralagos", "canning"].includes(e)) q.costos = e; else if (e === "todo") q.todo = "1"; else if (e === "plan") q.plan = "1"; else if (e === "hoy") q.hoy = "1"; }
     }
     if (!dir || !q.k || !iguales(q.k, claveDe(dir, rev))) { await pausa(700); res.status(403).send("Enlace no válido."); return; }
     const obras = await cargarObras(H);
