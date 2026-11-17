@@ -482,6 +482,35 @@ export default async function handler(req, res) {
       res.status(200).json({ ok: true }); return;
     }
 
+    if (b.op === "obras_recuperables" || b.op === "obras_restaurar") {
+      // obras que estaban en la nube (copias diarias o fotos de obra) y ya no aparecen; Dirección elige cuáles volver a traer
+      if (!dirOk(b.dir)) { await pausa(600); res.status(403).json({ error: "No autorizado" }); return; }
+      const cur = await leer(H, "cfg"); let C = {}; try { C = cur && cur.v ? JSON.parse(cur.v) : {}; } catch { C = {}; }
+      C.mod = C.mod || {}; C.nuevas = Array.isArray(C.nuevas) ? C.nuevas : []; C.del = Array.isArray(C.del) ? C.del : []; C.delN = Array.isArray(C.delN) ? C.delN : [];
+      const ya = new Set(C.nuevas.map((x) => x && x.id)), cand = new Map();
+      const lb = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave&clave=like.bk_*&order=clave.desc`, { headers: H });
+      const bks = lb.ok ? (await lb.json()).map((x) => x.clave).filter((k) => /^bk_\d{8}$/.test(k)).slice(0, 30) : [];
+      for (const k of bks) {
+        const r = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=valor&clave=eq.${k}`, { headers: H }); const j = r.ok ? await r.json() : [];
+        const f = ((j[0] && j[0].valor && j[0].valor.filas) || []).find((y) => y.clave === "cfg"); if (!f || !f.valor || !f.valor.v) continue;
+        let B; try { B = JSON.parse(f.valor.v); } catch { continue; }
+        const dia = k.slice(3, 7) + "-" + k.slice(7, 9) + "-" + k.slice(9, 11);
+        for (const x of (B.nuevas || [])) if (x && x.id && !ya.has(x.id) && !cand.has(x.id)) cand.set(x.id, { id: x.id, nombre: x.nombre || x.id, tipo: "nueva", dia, cfg: x });
+        for (const id of C.del) if (!(B.del || []).includes(id) && !cand.has(id)) cand.set(id, { id, nombre: (B.mod && B.mod[id] && B.mod[id].nombre) || id, tipo: "base", dia });
+      }
+      const rs = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave,valor&clave=like.snap_*`, { headers: H });
+      if (rs.ok) for (const x of await rs.json()) { const id = String(x.clave).slice(5); if (!ya.has(id) && !cand.has(id) && !/^o[1-6]$/.test(id)) cand.set(id, { id, nombre: (x.valor && x.valor.nombre) || id, tipo: "solo_nombre", dia: "" }); }
+      if (b.op === "obras_recuperables") { res.status(200).json({ ok: true, items: [...cand.values()].map(({ cfg, ...r }) => r) }); return; }
+      const ids = (Array.isArray(b.ids) ? b.ids : []).map(String); let n = 0;
+      for (const id of ids) {
+        const c = cand.get(id); if (!c) continue;
+        if (c.tipo === "nueva") { C.nuevas.push(c.cfg); n++; }
+        else if (c.tipo === "base") { C.del = C.del.filter((x) => x !== id); n++; }
+        C.delN = C.delN.filter((x) => x !== id);
+      }
+      if (n) { if (cur) await escribir(H, "cfg_prev", cur); const t = Math.max(Date.now(), (cur && Number(cur.t) || 0) + 1); await escribir(H, "cfg", { t, v: JSON.stringify(C) }); }
+      res.status(200).json({ ok: true, n }); return;
+    }
     if (b.op === "cods_get") {
       if (!dirOk(b.dir)) { await pausa(600); res.status(403).json({ error: "No autorizado" }); return; }
       res.status(200).json({ dir: dirVigente(cods), obras: cods.obras, seed: cods.seed });
