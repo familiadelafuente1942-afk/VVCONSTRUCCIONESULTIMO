@@ -879,6 +879,21 @@ export default async function handler(req, res) {
         it.pdf = u; await escribir(H, clave, { items });
         res.status(200).json({ ok: true }); return;
       }
+      if (b.op === "ct_mover") {
+        // el contratista lo cargó en la obra equivocada: lo pasa a otra de sus obras (mantiene el número)
+        if (quien !== "ct") { res.status(403).json({ error: "No autorizado" }); return; }
+        const id = idOk(b.id), dest = misCt.find((c) => c.obra === String(b.hacia || ""));
+        if (!dest || dest.obra === obra) { res.status(400).json({ error: "Elegí otra de tus obras" }); return; }
+        const v = await leer(H, clave); const items = (v && v.items) || [];
+        const it = items.find((x) => x.id === id);
+        if (!it) { res.status(404).json({ error: "No existe" }); return; }
+        if (it.ctId !== ct.id) { res.status(403).json({ error: "No es tuyo" }); return; }
+        const kd = "ctrec_" + dest.obra, vd = await leer(H, kd); const itemsD = (vd && vd.items) || [];
+        const nuevo = { ...it, obra: dest.obra, obraNombre: dest.obraNombre, ctId: dest.id, pdf: undefined, editado: Date.now(), hist: [...(it.hist || []), { t: Date.now(), por: "ct", nom: ct.nombre, tx: "Pasado de " + (ct.obraNombre || obra) + " a " + (dest.obraNombre || dest.obra) }] };
+        await escribir(H, kd, { ...(vd || {}), items: [...itemsD.filter((x) => x.id !== id), nuevo] });
+        await escribir(H, clave, { ...(v || {}), items: items.filter((x) => x.id !== id) });
+        res.status(200).json({ ok: true, rec: nuevo }); return;
+      }
       if (b.op === "ct_del") {
         if (quien !== "ct") { res.status(403).json({ error: "Solo el contratista puede borrar lo que cargó" }); return; }
         const id = idOk(b.id);
