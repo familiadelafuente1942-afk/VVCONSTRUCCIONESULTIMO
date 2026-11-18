@@ -37,6 +37,9 @@
     },
     "api/mcp-asistente.js": {
       "maxDuration": 30
+    },
+    "api/mcp-nexo.js": {
+      "maxDuration": 30
     }
   },
   "crons": [
@@ -50,6 +53,10 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/mcp/nexo2/:k",
+      "destination": "/api/mcp-nexo?k=:k"
+    },
     {
       "source": "/mcp/asistente/:k",
       "destination": "/api/mcp-asistente?k=:k"
