@@ -6,6 +6,7 @@
 // Cada link lleva su propia clave; acá solo se guarda la huella (SHA-256).
 import crypto from "crypto";
 import auditoria from "./auditoria.js";
+import { calcCert } from "./_fincalc.js";
 
 const NX = process.env.SUPABASE_URL || "https://qaubkwiwtszebdgfrizr.supabase.co";
 const BCO = "https://bxhjgxzvayszfqwlwinq.supabase.co", BCO_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
@@ -54,7 +55,7 @@ const BARRACAS = {
 const FINANZAS = {
   tools: [
     { name: "resumen", description: "Resumen financiero de V+V Construcciones (Finanzas cliente): facturado, costo directo, imprevistos, gastos, cobros, pagos, resultado por obra y total. Información privada de Sebastián.", inputSchema: { type: "object", properties: {} } },
-    { name: "certificados", description: "Certificados cargados, por obra (fecha, monto, avance), los más recientes primero.", inputSchema: { type: "object", properties: { obra: { type: "string" }, cantidad: { type: "number" } } } },
+    { name: "certificados", description: "Certificados cargados, los más recientes primero, con su número, fecha de pago, avance acumulado, monto del período, redeterminación, total, descuento de anticipo, neto a cobrar, costo y margen (misma cuenta que la app).", inputSchema: { type: "object", properties: { obra: { type: "string" }, cantidad: { type: "number" } } } },
     { name: "movimientos", description: "Cobros, pagos y gastos cargados en Finanzas (los más recientes primero).", inputSchema: { type: "object", properties: { tipo: { type: "string", enum: ["cobro", "pago", "gasto"] }, cantidad: { type: "number" } } } },
   ],
   async run(n, a) {
@@ -62,7 +63,13 @@ const FINANZAS = {
     const raw = await bco("vv_finanzas"); if (!raw) return "Todavía no hay datos de Finanzas en la nube."; const d = JSON.parse(raw);
     const obra = (id) => ((d.obras || []).find((o) => o.id === id) || {}).nombre || id;
     if (n === "resumen") return JSON.stringify(sinB64({ obras: (d.obras || []).map((o) => o.nombre), certificados: (d.certs || []).length }));
-    if (n === "certificados") { let C = (d.certs || []).slice().sort((p, q) => String(q.fecha).localeCompare(String(p.fecha))); if (a.obra) C = C.filter((c) => nrm(obra(c.obraId)).includes(nrm(a.obra))); return JSON.stringify(C.slice(0, Math.min(60, Number(a.cantidad) || 20)).map((c) => sinB64({ ...c, obra: obra(c.obraId) }))); }
+    if (n === "certificados") {
+      // montos calculados con la misma cuenta que la app (avance del período, redeterminación, anticipo, costo y margen)
+      let C = (d.certs || []).slice().sort((p, q) => String(q.fecha).localeCompare(String(p.fecha)) || (q.ts || 0) - (p.ts || 0)); if (a.obra) C = C.filter((c) => nrm(obra(c.obraId)).includes(nrm(a.obra)));
+      const cac = d.cacMensual || {}, de = (id) => (d.certs || []).filter((c) => c.obraId === id).sort((p, q) => (p.fecha < q.fecha ? -1 : p.fecha > q.fecha ? 1 : (p.ts || 0) - (q.ts || 0)));
+      return JSON.stringify(C.slice(0, Math.min(60, Number(a.cantidad) || 20)).map((c) => { const o = (d.obras || []).find((x) => x.id === c.obraId); const L = de(c.obraId), nro = L.findIndex((x) => x.id === c.id) + 1; let r = null; try { r = o ? calcCert(c, o, L, cac) : null; } catch { }
+        return { obra: obra(c.obraId), certificado_n: nro, fecha: fl(c.fecha), fecha_de_pago: fl(c.fechaPago), avance_acumulado: r ? Math.round(r.avanceAcum) + "%" : "", monto_del_periodo: r ? pesos(r.bruto) : "", redeterminacion: r ? pesos(r.ajuste) + (r.provisorio ? " (provisoria)" : "") : "", total_certificado: r ? pesos(r.ajustado) : "", descuento_anticipo: r && r.amort ? pesos(r.amort) : "", neto_a_cobrar: r ? pesos(r.neto) : "", costo_de_obra_del_periodo: r ? pesos(r.costo) : "", margen: r ? pesos(r.margen) + " (" + Math.round(r.margenPct) + "%)" : "", fotos: (c.adjuntos || []).length }; }));
+    }
     if (n === "movimientos") { let M = [...(d.movimientos || []).map((m) => ({ ...m, clase: m.tipo })), ...(d.gastos || []).map((g) => ({ ...g, clase: "gasto" }))]; if (a.tipo) M = M.filter((m) => m.clase === a.tipo); M.sort((p, q) => ts(q.fecha) - ts(p.fecha) || (q.ts || 0) - (p.ts || 0)); return JSON.stringify(M.slice(0, Math.min(80, Number(a.cantidad) || 30)).map((m) => sinB64({ ...m, obra: m.obraId ? obra(m.obraId) : m.obra }))); }
   },
 };
