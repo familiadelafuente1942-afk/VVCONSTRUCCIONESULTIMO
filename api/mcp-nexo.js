@@ -93,6 +93,9 @@ const TOOLS = [
   { name: "reclamos", description: "Reclamos y auditorías que mandaron los contratistas, por obra o todos; con opción de ver solo los que Dirección todavía no respondió.", inputSchema: { type: "object", properties: { obra: { type: "string" }, solo_sin_respuesta: { type: "boolean" }, cantidad: { type: "number" } } } },
   { name: "buscar", description: "Busca una palabra en todos los datos de NEXO 2 (obras, registros, reclamos, compras, etc.).", inputSchema: { type: "object", properties: { texto: { type: "string" } }, required: ["texto"] } },
 ];
+// para MiAsistente (api/asistente-apps.js)
+export async function correrNexo(name, args) { const sk = process.env.SUPABASE_SERVICE_KEY; return ejecutar(name, args || {}, { apikey: sk, Authorization: "Bearer " + sk, "Content-Type": "application/json" }); }
+export const CATALOGO_NEXO = TOOLS.map((t) => ({ name: t.name, description: t.description, args: Object.keys((t.inputSchema && t.inputSchema.properties) || {}) }));
 const ok = (id, result) => ({ jsonrpc: "2.0", id, result });
 async function rpc(m, H) {
   const id = m.id ?? null;

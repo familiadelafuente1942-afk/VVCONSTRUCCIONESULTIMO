@@ -43,6 +43,9 @@
     },
     "api/mcp-apps.js": {
       "maxDuration": 60
+    },
+    "api/asistente-apps.js": {
+      "maxDuration": 60
     }
   },
   "crons": [

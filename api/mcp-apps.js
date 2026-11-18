@@ -131,6 +131,13 @@ function buscarEn(data, texto) {
 }
 
 const APPS = { barracas: { ...BARRACAS, nombre: "Barracas" }, finanzas: { ...FINANZAS, nombre: "Finanzas cliente" }, seguimiento: { ...SEGUIMIENTO, nombre: "Seguimiento V+V" }, contratistas: { ...CONTRATISTAS, nombre: "Contratistas" } };
+// para MiAsistente (api/asistente-apps.js): misma consulta, sin pasar por el protocolo MCP
+export async function correrApp(app, name, args) {
+  const A = APPS[app]; if (!A || !A.tools.some((t) => t.name === name)) throw new Error("Consulta desconocida");
+  const sk = process.env.SUPABASE_SERVICE_KEY; H = { apikey: sk, Authorization: "Bearer " + sk, "Content-Type": "application/json" };
+  return A.run(name, args || {});
+}
+export const CATALOGO = Object.fromEntries(Object.entries(APPS).map(([k, A]) => [k, A.tools.map((t) => ({ name: t.name, description: t.description, args: Object.keys((t.inputSchema && t.inputSchema.properties) || {}) }))]));
 const ok = (id, result) => ({ jsonrpc: "2.0", id, result });
 async function rpc(m, A) {
   const id = m.id ?? null;

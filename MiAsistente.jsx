@@ -448,6 +448,9 @@ export default function MiAsistente() {
   T.border = cfg.borde || "#E5E1D6"; T.sub = cfg.sub || "#6E695E"; T.rsm = (cfg.rsm != null ? cfg.rsm : 10); BRASS = cfg.brass || "#A17C3E";
   { const F = FONTS[cfg.fontId] || FONTS.inter; T.sans = F.sans; T.serif = F.serif; }
   const [sysClaro, setSysClaro] = useState(() => { try { return window.matchMedia("(prefers-color-scheme: light)").matches; } catch { return false; } });
+  useEffect(() => { // link de conexión con las otras apps: mi-asistente.html#conectar=LLAVE (queda guardada solo en este equipo)
+    try { const m = (location.hash || "").match(/conectar=([0-9a-f]{20,})/i); if (m) { localStorage.setItem("miasistente_llave_apps", m[1]); history.replaceState(null, "", location.pathname + location.search); setTimeout(() => alert("Listo: MiAsistente quedó conectado a NEXO 2, Barracas, Finanzas, Seguimiento y Contratistas en este equipo."), 600); } } catch { }
+  }, []);
   useEffect(() => { let mq; try { mq = window.matchMedia("(prefers-color-scheme: light)"); const f = () => setSysClaro(mq.matches); mq.addEventListener("change", f); return () => mq.removeEventListener("change", f); } catch { } }, []);
   const [masAbierto, setMasAbierto] = useState(false);
   const NAV_PRINC = [["chat", "Chat"], ["pagos", "Pagos"], ["agenda", "Agenda"], ["caja", "Caja"]];
@@ -885,6 +888,7 @@ Acciones:
 {"tipo":"traer_fotos","obra":"nombre de la obra","cantidad":1,"videos":false}
 {"tipo":"traer_plano","obra":"nombre de la obra","buscar":"palabras clave del plano"}
 {"tipo":"traer_dato_app","key":"el key EXACTO tal cual aparece en OTRAS APLICACIONES de acá arriba","pregunta":"qué necesitás saber de ahí adentro, en tus palabras"}
+{"tipo":"consultar_app","app":"nexo2|barracas|finanzas|seguimiento|contratistas","consulta":"nombre de la consulta","args":{},"pregunta":"lo que preguntó Sebastián","fotos":false}
 Reglas:
 - "mandar_mail" cuando dice "mandale un mail a X que…" o "escribile un mail a X". Redactá un asunto y un cuerpo profesional y claro; se abre el mail listo para enviar. Si no sabés el email, dejalo vacío (él elige el contacto).
 - "como_llego" cuando Sebastián pregunta cuánto tarda, cuánto hay, cómo llegar o la distancia a un lugar (ej: "¿cuánto tardo hasta el Aeroparque?", "¿cómo llego a Castores 475?", "¿cuánto hay hasta Pilar?"). Poné el destino. El sistema toma su ubicación GPS, estima el tiempo y le deja un botón a Google Maps. Si el destino es una obra, usá su dirección si la sabés.
@@ -902,6 +906,13 @@ Reglas:
 - "whatsapp" cuando dice "mandale un mensaje a X que…" o "escribile a X". Uso los teléfonos de Personal; le dejo el WhatsApp listo para enviar con un toque.
 - "preguntar_ia" solo si pide expresamente consultar a la IA de V+V.
 - "traer_fotos"/"traer_plano" para mostrar fotos, videos o planos en el chat.
+- "consultar_app" PRIMERO que nada cuando pregunta por NEXO 2, Barracas, Finanzas cliente, Seguimiento o Contratistas (datos reales, actualizados, solo lectura). Consultas disponibles:
+  · app "nexo2": "novedades" (args: dias) lo último de las obras: registros, retrasos, adicionales, actas, reclamos y auditorías de contratistas · "obras" (cartera con avance, etapa, entrega, desvío, lo que nos deben) · "obra" (args: nombre) detalle de una obra · "reclamos" (args: obra, solo_sin_respuesta) · "buscar" (args: texto).
+  · app "barracas": "visitas" (args: cantidad) última visita de obra: presentes, notas, audios, informe, fotos y videos · "resumen_costos" presupuesto, compras, mano de obra, pagos · "buscar" (args: texto).
+  · app "finanzas": "resumen" resultado, caja, por obra · "certificados" (args: obra, cantidad) con monto de cada certificado, neto a cobrar y fecha de pago · "movimientos" (args: tipo cobro|pago|gasto, cantidad).
+  · app "seguimiento": "novedades" (args: dias) · "obras" · "tareas" · "agenda" (args: dias) · "buscar" (args: texto).
+  · app "contratistas": "contratistas" · "reclamos" (args: contratista, obra, solo_sin_respuesta, dias) · "reclamo" (args: num) detalle completo.
+  Si pide FOTOS o VIDEOS de Barracas (ej "mostrame/subime las últimas fotos de Barracas"), usá app "barracas", consulta "visitas", args {"cantidad":1} y "fotos":true: se le muestran las fotos en el chat. Después de "consultar_app" recibís los datos y le contestás en el siguiente mensaje.
 - "traer_dato_app" cuando te pide algo que está en OTRA de sus apps (ej: "leeme la bitácora de Lote 132", "buscá en tal app tal cosa", "fijate en [nombre de la app]..."). Elegí el "key" que por el nombre/preview más se parezca a lo que pide (ej: si busca "Lote 132" y hay un key "bpb_bitacora_lote132" o similar, usá ese). Si no encontrás ningún key que pinte relacionado, NO inventes uno — respondé normal explicando que no encontrás esa app/dato en el índice y pedile más precisión o que confirme el nombre exacto de la app. Después de "traer_dato_app" vas a recibir el contenido completo y se lo vas a poder responder en el siguiente mensaje.
 Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   }
@@ -1420,6 +1431,23 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
           setMsgs(prev => [...prev, { role: "assistant", content: resp }]);
         }
       } catch { setMsgs(prev => [...prev, { role: "assistant", content: "No pude traer ese dato (revisá la conexión e intentá de nuevo)." }]); }
+      setBusy(false); return;
+    }
+    if (accion && accion.tipo === "consultar_app") {
+      const nombres = { nexo2: "NEXO 2", barracas: "Barracas", finanzas: "Finanzas cliente", seguimiento: "Seguimiento", contratistas: "Contratistas" };
+      const llave = (() => { try { return localStorage.getItem("miasistente_llave_apps") || ""; } catch { return ""; } })();
+      setMsgs(prev => [...prev, { role: "assistant", content: limpio || `Me fijo en ${nombres[accion.app] || accion.app}…` }]);
+      try {
+        const r = await fetch("/api/asistente-apps", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ llave, app: accion.app, consulta: accion.consulta, args: accion.args || {} }) });
+        const d = await r.json().catch(() => ({}));
+        if (r.status === 401) { setMsgs(prev => [...prev, { role: "assistant", content: "Todavía no estoy conectada a tus apps en este equipo. Abrí una vez el link de conexión que te pasó Claude (empieza con nexoentorno.vercel.app/mi-asistente.html#conectar=) y listo." }]); setBusy(false); return; }
+        if (!d.ok) { setMsgs(prev => [...prev, { role: "assistant", content: `No pude consultar ${nombres[accion.app] || accion.app}: ${d.error || "error"}.` }]); setBusy(false); return; }
+        let media = [];
+        if (accion.fotos) { try { const j = JSON.parse(d.texto); const v = (j.visitas || [])[0] || {}; media = (v.fotos || []).map(f => f.link).filter(Boolean).slice(0, 30); } catch { } }
+        const sysDato = `Sos el asistente de Sebastián. Te paso los datos REALES que acabo de traer de su app ${nombres[accion.app] || accion.app} (consulta "${accion.consulta}") y lo que te preguntó. Contestá SOLO lo que pide, claro y breve, en español rioplatense, como para escucharlo manejando: sin listas largas, montos sin decimales con separador de miles (ej $ 11.528.318). Si piden fotos, decile cuántas son y de qué visita (las fotos ya se le muestran abajo). No repitas el JSON ni pegues links.\n\nDATOS:\n${String(d.texto).slice(0, 60000)}`;
+        const resp = await callAI([{ role: "user", content: accion.pregunta || "Contame qué hay." }], sysDato, apiKey, false);
+        setMsgs(prev => [...prev, { role: "assistant", content: resp, ...(media.length ? { media, mediaTipo: "fotos" } : {}) }]);
+      } catch { setMsgs(prev => [...prev, { role: "assistant", content: "No pude conectarme con esa app (revisá internet y probá de nuevo)." }]); }
       setBusy(false); return;
     }
     if (accion && accion.tipo === "preguntar_ia") {
