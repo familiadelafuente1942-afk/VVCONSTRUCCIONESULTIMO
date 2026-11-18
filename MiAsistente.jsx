@@ -449,7 +449,7 @@ export default function MiAsistente() {
   { const F = FONTS[cfg.fontId] || FONTS.inter; T.sans = F.sans; T.serif = F.serif; }
   const [sysClaro, setSysClaro] = useState(() => { try { return window.matchMedia("(prefers-color-scheme: light)").matches; } catch { return false; } });
   useEffect(() => { // link de conexión con las otras apps: mi-asistente.html#conectar=LLAVE (queda guardada solo en este equipo)
-    try { const m = (location.hash || "").match(/conectar=([0-9a-f]{20,})/i); if (m) { localStorage.setItem("miasistente_llave_apps", m[1]); history.replaceState(null, "", location.pathname + location.search); setTimeout(() => alert("Listo: MiAsistente quedó conectado a NEXO 2, Barracas, Finanzas, Seguimiento y Contratistas en este equipo."), 600); } } catch { }
+    try { const m = (location.hash || "").match(/conectar=([0-9a-f]{20,})/i); if (m) { localStorage.setItem("miasistente_llave_apps", m[1]); history.replaceState(null, "", location.pathname + location.search); window.__conectadoApps = true; } } catch { }
   }, []);
   useEffect(() => { let mq; try { mq = window.matchMedia("(prefers-color-scheme: light)"); const f = () => setSysClaro(mq.matches); mq.addEventListener("change", f); return () => mq.removeEventListener("change", f); } catch { } }, []);
   const [masAbierto, setMasAbierto] = useState(false);
@@ -573,6 +573,7 @@ export default function MiAsistente() {
   }, []);
   // Voz: leer en voz alta las respuestas nuevas cuando está activado.
   useEffect(() => { if (vozOn) { lastSpokeRef.current = msgs.length - 1; } else { pararVoz(); } }, [vozOn]);
+  useEffect(() => { if (window.__conectadoApps && pinOk) { window.__conectadoApps = false; setMsgs(prev => [...prev, { role: "assistant", content: "✅ Listo: quedé conectada a NEXO 2, Barracas, Finanzas, Seguimiento y Contratistas en este equipo. Preguntame lo que quieras de esas apps." }]); } }, [pinOk]);
   useEffect(() => { if (!vozOn) return; const i = msgs.length - 1; const last = msgs[i]; if (last && last.role === "assistant" && i > lastSpokeRef.current && msgs[i - 1] && msgs[i - 1].role === "user") { lastSpokeRef.current = i; hablar(last.content); } }, [msgs, vozOn]);
 
   // Memoria persistente: carga el historial del chat y el perfil al abrir.
@@ -1429,6 +1430,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
           const sysDato = `Sos el asistente de Sebastián. Te paso el contenido completo guardado en su app bajo la clave "${accion.key}" (en JSON u otro formato tal cual está guardado) y lo que te preguntó sobre eso. Respondé SOLO con la info puntual que pide, clara y breve, en español rioplatense. Si el contenido no tiene lo que busca, decilo directamente. No repitas el JSON crudo.\n\nCONTENIDO:\n${contenido.slice(0, 30000)}`;
           const resp = await callAI([{ role: "user", content: accion.pregunta || "Contame qué hay ahí." }], sysDato, apiKey, false);
           setMsgs(prev => [...prev, { role: "assistant", content: resp }]);
+          if (vozOn) setTimeout(() => hablar(resp), 50);
         }
       } catch { setMsgs(prev => [...prev, { role: "assistant", content: "No pude traer ese dato (revisá la conexión e intentá de nuevo)." }]); }
       setBusy(false); return;
@@ -1447,6 +1449,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
         const sysDato = `Sos el asistente de Sebastián. Te paso los datos REALES que acabo de traer de su app ${nombres[accion.app] || accion.app} (consulta "${accion.consulta}") y lo que te preguntó. Contestá SOLO lo que pide, claro y breve, en español rioplatense, como para escucharlo manejando: sin listas largas, montos sin decimales con separador de miles (ej $ 11.528.318). Si piden fotos, decile cuántas son y de qué visita (las fotos ya se le muestran abajo). No repitas el JSON ni pegues links.\n\nDATOS:\n${String(d.texto).slice(0, 60000)}`;
         const resp = await callAI([{ role: "user", content: accion.pregunta || "Contame qué hay." }], sysDato, apiKey, false);
         setMsgs(prev => [...prev, { role: "assistant", content: resp, ...(media.length ? { media, mediaTipo: "fotos" } : {}) }]);
+        if (vozOn) setTimeout(() => hablar(resp), 50); // la respuesta llega en un segundo mensaje: se dice en voz alta igual
       } catch { setMsgs(prev => [...prev, { role: "assistant", content: "No pude conectarme con esa app (revisá internet y probá de nuevo)." }]); }
       setBusy(false); return;
     }
