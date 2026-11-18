@@ -61,7 +61,20 @@ async function graph(path, body, method) {
   }
   return j;
 }
-async function enviar(to, payload) { return graph(`/${PHONE_ID()}/messages`, { messaging_product: "whatsapp", recipient_type: "individual", to, ...payload }); }
+// Argentina: según cómo quedó registrado el número en WhatsApp, Meta a veces lo acepta con el 9, sin el 9 o con el 15.
+function variantes(to) {
+  const v = [to];
+  if (/^549\d{10}$/.test(to)) { const n = to.slice(3); v.push("54" + n); for (const a of [2, 3, 4]) v.push("54" + n.slice(0, a) + "15" + n.slice(a)); }
+  return v;
+}
+async function enviar(to, payload) {
+  let ult;
+  for (const t of variantes(to)) {
+    try { return await graph(`/${PHONE_ID()}/messages`, { messaging_product: "whatsapp", recipient_type: "individual", to: t, ...payload }); }
+    catch (e) { ult = e; if (!/destinatarios permitidos/.test(e.message)) throw e; }
+  }
+  throw ult;
+}
 
 const TOOLS = [
   { name: "enviar_mensaje", description: "Manda un WhatsApp de texto desde el número de empresa de V+V. ANTES de llamar, confirmale a Sebastián en una frase a quién y qué texto vas a mandar y esperá su sí. Si la persona no escribió en las últimas 24 h, WhatsApp exige plantilla (enviar_plantilla).", inputSchema: { type: "object", properties: { para: { type: "string", description: "Nombre del contacto (ej: Enrico) o número" }, texto: { type: "string" } }, required: ["para", "texto"] } },
