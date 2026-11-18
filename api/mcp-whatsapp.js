@@ -27,13 +27,16 @@ async function registrar(tx) { try { const L = await leer("whatsapp_conector_log
 const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 // Celulares de Argentina: 11 2345 6789 / 011 15 2345 6789 / +54 9 11 ... -> 5491123456789
 function numero(v) {
-  let d = String(v || "").replace(/\D/g, "");
+  const raw = String(v || "").trim();
+  let d = raw.replace(/\D/g, "");
   if (!d) return "";
+  if (raw.startsWith("+") && !d.startsWith("54")) return d; // otro país, tal cual
   if (d.startsWith("00")) d = d.slice(2);
+  if (d.startsWith("54")) { d = d.slice(2); if (d.startsWith("9")) d = d.slice(1); }
   if (d.startsWith("0")) d = d.slice(1);
-  if (!d.startsWith("54") && d.length >= 10 && d.length <= 12) { d = d.replace(/^(\d{2,4})15(\d{6,8})$/, "$1$2"); return "549" + d; }
-  if (d.startsWith("54") && !d.startsWith("549") && d.length === 12) return "549" + d.slice(2);
-  return d;
+  // número nacional: 10 dígitos, o 12 si trae el 15 después del código de área
+  if (d.length === 12) { const m = d.match(/^(\d{2,4})15(\d{6,8})$/); if (m && (m[1] + m[2]).length === 10) d = m[1] + m[2]; }
+  return d.length === 10 ? "549" + d : d;
 }
 async function destino(para) {
   const C = await leer("wa_contactos");
