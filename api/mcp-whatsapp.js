@@ -81,6 +81,7 @@ const TOOLS = [
   { name: "enviar_pdf", description: "Manda un PDF (o cualquier documento) como ARCHIVO real por WhatsApp, no como link. Pedí confirmación antes.", inputSchema: { type: "object", properties: { para: { type: "string" }, url: { type: "string", description: "URL pública del PDF" }, nombre_archivo: { type: "string", description: "Ej: Auditoria-0008.pdf" }, texto: { type: "string", description: "Texto que acompaña (opcional)" } }, required: ["para", "url"] } },
   { name: "enviar_plantilla", description: "Manda un mensaje con una plantilla aprobada por Meta (necesario si la persona no escribió en las últimas 24 h). Pedí confirmación antes.", inputSchema: { type: "object", properties: { para: { type: "string" }, plantilla: { type: "string", description: "Nombre de la plantilla (ver plantillas)" }, idioma: { type: "string", description: "Código, ej es_AR, es, en_US" }, parametros: { type: "array", items: { type: "string" }, description: "Valores para {{1}}, {{2}}… del cuerpo" } }, required: ["para", "plantilla"] } },
   { name: "plantillas", description: "Lista las plantillas de mensaje de la cuenta de WhatsApp y su estado de aprobación.", inputSchema: { type: "object", properties: {} } },
+  { name: "crear_plantilla", description: "Crea una plantilla de mensaje y la manda a aprobar a Meta. Solo si Sebastián lo pide.", inputSchema: { type: "object", properties: { nombre: { type: "string", description: "minúsculas y guiones bajos" }, texto: { type: "string", description: "Cuerpo con {{1}}, {{2}}… (no puede empezar ni terminar con una variable)" }, ejemplos: { type: "array", items: { type: "string" } }, idioma: { type: "string" }, categoria: { type: "string", enum: ["UTILITY", "MARKETING"] } }, required: ["nombre", "texto"] } },
   { name: "contactos", description: "Lista los contactos guardados para WhatsApp (nombre y número).", inputSchema: { type: "object", properties: {} } },
   { name: "agregar_contacto", description: "Guarda o actualiza un contacto de WhatsApp (nombre + celular).", inputSchema: { type: "object", properties: { nombre: { type: "string" }, numero: { type: "string", description: "Celular, ej 11 2345 6789" } }, required: ["nombre", "numero"] } },
   { name: "borrar_contacto", description: "Borra un contacto guardado, solo si Sebastián lo pide.", inputSchema: { type: "object", properties: { nombre: { type: "string" } }, required: ["nombre"] } },
@@ -102,6 +103,12 @@ async function ejecutar(name, a) {
     const j = await graph(`/${WABA_ID()}/message_templates?fields=name,status,language,components&limit=50`);
     const L = (j.data || []).map((t) => { const b = (t.components || []).find((c) => c.type === "BODY"); return `${t.name} (${t.language}, ${t.status})${b ? ": " + b.text : ""}`; });
     return L.length ? L.join("\n") : "No hay plantillas.";
+  }
+  if (name === "crear_plantilla") {
+    const body = { type: "BODY", text: String(a.texto) }; if (a.ejemplos && a.ejemplos.length) body.example = { body_text: [a.ejemplos.map(String)] };
+    const j = await graph(`/${WABA_ID()}/message_templates`, { name: String(a.nombre).toLowerCase().replace(/[^a-z0-9_]/g, "_"), language: a.idioma || "es_AR", category: a.categoria || "UTILITY", components: [body] });
+    await registrar("Plantilla creada: " + a.nombre);
+    return `Plantilla enviada a aprobación (estado: ${j.status || "pendiente"}, categoría ${j.category || a.categoria || "UTILITY"}).`;
   }
   if (name === "enviar_mensaje") {
     const d = await destino(a.para); const texto = String(a.texto || "").trim(); if (!texto) throw new Error("Falta el texto");
