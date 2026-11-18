@@ -94,5 +94,12 @@
       "source": "/ver/:app/:k",
       "destination": "/api/auditoria?k=:k&costos=:app"
     }
+  ],
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/nexo2.html",
+      "permanent": false
+    }
   ]
 }
