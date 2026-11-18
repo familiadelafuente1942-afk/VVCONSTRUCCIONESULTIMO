@@ -1996,7 +1996,9 @@ function AjustesBody({ cfg, saveCfg }) {
     try {
       const r = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v === "def" ? { texto: "Hola Sebastián, ¿cómo vas? Acá estoy para lo que necesités." } : { texto: "Hola Sebastián, ¿cómo vas pues? Acá estoy para lo que necesités.", voz: v }) });
       if (!r.ok) throw new Error("x");
-      const a = new Audio(URL.createObjectURL(await r.blob())); vozAud.current = a; await a.play(); setVozMsg("");
+      const resp = r.headers.get("X-Voz") === "openai-respaldo";
+      const a = new Audio(URL.createObjectURL(await r.blob())); vozAud.current = a; await a.play();
+      setVozMsg(resp ? (r.headers.get("X-Voz-Motivo") === "sin-creditos-elevenlabs" ? "Se terminaron los créditos de ElevenLabs de este mes: mientras tanto hablo con una voz de respaldo (colombiana, de OpenAI). Cuando renueves o amplíes el plan de ElevenLabs vuelve sola la voz elegida." : "ElevenLabs no respondió: hablo con la voz de respaldo.") : "");
     } catch { setVozMsg("Esta voz no respondió. Si sigue así, agregala a \"My Voices\" en tu cuenta de ElevenLabs o elegí otra. Mientras tanto el asistente habla con la voz anterior."); }
   }
   return (<div style={{ flex: 1, overflowY: "auto", padding: 16 }}>

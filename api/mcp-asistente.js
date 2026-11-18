@@ -118,7 +118,6 @@ async function ejecutar(name, a) {
     let prueba = "sin probar"; if (vid && vid !== "def") { const t = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${vid}`, { method: "POST", headers: { "Content-Type": "application/json", "xi-api-key": key, Accept: "audio/mpeg" }, body: JSON.stringify({ text: a.texto || "Hola Sebastián, ¿cómo vas pues? Acá estoy para lo que necesités. Hoy tenés tres certificados para cobrar el viernes.", model_id: "eleven_multilingual_v2" }) }); prueba = t.ok ? "OK" : "ERROR " + t.status + ": " + (await t.text().catch(() => "")).slice(0, 300); }
     return JSON.stringify({ suscripcion: r.ok ? { plan: d.tier, caracteres_usados: d.character_count, limite: d.character_limit, renueva: d.next_character_count_reset_unix ? new Date(d.next_character_count_reset_unix * 1000).toISOString().slice(0, 10) : "" } : "ERROR " + r.status + ": " + JSON.stringify(d).slice(0, 300), voz_elegida_en_la_app: cfgVoz || "(ninguna: usa la de Vercel)", voz_por_defecto_vercel: process.env.ELEVENLABS_VOICE_ID || "", prueba_voz: { id: vid, resultado: prueba } });
   }
-  if (name === "resumen" && Date.now() < Date.parse("2026-11-18T09:00:00Z")) { let v = ""; try { v = await ejecutar("estado_voz", { voz: "KoIf2KgeJA8uoGcgKIao" }); } catch (e) { v = "error " + e.message; } return "VOZ: " + v; }
   if (name === "resumen") {
     const [A, P, G] = await Promise.all([leer("sebastian_agenda"), leer("sebastian_pagos"), leer("sebastian_gastos")]);
     const h = orden(hoyStr()), mes = hoyStr().slice(3);

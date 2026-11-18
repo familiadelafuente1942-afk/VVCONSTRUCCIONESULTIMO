@@ -49,7 +49,19 @@ export default async function handler(req, res) {
 
     if (!r.ok) {
       const errText = await r.text().catch(() => "");
-      res.status(502).json({ error: "ElevenLabs error: " + errText.slice(0, 300) });
+      // Si se terminaron los créditos de ElevenLabs (o falla), habla igual con la voz de OpenAI, mujer con acento colombiano
+      const ok = process.env.OPENAI_API_KEY ? await fetch("https://api.openai.com/v1/audio/speech", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + process.env.OPENAI_API_KEY },
+        body: JSON.stringify({ model: "gpt-4o-mini-tts", voice: "coral", input: texto, response_format: "mp3",
+          instructions: "Mujer joven colombiana, acento paisa de Medellín, cálida, alegre y cercana. Hablá en español latino, ritmo natural, nunca robótica." }),
+      }).catch(() => null) : null;
+      if (ok && ok.ok) {
+        const b2 = Buffer.from(await ok.arrayBuffer());
+        res.setHeader("Content-Type", "audio/mpeg"); res.setHeader("Cache-Control", "no-store"); res.setHeader("X-Voz", "openai-respaldo");
+        res.setHeader("X-Voz-Motivo", /quota_exceeded/.test(errText) ? "sin-creditos-elevenlabs" : "elevenlabs-error");
+        res.status(200).send(b2); return;
+      }
+      res.status(502).json({ error: (/quota_exceeded/.test(errText) ? "Se terminaron los créditos de voz de ElevenLabs de este mes. " : "") + "ElevenLabs error: " + errText.slice(0, 300) });
       return;
     }
 
