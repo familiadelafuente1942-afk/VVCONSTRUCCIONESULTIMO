@@ -246,6 +246,16 @@ export default async function handler(req, res) {
       L.push("", "Para agregar: POST a este mismo /api/auditoria con JSON {k:<clave del enlace>, op:'plan_obj_add', t:'texto', fecha:'aaaa-mm-dd', area:'Contactos|Mi prima|Primo y socio|Edificio|Dinero|Para mí'}; op:'plan_obj_hecho' {id}; op:'plan_contacto_add' {n,d,f,q,r}. No borra nada.");
       res.setHeader("Content-Type", "text/plain; charset=utf-8"); res.status(200).send(L.join("\n")); return;
     }
+    // vistas de las otras apps para el asistente externo (misma consulta que los conectores de Claude), por ruta: /ver/<vista>/<clave>
+    const VISTAS = { reclamos: ["contratistas", "reclamos", { cantidad: 60 }], contratistas: ["contratistas", "reclamos", { cantidad: 60 }], sinrespuesta: ["contratistas", "reclamos", { solo_sin_respuesta: true, cantidad: 60 }],
+      nexo: ["nexo2", "novedades", { dias: 7 }], novedades: ["nexo2", "novedades", { dias: 7 }], obras: ["nexo2", "obras", {}], finanzas: ["finanzas", "resumen", {}], certificados: ["finanzas", "certificados", { cantidad: 40 }],
+      seguimiento: ["seguimiento", "novedades", { dias: 7 }], tareas: ["seguimiento", "tareas", {}], visitas: ["barracas", "visitas", { cantidad: 5 }] };
+    if (q.costos !== undefined && VISTAS[String(q.costos).toLowerCase()]) {
+      const [app, consulta, args] = VISTAS[String(q.costos).toLowerCase()];
+      const tx = app === "nexo2" ? await (await import("./mcp-nexo.js")).correrNexo(consulta, args) : await (await import("./mcp-apps.js")).correrApp(app, consulta, args);
+      let out = String(tx || ""); try { out = JSON.stringify(JSON.parse(out), null, 1); } catch { }
+      res.setHeader("Content-Type", "text/plain; charset=utf-8"); res.status(200).send(`${String(q.costos).toUpperCase()} (datos reales, solo lectura, actualizado ${fechaLarga(Date.now())})\n\n` + out); return;
+    }
     if (q.costos !== undefined) {
       // resumen en texto (liviano) del presupuesto, compras y pagos de las apps de costos
       const APPS = { barracas: "barracas_db", paseo: "paseocolon_db", paseocolon: "paseocolon_db", casa: "casa_db", terralagos: "casa_db", canning: "casa_db" };
