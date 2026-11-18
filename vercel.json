@@ -40,6 +40,9 @@
     },
     "api/mcp-nexo.js": {
       "maxDuration": 30
+    },
+    "api/mcp-apps.js": {
+      "maxDuration": 60
     }
   },
   "crons": [
@@ -53,6 +56,10 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/mcp/:app(barracas|finanzas|seguimiento|contratistas)/:k",
+      "destination": "/api/mcp-apps?app=:app&k=:k"
+    },
     {
       "source": "/mcp/nexo2/:k",
       "destination": "/api/mcp-nexo?k=:k"
