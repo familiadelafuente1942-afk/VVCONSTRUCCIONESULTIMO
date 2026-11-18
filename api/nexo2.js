@@ -118,6 +118,17 @@ function unirVisitas(base, otra) {
   });
   return ch;
 }
+// saca fotos/audios/videos repetidos (mismo archivo): se queda con el que tiene clasificación o descripción
+function sinRepetidos(doc) {
+  let ch = false;
+  for (const o of (doc && doc.obras) || []) for (const v of (o && o.vis) || []) for (const c of ["fotos", "aud", "videos"]) {
+    if (!Array.isArray(v[c])) continue; const m = new Map();
+    for (const x of v[c]) { const k = (x && (x.u || (x.partes && x.partes[0]))) || (x && x.id); if (!k) continue; const y = m.get(k);
+      if (!y) m.set(k, x); else { const pesa = (z) => (z.tag && z.tag !== "o" ? 2 : 0) + (z.n || z.tx ? 1 : 0); if (pesa(x) > pesa(y)) m.set(k, x); } }
+    if (m.size !== v[c].length) { const quedan = new Set(m.values()); v.del = [...new Set([...(v.del || []), ...v[c].filter((x) => !quedan.has(x)).map((x) => x.id).filter(Boolean)])]; v[c] = v[c].filter((x) => quedan.has(x)); ch = true; }
+  }
+  return ch;
+}
 function visConDatos(v) {
   return !!(v && ((v.fotos || []).length || (v.aud || []).length || (v.videos || []).length || ["notas", "dem", "cons", "tec", "tar", "pres"].some((k) => String(v[k] || "").trim())));
 }
@@ -281,6 +292,9 @@ export default async function handler(req, res) {
           await escribir(H, pcKey, nv); v = nv;
         } catch {}
       }
+      if (v && v.v && pcKey === "barracas_db" && !String(v.v).includes('"_dedup":1')) {
+        try { const n = JSON.parse(v.v); sinRepetidos(n); n._dedup = 1; const nv = { t: Date.now(), v: JSON.stringify(n) }; await escribir(H, pcKey + "_prev", v); await escribir(H, pcKey, nv); v = nv; } catch {}
+      }
       // una sola vez: saca la visita de prueba del 15/11 que la recuperación había vuelto a traer (ya estaba borrada)
       if (v && v.v && pcKey === "barracas_db" && !String(v.v).includes('"_fixVr":1')) {
         try {
@@ -299,7 +313,7 @@ export default async function handler(req, res) {
       let v = b.v, t = b.t, unido = false;
       // lo que viene nunca borra visitas, fotos, audios ni videos que ya estaban (salvo los que se borraron a propósito)
       if (cur && cur.v && cur.v !== b.v) {
-        try { const n = JSON.parse(b.v); if (unirVisitas(n, JSON.parse(cur.v))) { v = JSON.stringify(n); t = Date.now(); unido = true; } } catch {}
+        try { const n = JSON.parse(b.v); const u1 = unirVisitas(n, JSON.parse(cur.v)), u2 = sinRepetidos(n); if (u1 || u2) { v = JSON.stringify(n); t = Date.now(); unido = true; } } catch {}
         await escribir(H, pcKey + "_prev", cur);
         // copia por hora (las últimas 24 horas) para poder volver atrás
         const hs = "_h" + new Date().getUTCHours(); const hc = await leer(H, pcKey + hs).catch(() => null);
