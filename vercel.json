@@ -34,6 +34,9 @@
     },
     "api/estudio-ig.js": {
       "maxDuration": 60
+    },
+    "api/mcp-asistente.js": {
+      "maxDuration": 30
     }
   },
   "crons": [
@@ -47,6 +50,10 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/mcp/asistente/:k",
+      "destination": "/api/mcp-asistente?k=:k"
+    },
     {
       "source": "/costos/:app/:k",
       "destination": "/api/auditoria?k=:k&costos=:app"
