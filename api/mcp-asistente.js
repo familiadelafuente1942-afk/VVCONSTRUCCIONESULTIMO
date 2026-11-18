@@ -50,6 +50,7 @@ const TOOLS = [
   { name: "ver_pagos", description: "Lista los pagos (los más recientes primero), con filtro opcional por estado u obra.", inputSchema: { type: "object", properties: { estado: { type: "string", enum: ["pagado", "pendiente"] }, obra: { type: "string" }, cantidad: { type: "number" } } } },
   { name: "ver_agenda", description: "Muestra la agenda desde hoy (o desde la fecha que diga) por la cantidad de días pedida.", inputSchema: { type: "object", properties: { desde: { type: "string" }, dias: { type: "number", description: "Por defecto 7" } } } },
   { name: "marcar_pagado", description: "Marca como pagado un pago pendiente (usá el id que devuelve ver_pagos).", inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] } },
+  { name: "estado_voz", description: "Diagnóstico de la voz de MiAsistente (ElevenLabs): créditos usados y disponibles del mes y si la voz elegida responde.", inputSchema: { type: "object", properties: { voz: { type: "string", description: "ID de la voz a probar (opcional)" } } } },
   { name: "borrar", description: "Borra un gasto, pago o evento cargado por error. Solo si Sebastián lo pide claramente. Usá el id que devuelven ver_gastos / ver_pagos / ver_agenda.", inputSchema: { type: "object", properties: { que: { type: "string", enum: ["gasto", "pago", "evento"] }, id: { type: "string" } }, required: ["que", "id"] } },
 ];
 
@@ -108,6 +109,14 @@ async function ejecutar(name, a) {
     await guardar("miasistente_conector_papelera", [{ t: Date.now(), key, x }, ...(await leer("miasistente_conector_papelera"))].slice(0, 100));
     await guardar(key, L.filter((y) => String(y.id) !== String(a.id))); await registrar("Borrado " + a.que + ": " + (x.concepto || x.persona || x.titulo));
     return `Borré el ${a.que}: ${x.concepto || x.persona || x.titulo}.`;
+  }
+  if (name === "estado_voz") {
+    const key = process.env.ELEVENLABS_API_KEY; if (!key) return "Falta ELEVENLABS_API_KEY en Vercel.";
+    const r = await fetch("https://api.elevenlabs.io/v1/user/subscription", { headers: { "xi-api-key": key } }); const d = await r.json().catch(() => ({}));
+    let cfgVoz = ""; try { const c = await fetch(`${SUPA_URL}/rest/v1/bco_storage?key=eq.sebastian_cfg&select=value&limit=1`, { headers: SH }); const j = await c.json(); cfgVoz = (JSON.parse(j[0].value) || {}).voz || ""; } catch { }
+    const vid = a.voz || cfgVoz || process.env.ELEVENLABS_VOICE_ID || "";
+    let prueba = "sin probar"; if (vid && vid !== "def") { const t = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${vid}`, { method: "POST", headers: { "Content-Type": "application/json", "xi-api-key": key, Accept: "audio/mpeg" }, body: JSON.stringify({ text: "Hola", model_id: "eleven_multilingual_v2" }) }); prueba = t.ok ? "OK" : "ERROR " + t.status + ": " + (await t.text().catch(() => "")).slice(0, 300); }
+    return JSON.stringify({ suscripcion: r.ok ? { plan: d.tier, caracteres_usados: d.character_count, limite: d.character_limit, renueva: d.next_character_count_reset_unix ? new Date(d.next_character_count_reset_unix * 1000).toISOString().slice(0, 10) : "" } : "ERROR " + r.status + ": " + JSON.stringify(d).slice(0, 300), voz_elegida_en_la_app: cfgVoz || "(ninguna: usa la de Vercel)", voz_por_defecto_vercel: process.env.ELEVENLABS_VOICE_ID || "", prueba_voz: { id: vid, resultado: prueba } });
   }
   if (name === "resumen") {
     const [A, P, G] = await Promise.all([leer("sebastian_agenda"), leer("sebastian_pagos"), leer("sebastian_gastos")]);
