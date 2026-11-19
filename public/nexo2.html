@@ -4864,6 +4864,7 @@ async function subir(k){
       setTimeout(()=>recargarCuando(),1500);return false}
     if(r.ok){let j={};try{j=await r.json()}catch(e){}
       window.__nuevoCron=(window.__nuevoCron||[]).filter(x=>!nuevos.includes(x));
+      if(typeof j.v==='string'&&j.v!==v){/* la nube conservó obras que este aparato no tenía: se bajan */const loc=lget(k);const f=loc===v?j.v:(merge3(v,loc,j.v)||fusion(loc,j.v));rawSet.call(localStorage,k,f);v=j.v;recargar=true}
       lset('nexo2_sync_t_'+k,String(+j.t||t));lset(BASE_K+k,v);if(lget(k)===v)limpio(k);else marcar(k);falloAviso=false;window.__sync.ok=Date.now();estado('ok');if(recargar)recargarCuando();return true}else throw new Error('http')}catch(e){if(window.__sync.ocupado>0)window.__sync.ocupado--;estado('pend');if(!falloAviso){falloAviso=true;try{toast('No se pudo guardar en la nube. El cambio quedó en este aparato y se sube solo al volver la conexión.')}catch(x){}}return false}
 }
 let falloAviso=false;
@@ -4882,6 +4883,9 @@ async function bajar(){
         try{const L=JSON.parse(lget(k)||'{}')||{},C=d?JSON.parse(d.v)||{}:{};if(((L.fu&&L.fu.t)||0)>((C.fu&&C.fu.t)||0))marcar(k)}catch(e){}
         if(!d)continue;
         const lt=+lget('nexo2_sync_t_'+k)||0;
+        /* aparato que quedó desfasado: cree estar al día pero en la nube hay obras que no tiene */
+        if(d.t===lt){try{const L=JSON.parse(lget(k)||'{}')||{},R=JSON.parse(d.v)||{},dn=new Set([...(L.delN||[]),...(R.delN||[])]),ya=new Set((L.nuevas||[]).map(x=>x&&x.id));
+          if((R.nuevas||[]).some(x=>x&&x.id&&!ya.has(x.id)&&!dn.has(x.id))){const loc=lget(k);const f=fusion(loc,d.v);if(f!==loc){rawSet.call(localStorage,k,f);cambio=true}lset(BASE_K+k,d.v);if(f!==d.v)marcar(k);else limpio(k);continue}}catch(e){}}
         if(d.t!==lt){/* cualquier diferencia con lo último que vio este aparato cuenta como cambio (no se compara por reloj) */
           const loc=lget(k);let f=null;
           if(sucio.has(k)&&lget(BASE_K+k))f=merge3(lget(BASE_K+k),loc,d.v);
@@ -4908,7 +4912,7 @@ const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearIn
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261119-153525';
+const NEXO_BUILD='20261119-153848';
 {let aviso=null;const ocupado=()=>document.querySelector('#layer .sheet,input:focus,textarea:focus');
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 const barra=()=>{if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};

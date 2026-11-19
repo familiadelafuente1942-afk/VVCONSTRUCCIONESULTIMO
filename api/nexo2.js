@@ -456,7 +456,8 @@ export default async function handler(req, res) {
         }
       } catch { /* si no se puede leer, se guarda como vino */ }
       await escribir(H, "cfg", { t, v: vOut });
-      res.status(200).json({ ok: true, t });
+      // si la nube tenía obras que este aparato no traía, se le devuelve lo que quedó guardado para que se ponga al día
+      res.status(200).json(vOut !== b.v ? { ok: true, t, v: vOut } : { ok: true, t });
       return;
     }
 
