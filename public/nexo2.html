@@ -1164,6 +1164,14 @@ input::placeholder,textarea::placeholder{color:var(--muted)!important;opacity:.8
  box-shadow:inset 0 2px 1px rgba(255,255,255,.85),inset 0 0 14px rgba(255,255,255,.14),inset 0 -8px 14px rgba(0,0,0,.16),0 0 16px rgba(255,255,255,.18),0 8px 22px rgba(0,0,0,.22)}
 @keyframes kpShine{0%{background-position:-160% 0,0 0}100%{background-position:260% 0,0 0}}
 @media (max-width:520px){.kp-d{grid-template-columns:repeat(3,68px);gap:12px}.kp-l{grid-template-columns:repeat(9,32px);gap:6px}.kp-l button{font-size:13px}}
+
+/* 3.4 · punto rojo de la barra dorada: entero y al frente (el brillo de la gema ya no lo tapa ni lo recorta) */
+.aviso2 .av-ico,.av-ico{overflow:visible!important}
+.av-ico::before{overflow:hidden}
+.aviso2.a-crit .av-ico::after,.aviso2.a-warn .av-ico::after{top:-4px!important;right:-4px!important;width:14px!important;height:14px!important;border-radius:50%;border:2px solid #FFF6E0!important;z-index:5!important}
+.aviso2.a-crit .av-ico::after{background:#C62828!important}
+@media (prefers-reduced-motion:no-preference){.aviso2.a-crit .av-ico::after{animation:nxlat 1.4s ease-in-out infinite!important}}
+@keyframes nxlat{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(198,40,40,.55)}50%{transform:scale(1.25);box-shadow:0 0 0 6px rgba(198,40,40,0)}}
 </style>
 <div class="app">
   <header class="top">
@@ -1507,7 +1515,7 @@ function buildObra(o){
   (o.edits||[]).forEach(([r,dw])=>{const i=o.tasks.findIndex(x=>x.rubro===r);if(i<0)return;const t=o.tasks[i];setDur(t,t.weeks+dw);o.tasks.slice(i+1).forEach(x=>{x.start+=dw*7*DAY;x.end+=dw*7*DAY})});
   buildPlanos(o);o.cards=[];o.tasks.forEach(t=>cardsDeTarea(o,t))}
   o.dotacion={hoy:o.dot,ayer:o.dot,ok:false};o.informes=[];o.invitados=o.invitados||{estudio:'aceptada',propietario:'aceptada'};
-  o.sup=[];for(let t=nextWork(d(o.inicio)+(14+(+o.id.slice(1)||0)%4)*DAY);t<=finObra(o);t=nextWork(t+14*DAY))o.sup.push({id:'s'+(++uid),fecha:t,estado:t<TODAY?'realizada':'programada'});
+  o.sup=[];for(let t=nextWork(d(o.inicio)+(14+(+o.id.slice(1)||0)%4)*DAY);t<=finObra(o);t=nextWork(t+14*DAY)){if(t>=TODAY)o.sup.push({id:'s'+(++uid),fecha:t,estado:'programada'})}/* 9.2: las visitas pasadas sin acta no se muestran como realizadas */
   o.cert=o.tpl?tplCert(o):[];if(!o.tpl)o.tasks.forEach(t=>{if(t.rubro==='losa')o.cert.push({id:'k'+(++uid),task:t,etapa:'Hormigonado de '+t.name.replace('Estructura · losa sobre','losa sobre'),estado:''});if(t.rubro==='fund')o.cert.push({id:'k'+(++uid),task:t,etapa:'Hormigonado de platea',estado:''});if(t.rubro==='mamp')o.cert.push({id:'k'+(++uid),task:t,etapa:t.name,estado:''});if(t.rubro==='sanit')o.cert.push({id:'k'+(++uid),task:t,etapa:'Instalaciones previo a revoques',estado:''});if(t.rubro==='cubierta')o.cert.push({id:'k'+(++uid),task:t,etapa:'Cubierta e impermeabilización',estado:''});if(t.rubro==='pileta')o.cert.push({id:'k'+(++uid),task:t,etapa:'Estructura de pileta',estado:''})});
   if(!o.nuevo&&!o.tpl&&!o.cero)seedReal(o);
   if(o.cero)o.sup=o.sup.filter(s=>s.estado==='programada');
@@ -1518,7 +1526,7 @@ const certFecha=c=>['losa','fund','pileta'].includes(c.task.rubro)?c.task.end-2*
 const certEstado=c=>c.estado==='certificada'?'certificada':certFecha(c)-TODAY<30*DAY?'pendiente':'programada';
 /* ===== configuración de las obras guardada en este aparato: modelo, m², inicio, jefatura, jornal, obras nuevas ===== */
 const CFG_LS='nexo2_obras_cfg';
-const CFG_KEYS=['audNombre','nombre','ubic','plantas','subsuelo','pileta','m2','nivel','inicio','jefe','estudio','jornal','dot','late','margen','edits','invitados','imgUrl','sinImg','renders','rndOcultos','tpl','mod2','ov','resp','reanud','cero','cg','cgu'];
+const CFG_KEYS=['audNombre','nombre','ubic','plantas','subsuelo','pileta','m2','nivel','inicio','jefe','pasante','estudio','jornal','dot','late','margen','edits','invitados','imgUrl','sinImg','renders','rndOcultos','tpl','mod2','ov','resp','reanud','cero','cg','cgu'];
 const BASE_OV={};let BASE_DEF={};
 const cfgPick=o=>{const r={};CFG_KEYS.forEach(k=>{if(o[k]!==undefined)r[k]=o[k]});return r};
 const CFG_ORIG=new Set(OBRAS.map(o=>o.id));
@@ -1604,7 +1612,7 @@ function tplCert(o){const c=[];o.tasks.forEach(t=>{
   if(t.cod==='PIS04')c.push({id:'k'+(++uid),task:t,etapa:'Estructura de pileta',estado:''});
   if(t.cod==='SAN06')c.push({id:'k'+(++uid),task:t,etapa:'Instalaciones previo a revoques',estado:''});
   if(t.cod==='TEC04')c.push({id:'k'+(++uid),task:t,etapa:'Cubierta e impermeabilización',estado:''})});return c}
-function tplSup(o,prev){const ok=(prev||[]).filter(s=>s.estado==='realizada'),out=[...ok];for(let t=nextWork(d(o.inicio)+(14+(+String(o.id).slice(1)||0)%4)*DAY);t<=finObra(o);t=nextWork(t+14*DAY)){if(t<TODAY){if(!ok.some(s=>Math.abs(s.fecha-t)<5*DAY))out.push({id:'s'+(++uid),fecha:t,estado:'realizada'})}else out.push({id:'s'+(++uid),fecha:t,estado:'programada'})}return out.sort((a,b)=>a.fecha-b.fecha)}
+function tplSup(o,prev){const ok=(prev||[]).filter(s=>s.estado==='realizada'),out=[...ok];for(let t=nextWork(d(o.inicio)+(14+(+String(o.id).slice(1)||0)%4)*DAY);t<=finObra(o);t=nextWork(t+14*DAY)){if(t>=TODAY)out.push({id:'s'+(++uid),fecha:t,estado:'programada'})/* 9.2: nada pasado sin acta real */}return out.sort((a,b)=>a.fecha-b.fecha)}
 /* se vuelve a derivar todo lo que depende del cronograma base (al recargar con la base guardada) */
 function tplResync(o){tplTasks(o);o.planos=[];o.cards=[];tplCards(o);
   const L=o.tasks.filter(t=>t.legacy&&LIB[t.rubro]);if(L.length){[...new Set(L.map(t=>t.rubro))].forEach(r=>(LIB[r].doc||[]).filter(x=>x[1]===PL&&condOk(o,x)).forEach(x=>{if(!o.planos.some(s=>s.nombre===x[0]))nuevoSlot(o,r,x[3]||LIB[r].f,x[0])}));L.forEach(t=>cardsDeTarea(o,t))}
@@ -1854,7 +1862,8 @@ function addAud(tipo,obra,fecha,data){const a={id:'au'+(++uid),tipo,num:'',obra,
 function renumber(){['sup','rev','cert'].forEach(t=>AUD.filter(a=>a.tipo===t&&!a.real).sort((a,b)=>a.fecha-b.fecha||a.id.localeCompare(b.id)).forEach((a,i)=>a.num=`${AUD_TIPO[t].pre}-2026-${String(i+1).padStart(3,'0')}`))}
 const tareaEn=(o,f)=>o.tasks.filter(t=>t.start<=f).sort((a,b)=>b.start-a.start)[0]||o.tasks[0];
 /* semilla: lo que la auditoría ya emitió en cada obra */
-OBRAS.filter(o=>o.constructora===ORG&&!o.cero).forEach(o=>{
+/* 9.2: ya no se inventan actas, certificados ni revisiones: solo existe lo que cargó un auditor (llega de la nube). */
+if(false)OBRAS.filter(o=>o.constructora===ORG&&!o.cero).forEach(o=>{
   o.sup.filter(s=>s.estado==='realizada').forEach(s=>{const h=hash(s.id+o.id),t=tareaEn(o,s.fecha),pool=OBS_POOL[t.rubro]||OBS_POOL.def;const res=h<.68?'Conforme':h<.95?'Conforme con observaciones':'No conforme';
     const obs=res==='Conforme'?[]:pool.slice(0,res==='No conforme'?2:1).map((x,i)=>({desc:x[0],sol:x[1],sector:x[2],crit:res==='No conforme'?'Alta':CRIT[1+i%2]}));
     const a=addAud('sup',o,s.fecha,{periodo:`${new Date(s.fecha).getUTCDate()<=15?'1ª':'2ª'} quincena de ${MESL[new Date(s.fecha).getUTCMonth()]} 2026 · ${t.name}`,presentes:'Auditoría · Jefatura de Obra',obs,interf:res==='No conforme'?[INTERF_POOL[0]]:[],fotos:[],resultado:res,conclusion:res==='Conforme'?'Los trabajos verificados se ajustan a la documentación vigente.':'Se solicita corregir lo observado antes de avanzar con la etapa siguiente.',responsable:'Auditoría técnica'});s.acta=a.id;s.resultado=res});
@@ -2928,10 +2937,11 @@ function sheetNuevaObra(){
   <span class="eyebrow">Modelo de obra</span><div class="row2"><label class="f">Plantas sobre nivel<select id="no-pl" data-inp="no">${[1,2,3].map(n=>`<option value="${n}" ${NO.plantas===n?'selected':''}>${['Planta baja','PB + PA','PB + PA + 2° piso'][n-1]}</option>`).join('')}</select></label><label class="f">Subsuelo<select id="no-sub" data-inp="no"><option value="0" ${NO.subsuelo?'':'selected'}>No</option><option value="1" ${NO.subsuelo?'selected':''}>Sí</option></select></label></div>
   <div class="row2"><label class="f">Pileta<select id="no-pil" data-inp="no"><option value="0" ${NO.pileta?'':'selected'}>No</option><option value="1" ${NO.pileta?'selected':''}>Sí</option></select></label><label class="f">Superficie (m²)<input id="no-m2" type="number" min="60" max="3000" value="${NO.m2}" data-inp="no"></label></div>
   <div class="row2"><label class="f">Terminación<select id="no-nv" data-inp="no">${Object.entries(NIVEL).map(([k,v])=>`<option value="${k}" ${NO.nivel===k?'selected':''}>${v.n}</option>`).join('')}</select></label><label class="f">Fecha de inicio<input id="no-ini" type="date" value="${NO.inicio}" data-inp="no"></label></div>
-  <div class="row2"><label class="f">Jefatura de obra<select id="no-jefe" data-inp="no">${['Matías','Lucía','Facundo','Ignacio'].map(j=>`<option ${NO.jefe===j?'selected':''}>${j}</option>`).join('')}</select></label><label class="f">Estudio<input id="no-est" value="${esc(NO.estudio)}" data-inp="no"></label></div>
+  <div class="row2"><label class="f">Jefe de obra<input id="no-jefe" list="no-jefes" value="${esc(NO.jefe||'')}" placeholder="Nombre del jefe de obra" data-inp="no"><datalist id="no-jefes">${[...new Set(OBRAS.map(o=>o.jefe).filter(Boolean))].map(j=>`<option value="${esc(j)}">`).join('')}</datalist></label><label class="f">Estudio<input id="no-est" list="no-ests" value="${esc(NO.estudio||'')}" placeholder="Elegí o escribí el estudio" data-inp="no"><datalist id="no-ests">${[...new Set(OBRAS.map(o=>o.estudio).filter(Boolean))].map(j=>`<option value="${esc(j)}">`).join('')}</datalist></label></div>
+  <label class="f">Pasante / ayudante de jefatura (opcional)<input id="no-pas" value="${esc(NO.pasante||'')}" placeholder="Ej.: Nicole" data-inp="no"></label>
   <div id="no-prev">${previewObra()}</div><button class="btn gold" type="submit">Crear obra con su base y sus tarjetas</button></form>`,'Nueva obra');
 }
-function readNO(){if(!$('#no-nom'))return;NO.nombre=val('no-nom')||'Obra nueva';NO.ubic=val('no-ubi');NO.plantas=+val('no-pl');NO.subsuelo=val('no-sub')==='1';NO.pileta=val('no-pil')==='1';NO.m2=clamp(+val('no-m2')||200,60,3000);NO.nivel=val('no-nv');NO.inicio=val('no-ini')||'2026-11-02';NO.jefe=val('no-jefe');NO.estudio=val('no-est')}
+function readNO(){if(!$('#no-nom'))return;NO.nombre=val('no-nom')||'Obra nueva';NO.ubic=val('no-ubi');NO.plantas=+val('no-pl');NO.subsuelo=val('no-sub')==='1';NO.pileta=val('no-pil')==='1';NO.m2=clamp(+val('no-m2')||200,60,3000);NO.nivel=val('no-nv');NO.inicio=val('no-ini')||'2026-11-02';NO.jefe=val('no-jefe').trim();NO.estudio=val('no-est').trim();NO.pasante=($('#no-pas')?val('no-pas'):'').trim()}
 
 /* ===== obras que desaparecieron: se buscan en las copias diarias de la nube y Dirección elige cuáles traer ===== */
 const OREC={items:null,t:0,cargando:false};
@@ -3083,7 +3093,7 @@ const A={
   modelos:()=>sheetLib(),
   manualTarjetas:()=>{openSheet(`<span class="eyebrow">Manual</span><h2>Las tarjetas</h2><p class="small soft">Cómo se generan, el semáforo y qué ve cada panel. Deslizá para pasar de hoja.</p>`+[1,2,3,4,5].map(n=>`<img src="/nexo2/manual-t-${n}.jpg" alt="Manual de las tarjetas, hoja ${n} de 5" loading="lazy" style="width:100%;display:block;margin:12px 0;border-radius:14px;border:1px solid var(--line,rgba(255,255,255,.2))">`).join(''),'Manual: Las tarjetas')},
   manualRoles:()=>{openSheet(`<span class="eyebrow">Manual</span><h2>Paso a paso por rol</h2><p class="small soft">De la creación de la obra hasta la entrega, y qué hace cada panel. Deslizá para pasar de hoja.</p>`+[1,2,3,4,5,6].map(n=>`<img src="/nexo2/manual-r-${n}.jpg" alt="Paso a paso por rol, hoja ${n} de 6" loading="lazy" style="width:100%;display:block;margin:12px 0;border-radius:14px;border:1px solid var(--line,rgba(255,255,255,.2))">`).join(''),'Manual: Paso a paso por rol')},
-  nuevaObra:()=>{NO={nombre:'Golf 310',ubic:'Nordelta · Barrio El Golf',plantas:2,subsuelo:false,pileta:true,m2:420,nivel:'alto',inicio:'2026-11-02',jefe:'Facundo',estudio:'Pacífica Arquitectura',jornal:75000,dot:6,late:0,margen:15,edits:[]};sheetNuevaObra()},
+  nuevaObra:()=>{NO={nombre:'',ubic:'',plantas:2,subsuelo:false,pileta:false,m2:400,nivel:'alto',inicio:new Date(Date.now()-108e5).toISOString().slice(0,10),jefe:'',estudio:'',pasante:'',jornal:75000,dot:6,late:0,margen:15,edits:[]};sheetNuevaObra()},
   iaSug:ds=>iaAsk(ds.q)
 };
 const SUBMIT={
@@ -3264,7 +3274,7 @@ async function audFotoMini(url){return new Promise(r=>{const im=new Image();im.o
 async function audFotosPub(o){try{const L=AUD.filter(a=>a.obra===o&&(a.data.fotos||[]).some(id=>FILES[id])).sort((a,b)=>b.fecha-a.fecha).slice(0,12);const key=L.map(a=>a.id+':'+a.data.fotos.join(',')).join('|');if(key===_audFH[o.id])return;_audFH[o.id]=key;const m={};for(const a of L){const u=[];for(const id of a.data.fotos.slice(0,4)){const f=FILES[id];if(f&&f.url&&/^image/.test(f.type||'image')){const d=await audFotoMini(f.url);if(d)u.push(d)}}if(u.length)m[a.id]=u}codApi({op:'aud_fotos_save',obra:o.id,fotos:m,cred:{rol:'dir',codigo:dirAuthGet()}}).catch(()=>{_audFH[o.id]=''})}catch(e){}}
 function snapPublicar(){
   try{
-    if(ROLE()!=='direccion'||!dirAuthGet()||Date.now()-_snapT<30000)return;
+    if((ROLE()!=='direccion'&&!MODO_PRUEBAS)||!dirAuthGet()||Date.now()-_snapT<30000)return;
     const out=[];
     for(const o of OBRAS){
       const cards=(o.cards||[]).filter(c=>(c.tipo==='doc'||c.tipo==='mat')&&!cDone(c)&&color(c)!=='futuro').map(c=>({id:String(c.id),tipo:c.tipo,tarea:c.task.name,limite:timing(c).limit,color:color(c),n:c.items.length,pend:c.items.filter(i=>!iDone(i)).map(i=>({txt:i.txt,resp:i.resp||'',tipo:i.tipo||''}))}));
@@ -3735,7 +3745,7 @@ const NIV_TXT=['PB','PB + 1° piso','PB + 2° piso','PB + 3° piso'];
 const termKey={Estándar:'estandar',Alta:'alto',Premium:'premium'};
 function tm2Read(){if(!TM||!$('#tm-m2'))return;const M=TM.M;M.m2=clamp(+val('tm-m2')||800,60,6000);if(TM.M.subsuelo&&$('#tm-ssm2'))M.subsueloM2=clamp(+val('tm-ssm2')||250,30,3000);
   if(!M.autoNiv){M.m2Niv=Array.from({length:M.niveles},(_,i)=>$('#tm-n'+i)?clamp(+val('tm-n'+i)||0,20,3000):(M.m2Niv&&M.m2Niv[i])||M.m2/M.niveles)}
-  M.ritmo=clamp(+val('tm-rit')||1,.8,1.3);M.inicio=val('tm-ini')||M.inicio;if($('#tm-mg'))TM.margen=clamp(Math.round(+val('tm-mg')),0,40)}
+  if($('#tm-rit'))M.ritmo=clamp(+val('tm-rit')||1,.8,1.3);if($('#tm-ini'))M.inicio=val('tm-ini')||M.inicio;if($('#tm-mg'))TM.margen=clamp(Math.round(+val('tm-mg')),0,40)}
 function tm2Stats(M){const g=tplGenerar({...M,m2Niv:M.autoNiv?null:M.m2Niv},PLANT_REG[M.plantilla||'base']||PLANT_REG.base),b0=lunesMs(d(M.inicio)),fase=f=>{const a=g.inst.filter(x=>x.t.fase===f);return a.length?[Math.min(...a.map(x=>x.ini)),Math.max(...a.map(x=>x.ini+x.dur))]:null}
   return{n:g.inst.length,sem:g.semanas,fin:bdMs(b0,g.dias-1),f:[1,2,3].map(fase),b0}}
 function tm2Prev(){const o=findO(TM.oid),st=tm2Stats(TM.M),fd=w=>fmt(bdMs(st.b0,w)),cur=o.tpl?{n:o.base.length,sem:(finDe(o.base)+DAY-Math.min(...o.base.map(t=>t.start)))/(7*DAY),fin:finDe(o.base)}:{n:o.base.length,sem:(finDe(o.base)+DAY-Math.min(...o.base.map(t=>t.start)))/(7*DAY),fin:finDe(o.base)};
@@ -3774,7 +3784,7 @@ CHG.tm2=(v,el)=>{if(!TM)return;tm2Read();const M=TM.M,id=el.id;
   if(id==='tm-niv'){M.niveles=+v;M.m2Niv=null;M.autoNiv=true}else if(id==='tm-auto'){M.autoNiv=el.checked;if(!M.autoNiv)M.m2Niv=Array(M.niveles).fill(Math.round(M.m2/M.niveles))}
   else if(id==='tm-pl')M.plantilla=v;else if(id==='tm-sub')M.subsuelo=v==='1';else if(id==='tm-pis')M.piscina=v==='1';else if(id==='tm-est')M.estructura=v;else if(id==='tm-cal')M.calef=v;else if(id==='tm-aa')M.aa=v==='1';else if(id==='tm-dom')M.domotica=v==='1';else if(id==='tm-term')M.term=v;
   tm2Draw()};
-document.addEventListener('input',e=>{const el=e.target.closest('[data-inp="tm2"]');if(!el||!TM)return;tm2Read();const p=$('#tm-prev');if(p)p.innerHTML=tm2Prev()});
+['input','change'].forEach(ev=>document.addEventListener(ev,e=>{const el=e.target.closest&&e.target.closest('[data-inp="tm2"]');if(!el||!TM)return;tm2Read();const p=$('#tm-prev');if(p)p.innerHTML=tm2Prev()},true));
 function tplCertDe(o,ts){return tplCert(o).filter(c=>ts.has(c.task))}
 /* equivalencia de una tarea del cronograma anterior con tareas de la plantilla */
 const TPL_SPEC={gas:['SAN04'],debiles:['ELE04'],carp:['MAM05'],aisl:['TEC04']};
@@ -3792,10 +3802,12 @@ function tplAplicar(o,M,modo){
   const nb=gen.map(g=>keep.has(g.id)?(oldBase.find(b=>b.id===g.id)||g):g);
   const nt=gen.map(g=>keep.has(g.id)?(oldTasks.find(t=>t.id===g.id)||{...g,equipo:tplEquipo(o,g)}):{...g,equipo:tplEquipo(o,g)});
   const fresh=new Set(nt.filter(t=>!oldTasks.includes(t)));
-  const moved=[],extraT=[],movedCards=[];
+  const moved=[],extraT=[],movedCards=[],amb=[];
   if(wasTpl)oldTasks.forEach(t=>{if(keep.has(t.id)&&!gid.has(t.id))extraT.push(t)});
   else oldTasks.forEach(lt=>{if(!conAv(lt))return;const D=tplEquiv(lt,nt);
-    if(D.length){const r=lt.real;if(r)D.forEach(d=>{d.real={ini:Math.min(d.start,r.ini||d.start),fin:r.fin?Math.min(d.end,r.fin):null,av:r.av,causa:r.causa||'',dot:r.dot||o.dot}});moved.push(lt);
+    /* C1: el avance pasa solo si hay UNA tarea equivalente clara; si hay varias o ninguna, la tarea vieja queda como manual (con su avance) y las nuevas en 0% */
+    if(D.length>1)amb.push(lt);
+    if(D.length===1){const r=lt.real;if(r)D.forEach(d=>{d.real={ini:Math.min(d.start,r.ini||d.start),fin:r.fin?Math.min(d.end,r.fin):null,av:r.av,causa:r.causa||'',dot:r.dot||o.dot}});moved.push(lt);
       oldCards.filter(c=>c.task===lt&&c.items.some(i=>i.estado!=='falta'||i.respuesta)).forEach(c=>{c.task=D[0];c.custom=true;c.ckey='mv'+Date.now().toString(36)+movedCards.length;movedCards.push(c)})}
     else extraT.push(lt)});
   extraT.forEach(t=>{if(!t.cod)Object.assign(t,etDe(t),{manual:true,legacy:true});else t.manual=true});
@@ -3810,7 +3822,7 @@ function tplAplicar(o,M,modo){
   const usados=new Set(o.cards.flatMap(c=>c.items.map(i=>i.slot).filter(Boolean)));
   o.planos=(o.planos||[]).filter(s=>usados.has(s.id)||s.manual||DOCS.some(d=>d.slot===s.id));
   o.sup=tplSup(o,o.sup);
-  return{n:o.base.length,mov:moved.length,kept:extraT.length,man:keep.size,cards:movedCards.length}}
+  return{n:o.base.length,mov:moved.length,kept:extraT.length,man:keep.size,cards:movedCards.length,amb:amb.length}}
 SUBMIT.modelo2=(f,ev)=>{const o=findO(f.dataset.o);if(!o||!esDir()||!TM)return;tm2Read();const modo=(ev&&ev.submitter&&ev.submitter.dataset.modo)||'todo',ap=TM.aplicar;
   if(!ap&&!confirm(`Ya existe un cronograma generado${o.cg?' por Dirección el '+fAR(o.cg)+' '+hAR(o.cg):''}. ¿Regenerarlo?`))return;
   if(ap)(window.__nuevoCron=window.__nuevoCron||[]).push(o.id);
@@ -3820,7 +3832,7 @@ SUBMIT.modelo2=(f,ev)=>{const o=findO(f.dataset.o);if(!o||!esDir()||!TM)return;t
   TM=null;closeSheet();ovRebase(o);
   {const tx=`La Dirección ${ap?'generó el cronograma de':'actualizó el modelo de'} ${o.nombre}: ${r.n} tareas`;['jefe','auditor','estudio'].forEach(rl=>avisoNube(rl,o,tx))}
   o.cgu=Date.now();cfgGuardar();ovFlush();
-  const detalle=`${r.n} tareas${r.mov?` · ${plural(r.mov,'tarea anterior con avance pasó','tareas anteriores con avance pasaron')} a su equivalente`:''}${r.kept?` · ${plural(r.kept,'tarea se conservó como manual','tareas se conservaron como manuales')}`:''}`;
+  const detalle=`${r.n} tareas${r.mov?` · ${plural(r.mov,'tarea anterior con avance pasó','tareas anteriores con avance pasaron')} a su equivalente`:''}${r.amb?` · ${plural(r.amb,'tarea con avance no tenía una sola equivalente: quedó como manual y las nuevas en 0% (revisala)','tareas con avance no tenían una sola equivalente: quedaron como manuales y las nuevas en 0% (revisalas)')}`:''}${r.kept?` · ${plural(r.kept,'tarea se conservó como manual','tareas se conservaron como manuales')}`:''}`;
   toast(`Guardando el cronograma en la nube… ${detalle}`);draw();
   /* recién cuando el servidor confirma se muestra "guardado ✓" */
   (window.nexoSubirYa?window.nexoSubirYa():Promise.resolve(false)).then(ok=>{
@@ -4416,7 +4428,7 @@ function sheetHist(){const cs=misChats(),q=norm(S.histQ||'');const vis=cs.filter
   openSheet(`<span class="eyebrow">Belfast IA · ${esc(ROL_TXT[ROLE()])}</span><h2>Historial de chats</h2>
   <p class="muted small">${IA9.mode==='db'?'Cada chat se guarda solo en tu cuenta de Nexo: lo ves desde cualquier dispositivo y no se pierde aunque cierres la app.':'Cada chat se guarda solo en este navegador. Descargá una copia de seguridad para no perder nada.'} Cada respuesta nueva actualiza la copia.</p>
   <input id="hist-q" placeholder="Buscar en los chats" value="${esc(S.histQ||'')}" data-inp="histq" aria-label="Buscar en los chats">
-  <div class="hlist">${vis.map(c=>`<div class="hrow"><button class="hopen" data-act="iaAbrir" data-id="${c.id}"><b>${esc(c.title)}</b><span class="muted small">${new Date(c.updated).toLocaleDateString('es-AR',{day:'numeric',month:'short'})} · ${new Date(c.updated).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})} · ${plural(c.msgs.length,'mensaje','mensajes')}</span></button><button class="ib" data-act="iaBorrar" data-id="${c.id}" aria-label="Eliminar chat">✕</button></div>`).join('')||`<p class="muted">${cs.length?'Ningún chat coincide con la búsqueda.':'Todavía no hay chats. Hacé tu primera pregunta y queda guardada acá.'}</p>`}</div>
+  <div class="hlist">${vis.map(c=>`<div class="hrow"><button class="hopen" data-act="iaAbrir" data-id="${c.id}"><b>${esc(c.title)}</b><span class="muted small">${new Date(c.updated).toLocaleDateString('es-AR',{day:'numeric',month:'short'})} · ${new Date(c.updated).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',hour12:false})} · ${plural(c.msgs.length,'mensaje','mensajes')}</span></button><button class="ib" data-act="iaBorrar" data-id="${c.id}" aria-label="Eliminar chat">✕</button></div>`).join('')||`<p class="muted">${cs.length?'Ningún chat coincide con la búsqueda.':'Todavía no hay chats. Hacé tu primera pregunta y queda guardada acá.'}</p>`}</div>
   <div class="row2"><button class="btn gold" data-act="iaNuevoCerrar">Nuevo chat</button>${cs.length?'<button class="btn" data-act="iaBackup">Descargar copia de seguridad</button>':''}</div>`,'Historial de chats')}
 A.iaNuevoCerrar=()=>{S.chat=[];S.chatId=null;closeSheet();if(document.querySelector('#view .ia'))iaRender();else A.iaOpen()};
 document.addEventListener('input',e=>{const el=e.target.closest('[data-inp="histq"]');if(!el)return;S.histQ=el.value;const pos=el.selectionStart;keepScroll(sheetHist);const n=$('#hist-q');if(n){n.focus();n.setSelectionRange(pos,pos)}});
@@ -4939,7 +4951,7 @@ const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearIn
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261120-174704';
+const NEXO_BUILD='20261120-215844';
 {let aviso=null;const ocupado=()=>document.querySelector('#layer .sheet,input:focus,textarea:focus');
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 const barra=()=>{if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -4947,7 +4959,7 @@ async function ver(){if(document.visibilityState!=='visible')return;try{const r=
   aviso=j.v;let ya='';try{ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}
   if(ya!==j.v&&!ocupado()){act();return}barra()}catch(e){}}
 setTimeout(ver,4000);setInterval(ver,60000);
-setTimeout(()=>{try{const m=/^(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)/.exec(NEXO_BUILD);if(!m)return;const f=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5])-108e5),z=n=>String(n).padStart(2,'0'),tx=' · v'+z(f.getUTCDate())+'/'+z(f.getUTCMonth()+1)+' '+z(f.getUTCHours())+':'+z(f.getUTCMinutes());document.querySelectorAll('.brand .mono').forEach(e=>{if(!e.querySelector('.nxv'))e.insertAdjacentHTML('beforeend','<span class="nxv" style="opacity:.65">'+tx+'</span>')})}catch(e){}},1200);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')ver()})}
+setTimeout(()=>{try{const m=/^(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)/.exec(NEXO_BUILD);if(!m)return;const f=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5])-108e5),z=n=>String(n).padStart(2,'0'),tx=' · v'+z(f.getUTCDate())+'/'+z(f.getUTCMonth()+1)+' '+z(f.getUTCHours())+':'+z(f.getUTCMinutes());const pinta=()=>{const ok=window.__sync&&window.__sync.ok,nb=ok?' · nube '+new Date(ok).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',hour12:false}):' · nube —';document.querySelectorAll('.brand .mono').forEach(e=>{let x=e.querySelector('.nxv');if(!x){e.insertAdjacentHTML('beforeend','<span class="nxv" style="opacity:.65"></span>');x=e.querySelector('.nxv')}if(x.textContent!==tx+nb)x.textContent=tx+nb})};pinta();setInterval(pinta,15000)}catch(e){}},1200);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')ver()})}
 window.nexoSubirYa=async()=>{let ok=true;for(const k of [...(sucio.size?sucio:Object.keys(MAP))]){clearTimeout(tim[k]);if(!(await subir(k)))ok=false}return ok};
 window.addEventListener('online',()=>{if(sucio.size)window.nexoSubirYa();bajar()});window.addEventListener('offline',()=>{if(sucio.size)estado('pend')});
 bajar();
