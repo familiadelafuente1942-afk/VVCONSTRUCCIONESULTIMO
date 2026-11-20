@@ -2072,11 +2072,11 @@ function vObras(){
 function vObra(){
   const o=OBRAS.find(x=>x.id===S.obra);if(!o||!puedeVer(o)){S.tab='obras';return vObras()}
   const r=ROLE(),est=r==='estudio',aud=r==='auditor',a=actual(o),n=proxima(o);
-  const tabs=est?[['crono','Cronograma'],['sol','Tarjetas'],['docs','Planos'],['avances','Avances'],['adic','Adicionales'],['audit','Auditoría']]:aud?[['asup','Supervisiones'],['arev','Revisión de doc.'],['acert','Certificación'],['crono','Cronograma'],['docs','Planos'],['avances','Avances']]:[['crono','Cronograma'],['docs','Planos'],['informes','Informes'],['avances','Avances'],['adic','Adicionales'],['audit','Auditoría'],['equipo','Equipo'],['reclamos','Contratistas'+(ctNum(o)?' ('+ctNum(o)+')':'')],...(r==='direccion'?[['gestion','Registros']]:[])];
+  const tabs=est?[['crono','Cronograma'],['sol','Tarjetas'],['docs','Planos'],['avances','Avances'],['adic','Adicionales'],['audit','Auditoría'],['check','Checklist']]:aud?[['check','Checklist'],['asup','Supervisiones'],['arev','Revisión de doc.'],['acert','Certificación'],['crono','Cronograma'],['docs','Planos'],['avances','Avances']]:[['crono','Cronograma'],['docs','Planos'],['informes','Informes'],['avances','Avances'],['adic','Adicionales'],['audit','Auditoría'],['equipo','Equipo'],['reclamos','Contratistas'+(ctNum(o)?' ('+ctNum(o)+')':'')],['check','Checklist'],...(r==='direccion'?[['gestion','Registros']]:[])];
   if(!tabs.find(t=>t[0]===S.otab))S.otab=tabs[0][0];
   const cs=est?o.cards.filter(c=>c.tipo==='doc'):o.cards;const falt=cs.filter(c=>!cDone(c)&&color(c)!=='futuro').length,res=cs.filter(cDone).length,nuevos=o.cards.filter(cNuevos).length;
   const dv=desvioSem(o);
-  const body={crono:tabCrono,sol:tabSol,docs:tabDocs,informes:tabInformes,avances:tabAvances,adic:tabAdic,audit:tabAudit,equipo:tabEquipo,gestion:o=>tabGestion(o),reclamos:tabReclamos,asup:o=>audPanel(o,'sup'),arev:o=>audPanel(o,'rev'),acert:o=>audPanel(o,'cert')}[S.otab](o);
+  const body={crono:tabCrono,sol:tabSol,docs:tabDocs,informes:tabInformes,avances:tabAvances,adic:tabAdic,audit:tabAudit,equipo:tabEquipo,gestion:o=>tabGestion(o),check:tabCheck,reclamos:tabReclamos,asup:o=>audPanel(o,'sup'),arev:o=>audPanel(o,'rev'),acert:o=>audPanel(o,'cert')}[S.otab](o);
   const facts=aud?'':`<div class="facts"><div class="fact"><span>Ahora</span><b>${iniciada(o)?esc(a.name):'Por iniciar'}</b></div><div class="fact"><span>Próxima tarea</span><b>${n?esc(n.name)+' · '+fmt(n.start):'Entrega'}</b></div><div class="fact"><span>${est?'Entrega contractual':'Entrega prevista'}</span><b class="${!est&&dv>0?'t-naranja':''}">${fmt(est?finContractual(o):finObra(o))}</b><small>${est?'según el cronograma presentado':dv>0?`${plural(dv,'semana','semanas')} después de la base`:'igual que la base'}</small></div><div class="fact"><span>${esDir()?'Pérdida por esperas':est?'Para entregar':'Tarjetas vencidas'}</span><b class="${esDir()?'t-rojo':''}">${esDir()?money(o.cards.reduce((s,c)=>s+costoEst(c),0)):est?falt:o.cards.filter(c=>color(c)==='rojo').length}</b></div></div>`;
   return `<div class="ohead"><button class="back" data-act="tab" data-t="obras">← Obras</button>${heroDos(o)}
   <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-end"><div><span class="eyebrow">${esc(o.ubic)}</span><h1>${esc(o.nombre)}</h1>${esDir()?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px"><button class="btn sm" data-act="editarObra" data-o="${o.id}">Editar obra</button><button class="btn sm ghost" data-act="modeloObra" data-o="${o.id}">Cambiar modelo</button></div>`:''}</div><span class="bigpct">${avance(o)}%</span></div>
@@ -2087,6 +2087,26 @@ function vObra(){
   <div class="tabs" role="tablist">${tabs.map(([k,l])=>`<button role="tab" data-act="otab" data-t="${k}" aria-selected="${S.otab===k}">${l}</button>`).join('')}</div>
   <section class="sec">${body}</section>`;
 }
+
+/* ===== Checklist de obra (viene del Manual de Obra Belfast: app-demo-ultimo.vercel.app/manual-obra.html) ===== */
+const MAN_URL='https://app-demo-ultimo.vercel.app';
+const CKL={d:null,cargando:false,err:'',t:0};
+function cklCargar(){if(CKL.cargando)return;CKL.cargando=true;fetch(MAN_URL+'/api/manual-fotos?accion=obras',{cache:'no-store'}).then(r=>r.json()).then(j=>{CKL.d=(j&&j.obras)||{};CKL.err='';CKL.t=Date.now()}).catch(()=>{CKL.err='No se pudo leer el checklist. Revisá la conexión.'}).finally(()=>{CKL.cargando=false;if(S.otab==='check')draw()})}
+function cklNorm(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'')}
+function cklBuscar(o){const d=CKL.d||{},id='onexo'+cklNorm(o.id);if(d[id]&&!d[id].borrada)return [id,d[id]];
+ for(const [k,v] of Object.entries(d)){if(v&&!v.borrada&&(v.nexo===o.id||cklNorm(v.nombre)===cklNorm(o.nombre)))return [k,v]}return [id,null]}
+function tabCheck(o){
+ if(!CKL.d||Date.now()-CKL.t>30000)cklCargar();
+ if(!CKL.d)return `<p class="muted">${CKL.err||'Cargando el checklist de obra…'}</p>`;
+ const [id,c]=cklBuscar(o);const link=`${MAN_URL}/manual-obra.html?obra=${id}&nombre=${encodeURIComponent(o.nombre)}&nexo=${encodeURIComponent(o.id)}#controles`;
+ if(!c)return `<span class="eyebrow">Checklist de obra</span><h2>Todavía no tiene checklist</h2><p class="muted">El checklist sale del Manual de Obra Belfast: 14 etapas de principio a fin, cada una se aprueba con todo tildado y con foto de respaldo de cada punto antes de tapar.</p><a class="btn" style="display:inline-block;text-decoration:none;color:inherit" href="${link}" target="_blank" rel="noopener">Crear el checklist de esta obra</a>`;
+ const res=c.res||[],ap=res.filter(e=>e.ok).length,tot=res.length||14,sig=res.find(e=>!e.ok),pct=Math.round(ap*100/tot);
+ return `<span class="eyebrow">Checklist de obra</span><div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px"><h2 style="margin:0">${ap} de ${tot} etapas aprobadas</h2><span class="bigpct">${pct}%</span></div>
+ <div class="bar" style="margin:8px 0"><i style="width:${pct}%"></i></div><p class="muted small">${sig?'Sigue: '+esc(sig.t):'Todas las etapas aprobadas'} · actualizado ${c.t?new Date(c.t).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):''}</p>
+ <div class="list">${res.map((e,i)=>`<div class="pe-row"><div style="display:flex;gap:10px;align-items:center"><span class="chip ${e.ok?'gold':''}" style="min-width:30px;justify-content:center">${e.ok?'✓':i+1}</span><div style="flex:1;min-width:0"><b>${esc(e.t)}</b><div class="muted small">${e.ok?'Aprobada el '+esc(e.ok):e.h+' de '+e.tot+' controles'} · ${(e.f||[]).length} ${(e.f||[]).length===1?'foto':'fotos'}</div></div></div>${(e.f||[]).length?`<div style="display:flex;gap:6px;overflow-x:auto">${e.f.slice(0,6).map(u=>`<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" loading="lazy" style="width:84px;height:62px;object-fit:cover;border-radius:8px;display:block"></a>`).join('')}</div>`:''}</div>`).join('')}</div>
+ <a class="btn" href="${link}" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;color:inherit;margin-top:10px">Abrir el checklist para tildar y cargar fotos</a>`;
+}
+function iaCkl(o){try{if(!CKL.d)cklCargar();const [,c]=cklBuscar(o);if(!c)return 'sin checklist cargado';return (c.res||[]).map(e=>({etapa:e.t,aprobada:e.ok||'no',controles:e.h+' de '+e.tot,fotos:(e.f||[]).length}))}catch(e){return 'sin datos'}}
 function tabSol(o){
   const cs=o.cards.filter(c=>c.tipo==='doc'&&itemsEstudio(c).length).sort((a,b)=>ORDEN[color(a)]-ORDEN[color(b)]||timing(a).limit-timing(b).limit);
   return `<p class="muted small">Una tarjeta por tarea con todos los planos y definiciones que necesita. La obra la marca como completa cuando verifica cada ítem.</p><div class="list">${cs.filter(c=>color(c)!=='futuro').map(c=>cardHTML(c,false)).join('')||'<p class="muted">Sin tarjetas abiertas.</p>'}</div>${cs.some(c=>color(c)==='futuro')?`<details class="card"><summary>Próximas (${cs.filter(c=>color(c)==='futuro').length})</summary><div class="list">${cs.filter(c=>color(c)==='futuro').map(c=>cardHTML(c,false)).join('')}</div></details>`:''}`;
@@ -4462,7 +4482,7 @@ function iaDatosObra(o){
   const sn=snapRol();let d=null;
   if(sn&&sn.obras)d=sn.obras.find(x=>x.obra===o.nombre)||null;
   if(!d)d={obra:o.nombre,etapa:etapaDe(o),avance:avance(o)+'%'};
-  return{...d,ubicacion:o.ubic,estudio:o.estudio,fotos_de_obra_disponibles:iaFotosObra(o).length,renders_disponibles:iaRendersObra(o).length,hoy:iso(TODAY),...(iaCtOk()?{contratistas:iaCt(o)}:{}),...(ROLE()==='direccion'&&window.iaCm?{compras:iaCm(o)}:{})};
+  return{...d,ubicacion:o.ubic,estudio:o.estudio,fotos_de_obra_disponibles:iaFotosObra(o).length,renders_disponibles:iaRendersObra(o).length,hoy:iso(TODAY),...(iaCtOk()?{contratistas:iaCt(o)}:{}),...(ROLE()==='direccion'&&window.iaCm?{compras:iaCm(o)}:{}),checklist_de_obra:iaCkl(o)};
 }
 function iaDocEstado(o){
   const r=ROLE(),full=r==='direccion',hoy=fmtLargo(TODAY)+' de 2026';
