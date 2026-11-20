@@ -1,4 +1,5 @@
-// Conectores de Claude (servidores MCP "Streamable HTTP" sin sesión, SOLO LECTURA) para las apps de Sebastián:
+// Conectores de Claude (servidores MCP "Streamable HTTP" sin sesión) para las apps de Sebastián. Todo es de lectura,
+// salvo Contratistas: "responder_informe" carga la respuesta al informe de la jefatura (con PDF) en nombre del contratista.
 //   /mcp/barracas/<clave>      Barracas (Correo Argentino · Sucursal N°10): costos, compras, pagos y visitas de obra
 //   /mcp/finanzas/<clave>      Finanzas cliente (V+V): certificados, cobros, gastos y resultado
 //   /mcp/seguimiento/<clave>   Seguimiento V+V (Sebastián y Nicolás): obras, registros, tareas, agenda, personal, gastos
@@ -7,6 +8,8 @@
 import crypto from "crypto";
 import auditoria from "./auditoria.js";
 import { calcCert } from "./_fincalc.js";
+import nexo2 from "./nexo2.js";
+import PDFDocument from "pdfkit";
 
 const NX = process.env.SUPABASE_URL || "https://qaubkwiwtszebdgfrizr.supabase.co";
 const BCO = "https://bxhjgxzvayszfqwlwinq.supabase.co", BCO_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
@@ -114,13 +117,107 @@ const SEGUIMIENTO = {
 /* ---------------- CONTRATISTAS ---------------- */
 async function obrasNombres() { const S = await filas("clave=like.snap_*"); const m = {}; S.forEach((s) => (m[String(s.clave).slice(5)] = (s.valor && s.valor.nombre) || "")); return m; }
 const audTxt = (a) => a ? `Personal: ${a.personal || 0}${a.ociosos ? " (" + a.ociosos + " sin tarea)" : ""}. ` + (a.items || []).map((i) => `${i.n ? i.n + ". " : ""}${i.tarea}: ${EST[i.est] || i.est}${i.est === "avanza" && (i.gente || i.fin) ? " (" + (i.gente || "?") + " personas, termina " + fl(i.fin) + ")" : ""}${i.falta ? " — falta " + i.falta : ""}${i.nota ? " — " + i.nota : ""}`).join("; ") + (a.concl ? ". Conclusión: " + a.concl : "") + (a.inf ? " (respuesta al informe " + (a.inf.semana || "") + ")" : "") : "";
+// llama a la API de NEXO 2 en el mismo proceso (misma lógica y permisos que la app de Contratistas)
+async function nx2(body) { let out = null, st = 200; const res = { setHeader() { return this; }, status(x) { st = x; return this; }, json(x) { out = x; return this; }, send(x) { out = x; return this; }, end() { return this; } }; await nexo2({ method: "POST", body, query: {}, headers: { host: "nexoentorno.vercel.app" } }, res); if (st >= 400 || !out || out.ok === false) throw new Error((out && out.error) || "No se pudo (" + st + ")"); return out; }
+const hoyAR = () => new Date(Date.now() - 108e5).toISOString().slice(0, 10);
+const fAR = (f) => (/^\d{4}-\d{2}-\d{2}/.test(f || "") ? f.slice(8, 10) + "/" + f.slice(5, 7) + "/" + f.slice(0, 4) : f || "—");
+const diasDesdeAR = (f) => { const t = Date.parse((f || "") + "T12:00:00-03:00"); return t ? Math.max(0, Math.floor((Date.now() - t) / 864e5)) : 0; };
+async function buscarCt(obra, quien) {
+  const reg = (await leer("ctcods")) || {}; const L = Array.isArray(reg.items) ? reg.items : []; const ON = await obrasNombres();
+  const q = nrm(quien || "V+V");
+  const mios = L.filter((c) => nrm(c.nombre).includes(q) || q.includes(nrm(c.nombre)));
+  const x = mios.find((c) => coincide(c.obraNombre || ON[c.obra] || c.obra, obra));
+  if (!x) throw new Error(`No encontré a ${quien || "V+V"} como contratista en la obra "${obra}". Obras de ${quien || "V+V"}: ${mios.map((c) => c.obraNombre || ON[c.obra]).join(", ") || "ninguna"}`);
+  return { ...x, obraN: x.obraNombre || ON[x.obra] || x.obra };
+}
+async function informeJefatura(a) {
+  const ON = await obrasNombres(); const id = Object.keys(ON).find((k) => coincide(ON[k], a.obra)); if (!id) return "No encontré esa obra.";
+  const v = await leer("informes_" + id); const I = ((v && v.items) || []).slice().sort((p, q) => (Number(q.fecha) || 0) - (Number(p.fecha) || 0));
+  if (!I.length) return `La obra ${ON[id]} no tiene informes de la jefatura cargados en NEXO 2. Pedile a Sebastián que te dicte los puntos.`;
+  return JSON.stringify({ obra: ON[id], informes: I.slice(0, 2).map((x) => ({ fecha: fl(x.fecha), autor: x.autor, texto: corta(x.resumen || x.txt || "", 6000) })) });
+}
+const TXE = { avanza: "SE PUEDE AVANZAR", material: "NO SE PUEDE: FALTA MATERIAL", definicion: "NO SE PUEDE: FALTA DEFINICIÓN / PLANO", otro: "NO SE PUEDE: OTRO MOTIVO", terminado: "TERMINADO" };
+const COLE = { avanza: "#3F8C5A", material: "#C8463E", definicion: "#CD7D3C", otro: "#CD7D3C", terminado: "#78736A" };
+function conclusionAud(personal, its) {
+  const bl = its.filter((x) => x.est === "material"), def = its.filter((x) => x.est === "definicion" || x.est === "otro"), av = its.filter((x) => x.est === "avanza");
+  let t = `Hoy hay ${personal || "—"} personas en obra.`;
+  if (bl.length) t += ` ${bl.length} tarea${bl.length > 1 ? "s no se pueden" : " no se puede"} avanzar por FALTA DE MATERIAL: ` + bl.map((x) => x.tarea + (x.falta ? ` (falta ${x.falta}${x.pedido ? ", pedido hace " + diasDesdeAR(x.pedido) + " días" : ""})` : "")).join("; ") + ".";
+  if (def.length) t += ` Frenadas por otro motivo: ` + def.map((x) => x.tarea + (x.nota ? ` (${x.nota})` : "")).join("; ") + ".";
+  if (av.length) t += ` Se puede avanzar en: ` + av.map((x) => `${x.tarea} (${x.gente || "?"} personas, termina el ${fAR(x.fin)})`).join(", ") + ".";
+  if (bl.length && av.length) t += " La falta de avance en esas tareas no es por falta de mano de obra: hay personal disponible y lo que falta es el material.";
+  return t;
+}
+function pdfAud({ num, obraN, ctNombre, rubro, fecha, personal, inf, its, concl }) {
+  return new Promise((ok, ko) => {
+    const d = new PDFDocument({ size: "A4", margin: 42 }); const ch = []; d.on("data", (c) => ch.push(c)); d.on("end", () => ok(Buffer.concat(ch))); d.on("error", ko);
+    const W = d.page.width - 84;
+    d.rect(0, 0, d.page.width, 70).fill("#111111"); d.rect(0, 70, d.page.width, 4).fill("#B0894F");
+    d.fillColor("#FFFFFF").font("Helvetica-Bold").fontSize(13).text(`NEXO · RECLAMO N° ${num} · RESPUESTA AL INFORME DE JEFATURA`, 42, 22, { width: W });
+    d.fillColor("#D9B26E").fontSize(11).text(String(obraN || "").toUpperCase(), 42, 44);
+    d.fillColor("#17181C").moveDown(0); d.y = 92;
+    const cs = (k) => its.filter((x) => (k === "otro" ? x.est === "otro" || x.est === "terminado" : x.est === k)).length;
+    d.font("Helvetica-Bold").fontSize(12).text(`Respuesta al informe${inf.semana ? " · " + inf.semana.replace(/\..*$/, "") : ""} · ${its.length - its.filter((x) => x.est !== "avanza" && x.est !== "terminado").length} se hacen, ${its.filter((x) => x.est !== "avanza" && x.est !== "terminado").length} no`);
+    d.moveDown(0.4); d.font("Helvetica").fontSize(9.5).fillColor("#333");
+    [["Informe", inf.semana || "—"], ["Responsable", inf.resp || "—"], ["Responde", `${ctNombre}${rubro ? " (" + rubro + ")" : ""}`], ["Fecha", fAR(fecha)], ["Personas en obra", String(personal || "—")]].forEach(([k, v]) => { const y = d.y; d.font("Helvetica-Bold").text(k, 42, y, { width: 120 }); d.font("Helvetica").text(v, 165, y, { width: W - 123 }); });
+    d.moveDown(0.6); let y = d.y;
+    [["SE PUEDE AVANZAR", cs("avanza"), "#3F8C5A"], ["FALTA MATERIAL", cs("material"), "#C8463E"], ["FALTA DEFINICIÓN", cs("definicion"), "#CD7D3C"], ["OTRO / TERMINADO", cs("otro"), "#78736A"]].forEach(([t, n, c], i) => { const x = 42 + i * (W / 4); d.roundedRect(x, y, W / 4 - 6, 42, 5).fill(c); d.fillColor("#fff").font("Helvetica-Bold").fontSize(16).text(String(n), x + 8, y + 6); d.fontSize(7.5).text(t, x + 8, y + 28); });
+    d.y = y + 56; d.fillColor("#17181C").font("Helvetica-Bold").fontSize(12).text("Estado de cada tarea", 42); d.moveDown(0.3);
+    its.forEach((x) => {
+      if (d.y > 740) d.addPage();
+      const y0 = d.y; d.rect(42, y0, 2.5, 12).fill(COLE[x.est] || "#777");
+      d.fillColor("#1E1E1E").font("Helvetica-Bold").fontSize(10.5).text((x.n ? x.n + ". " : "") + x.tarea, 50, y0, { width: W - 170 });
+      const yA = d.y; d.fillColor(COLE[x.est] || "#777").fontSize(8).text(TXE[x.est] || x.est, 42 + W - 160, y0 + 1, { width: 160, align: "right" }); d.y = Math.max(yA, y0 + 12);
+      d.fillColor("#3C3C3C").font("Helvetica").fontSize(9.2);
+      if (x.est === "avanza") d.text(`Gente asignada: ${x.gente || "—"} · Termina el ${fAR(x.fin)}`, 50, d.y, { width: W - 8 });
+      if (x.est === "material" && x.falta) d.text(`Falta: ${x.falta}${x.pedido ? " · pedido el " + fAR(x.pedido) + " (hace " + diasDesdeAR(x.pedido) + " días)" : " · sin fecha de pedido"}`, 50, d.y, { width: W - 8 });
+      if (x.nota) d.text(x.nota, 50, d.y, { width: W - 8 });
+      d.moveDown(0.6);
+    });
+    if (d.y > 680) d.addPage();
+    d.moveDown(0.4); const yc = d.y; d.font("Helvetica-Bold").fontSize(10).fillColor("#17181C").text("CONCLUSIÓN", 50, yc + 8); d.font("Helvetica").fontSize(9.5).fillColor("#333").text(concl, 50, d.y + 2, { width: W - 16 }); const yf = d.y + 8; d.rect(42, yc, W, yf - yc).lineWidth(0.8).stroke("#B0894F");
+    d.y = yf + 16; d.fontSize(8).fillColor("#888").text(`Generado desde la app Nexo · Contratistas (cargado por voz con Claude) · ${new Date(Date.now() - 108e5).toISOString().slice(0, 16).replace("T", " ")}`, 42, d.y, { width: W });
+    d.end();
+  });
+}
+async function responderInforme(a) {
+  const its = (Array.isArray(a.tareas) ? a.tareas : []).map((t, i) => ({ n: Number(t.n) || undefined, tarea: String(t.tarea || "").trim(), est: ["avanza", "material", "definicion", "otro", "terminado"].includes(t.estado) ? t.estado : "", gente: Number(t.gente) || 0, fin: /^\d{4}-\d{2}-\d{2}$/.test(t.termina || "") ? t.termina : "", falta: String(t.falta || ""), pedido: /^\d{4}-\d{2}-\d{2}$/.test(t.pedido || "") ? t.pedido : "", nota: String(t.nota || ""), fotos: [] })).filter((x) => x.tarea);
+  if (!its.length) return "Faltan las tareas: dictame cada punto y qué pasa con él.";
+  const sinE = its.find((x) => !x.est); if (sinE) return `Falta decir qué pasa con: "${sinE.tarea}" (se puede avanzar, falta material, falta definición, otro motivo o terminado).`;
+  const sinD = its.find((x) => x.est === "avanza" && (!x.gente || !x.fin)); if (sinD) return `En "${sinD.tarea}" falta ${!sinD.gente ? "cuánta gente asignás" : "cuándo queda terminada (fecha)"}.`;
+  const ct = await buscarCt(a.obra, a.contratista);
+  const fecha = /^\d{4}-\d{2}-\d{2}$/.test(a.fecha || "") ? a.fecha : hoyAR(), personal = Number(a.personal) || 0;
+  const inf = { semana: String(a.semana || ""), resp: String(a.responsable || ""), obraTxt: ct.obraN };
+  const concl = String(a.conclusion || "").trim() || conclusionAud(personal, its);
+  const bl = its.filter((x) => x.est !== "avanza" && x.est !== "terminado");
+  const titulo = `Respuesta al informe${inf.semana ? " · " + inf.semana.replace(/\..*$/, "") : ""} · ${its.length - bl.length} se hacen${bl.length ? ", " + bl.length + " no" : ""}`;
+  const resumen = `${ct.nombre} · ${ct.obraN}${inf.semana ? " · " + inf.semana : ""} · ${personal || "?"} personas en obra.\n` + its.map((x) => `${x.n ? x.n + ". " : ""}${x.tarea}: ${TXE[x.est].toLowerCase()}${x.est === "avanza" ? `, ${x.gente} personas, termina el ${fAR(x.fin)}` : ""}${x.est === "material" && x.falta ? `, falta ${x.falta}${x.pedido ? " (pedido el " + fAR(x.pedido) + ")" : ""}` : ""}${x.nota ? " — " + x.nota : ""}`).join("\n") + `\nConclusión: ${concl}`;
+  if (!a.confirmado) return "TODAVÍA NO SE CARGÓ. Leele esto a Sebastián y preguntale si lo cargás (si dice que sí, llamá de nuevo con confirmado=true y los mismos datos):\n" + resumen;
+  const desc = `Respuesta al informe de la jefatura${inf.semana ? " (" + inf.semana + ")" : ""}${inf.resp ? " · Responsable: " + inf.resp : ""}\nFecha: ${fAR(fecha)} · Personas en obra: ${personal || "—"}\n` + its.map((x) => `- ${x.tarea}: ${TXE[x.est].toLowerCase()}${x.est === "avanza" ? ` — ${x.gente} persona${x.gente === 1 ? "" : "s"} asignada${x.gente === 1 ? "" : "s"}, termina el ${fAR(x.fin)}` : ""}${x.est === "material" && x.falta ? " — falta " + x.falta + (x.pedido ? " (pedido el " + fAR(x.pedido) + ", hace " + diasDesdeAR(x.pedido) + " días)" : "") : ""}${x.nota ? " — " + x.nota : ""}`).join("\n") + `\n\nConclusión: ${concl}`;
+  const cred = { rol: "ct", codigo: ct.cod };
+  const d = await nx2({ op: "ct_new", cred, obra: ct.obra, rec: { tipo: "auditoria", titulo, desc, archivos: [], fotos: [], aud: { fecha, personal, ociosos: 0, concl, items: its, reclamos: [], fotosP: [], inf } } });
+  let pdfU = "";
+  try {
+    const buf = await pdfAud({ num: d.rec.num, obraN: ct.obraN, ctNombre: ct.nombre, rubro: ct.rubro, fecha, personal, inf, its, concl });
+    const u = await nx2({ op: "ct_up_url", cred, obra: ct.obra, name: "respuesta-informe.pdf", type: "application/pdf", size: buf.length });
+    const up = await fetch(u.up, { method: "PUT", headers: { "Content-Type": "application/pdf" }, body: buf }); if (!up.ok) throw new Error("subida");
+    await nx2({ op: "ct_pdf", cred, obra: ct.obra, id: d.rec.id, url: u.pub }); pdfU = u.pub;
+  } catch (e) { pdfU = ""; }
+  return `CARGADO ✓ Reclamo N° ${d.rec.num} · ${ct.obraN} · ${titulo}. Le llegó a la Dirección y a la Jefatura.${pdfU ? " PDF: " + pdfU : " (El PDF no se pudo armar ahora: se arma solo al abrir el reclamo en la app de Contratistas.)"}`;
+}
 const CONTRATISTAS = {
   tools: [
     { name: "contratistas", description: "Lista de contratistas dados de alta (empresa, rubro y obras), sin códigos de acceso.", inputSchema: { type: "object", properties: {} } },
     { name: "reclamos", description: "Reclamos, presupuestos, listados de materiales y auditorías que mandaron los contratistas, con estado y si Dirección respondió. Filtros por contratista, obra o solo sin respuesta.", inputSchema: { type: "object", properties: { contratista: { type: "string" }, obra: { type: "string" }, solo_sin_respuesta: { type: "boolean" }, dias: { type: "number", description: "Solo los de los últimos N días" }, cantidad: { type: "number" } } } },
     { name: "reclamo", description: "Detalle completo de un reclamo o auditoría por número (ej 0004): pedido por pedido, historial y respuestas.", inputSchema: { type: "object", properties: { num: { type: "string" } }, required: ["num"] } },
+    { name: "informe_jefatura", description: "Último informe de la jefatura de obra (NEXO 2) de una obra, con su texto, para ir leyéndole a Sebastián los puntos uno por uno antes de responderlos.", inputSchema: { type: "object", properties: { obra: { type: "string" } }, required: ["obra"] } },
+    { name: "responder_informe", description: "CARGA en la app de Contratistas la respuesta al informe de la jefatura (como el contratista, por defecto V+V Construcciones) y arma el PDF, igual que si se hiciera desde la app: le llega a la Dirección y a la Jefatura. Uso: Sebastián dicta cada punto y qué pasa con él. Primero llamala con confirmado=false: devuelve el resumen; leéselo y preguntale si lo cargás. Solo con un sí explícito volvé a llamarla igual con confirmado=true. Estados: avanza (se puede avanzar: pedir cuánta gente y cuándo termina), material (falta material: qué falta y desde cuándo está pedido), definicion (falta definición/plano), otro (otro motivo, en nota), terminado.", inputSchema: { type: "object", properties: {
+      obra: { type: "string" }, contratista: { type: "string", description: "Por defecto V+V" }, semana: { type: "string", description: "Ej: Semana 70. Del 23 al 27 de Noviembre" }, responsable: { type: "string", description: "Jefe de obra que firmó el informe" }, fecha: { type: "string", description: "YYYY-MM-DD, por defecto hoy" }, personal: { type: "number", description: "Personas en obra" },
+      tareas: { type: "array", items: { type: "object", properties: { n: { type: "number" }, tarea: { type: "string" }, estado: { type: "string", enum: ["avanza", "material", "definicion", "otro", "terminado"] }, gente: { type: "number" }, termina: { type: "string", description: "YYYY-MM-DD" }, falta: { type: "string" }, pedido: { type: "string", description: "YYYY-MM-DD en que se pidió el material" }, nota: { type: "string" } }, required: ["tarea", "estado"] } },
+      conclusion: { type: "string" }, confirmado: { type: "boolean" } }, required: ["obra", "tareas"] } },
   ],
   async run(n, a) {
+    if (n === "informe_jefatura") return informeJefatura(a);
+    if (n === "responder_informe") return responderInforme(a);
     const [reg, R, ON] = await Promise.all([leer("ctcods"), filas("clave=like.ctrec_*"), obrasNombres()]);
     const L = (reg && reg.items) || [];
     if (n === "contratistas") { const por = {}; L.forEach((c) => { const k = nrm(c.nombre); (por[k] = por[k] || { empresa: c.nombre, rubro: c.rubro, obras: [] }).obras.push(c.obraNombre || ON[c.obra] || c.obra); }); return JSON.stringify(Object.values(por)); }
