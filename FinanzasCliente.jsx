@@ -3144,6 +3144,26 @@ function contextoDatos(data) {
   // operativo, caja real, imprevistos) va primero: es lo que más se pregunta y así
   // no se pierde si el contexto se recorta más abajo por ser muy largo.
   try { L.push("== RESUMEN FINANCIERO Y RESULTADO (certificados, facturación, caja) =="); L.push(resumenFinanciero(data)); L.push(""); } catch { }
+  // Certificados uno por uno (lo que se cobra en cada uno): va arriba para que no se recorte.
+  try {
+    const obs = ordenarObras(data.obras), cac = data.cacMensual || {};
+    const certsO = (id) => (data.certs || []).filter(c => c.obraId === id).sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : (a.ts || 0) - (b.ts || 0)));
+    const conC = obs.filter(o => certsO(o.id).length);
+    if (conC.length) {
+      L.push("== CERTIFICADOS DE CLIENTE, UNO POR UNO (el último de cada obra es el más reciente; 'neto a cobrar' es lo que hay que cobrar en ese certificado) ==");
+      conC.forEach(o => {
+        const cs = certsO(o.id), q = quincenasObra(o);
+        L.push(`- ${o.nombre} (${cs.length} certificados${q ? ` de ${q} previstos` : ""}):`);
+        cs.forEach((c, i) => {
+          const r = calcCert(c, o, cs, cac), det = detalleRubros(c, o, cs), cP = det.reduce((t, d) => t + d.costoPeriodo, 0);
+          const pEste = r.pc > 0 ? r.bruto / r.pc * 100 : 0;
+          const rub = det.filter(d => d.per > 0).map(d => `${d.nombre} ${Math.round(d.per)}% (acum. ${Math.round(d.pctAcum)}%) ${money(d.clientePeriodo)}`).join("; ");
+          L.push(`    · Cert. N° ${i + 1}${i === cs.length - 1 ? " (ÚLTIMO)" : ""} del ${fmtISO(c.fecha)}: este certificado ${Math.round(pEste)}% de la obra = ${money(r.bruto)}; ajuste CAC ${money(r.ajuste)}${r.provisorio ? " (provisorio, falta CAC)" : ""}; descuento anticipo ${money(r.amort)}; NETO A COBRAR ${money(r.neto)}. Avance general ${Math.round(r.avanceAcum)}%, resta ${money(r.pc - r.pc * r.avanceAcum / 100)}. Costo del período ${money(cP)}.${rub ? ` Rubros: ${rub}.` : ""}${(c.firmas?.cliente || c.firmas?.contratista) ? " Firmado conforme." : ""}`);
+        });
+      });
+      L.push("");
+    }
+  } catch { }
   const obras = ordenarObras(data.obras), gastos = data.gastos || [], movs = data.movimientos || [], propias = ordenarObras(data.propias), soc = data.sociedad || [], edif = data.edificios || [], cont = data.contactos || [], pres = data.presupuestosSoc || [];
   const nomObra = (id) => (obras.find(o => o.id === id) || {}).nombre || "General/sin asignar";
   if (obras.length) { L.push("== OBRAS DE CLIENTE =="); obras.forEach(o => L.push(`- ${o.nombre}: ${num(o.m2) || 0} m2, precio cliente ${m(o.precioCliente)}/m2, costo ${m(o.costoM2)}/m2, plazo ${o.plazoMeses || "?"} meses`)); }
