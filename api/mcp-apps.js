@@ -56,6 +56,7 @@ const FINANZAS = {
   tools: [
     { name: "resumen", description: "Resumen financiero de V+V Construcciones (Finanzas cliente): facturado, costo directo, imprevistos, gastos, cobros, pagos, resultado por obra y total. Información privada de Sebastián.", inputSchema: { type: "object", properties: {} } },
     { name: "certificados", description: "Certificados cargados, los más recientes primero, con su número, fecha de pago, avance acumulado, monto del período, redeterminación, total, descuento de anticipo, neto a cobrar, costo y margen (misma cuenta que la app).", inputSchema: { type: "object", properties: { obra: { type: "string" }, cantidad: { type: "number" } } } },
+    { name: "detalle_certificado", description: "Detalle por rubro de los certificados de una obra: peso de cada rubro, % acumulado cargado en cada certificado, % del período y monto por rubro (misma cuenta que la app).", inputSchema: { type: "object", properties: { obra: { type: "string" } }, required: ["obra"] } },
     { name: "movimientos", description: "Cobros, pagos y gastos cargados en Finanzas (los más recientes primero).", inputSchema: { type: "object", properties: { tipo: { type: "string", enum: ["cobro", "pago", "gasto"] }, cantidad: { type: "number" } } } },
   ],
   async run(n, a) {
@@ -69,6 +70,12 @@ const FINANZAS = {
       const cac = d.cacMensual || {}, de = (id) => (d.certs || []).filter((c) => c.obraId === id).sort((p, q) => (p.fecha < q.fecha ? -1 : p.fecha > q.fecha ? 1 : (p.ts || 0) - (q.ts || 0)));
       return JSON.stringify(C.slice(0, Math.min(60, Number(a.cantidad) || 20)).map((c) => { const o = (d.obras || []).find((x) => x.id === c.obraId); const L = de(c.obraId), nro = L.findIndex((x) => x.id === c.id) + 1; let r = null; try { r = o ? calcCert(c, o, L, cac) : null; } catch { }
         return { obra: obra(c.obraId), certificado_n: nro, fecha: fl(c.fecha), fecha_de_pago: fl(c.fechaPago), avance_acumulado: r ? Math.round(r.avanceAcum) + "%" : "", monto_del_periodo: r ? pesos(r.bruto) : "", redeterminacion: r ? pesos(r.ajuste) + (r.provisorio ? " (provisoria)" : "") : "", total_certificado: r ? pesos(r.ajustado) : "", descuento_anticipo: r && r.amort ? pesos(r.amort) : "", neto_a_cobrar: r ? pesos(r.neto) : "", costo_de_obra_del_periodo: r ? pesos(r.costo) : "", margen: r ? pesos(r.margen) + " (" + Math.round(r.margenPct) + "%)" : "", fotos: (c.adjuntos || []).length }; }));
+    }
+    if (n === "detalle_certificado") {
+      const o = (d.obras || []).find((x) => nrm(x.nombre).includes(nrm(a.obra || ""))); if (!o) return "No encontré esa obra.";
+      const pc = 0;
+      const L = (d.certs || []).filter((c) => c.obraId === o.id).sort((p, q) => (p.fecha < q.fecha ? -1 : p.fecha > q.fecha ? 1 : (p.ts || 0) - (q.ts || 0)));
+      return JSON.stringify({ obra: o.nombre, obraCampos: Object.fromEntries(Object.entries(o).filter(([k, v]) => typeof v !== "object" && !String(v).startsWith("data:"))), rubros: (o.rubros || []).map((r) => ({ id: r.id, nombre: r.nombre || r.n || r.t, peso: r.pct })), certs: L.map((c, i) => ({ n: i + 1, fecha: c.fecha, cantidades: c.cantidades, calc: (() => { try { const r = calcCert(c, o, L, d.cacMensual || {}); return { pc: Math.round(r.pc), bruto: Math.round(r.bruto), avanceAcum: r.avanceAcum }; } catch (e) { return String(e); } })() })) });
     }
     if (n === "movimientos") { let M = [...(d.movimientos || []).map((m) => ({ ...m, clase: m.tipo })), ...(d.gastos || []).map((g) => ({ ...g, clase: "gasto" }))]; if (a.tipo) M = M.filter((m) => m.clase === a.tipo); M.sort((p, q) => ts(q.fecha) - ts(p.fecha) || (q.ts || 0) - (p.ts || 0)); return JSON.stringify(M.slice(0, Math.min(80, Number(a.cantidad) || 30)).map((m) => sinB64({ ...m, obra: m.obraId ? obra(m.obraId) : m.obra }))); }
   },
