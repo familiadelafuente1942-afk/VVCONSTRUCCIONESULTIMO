@@ -833,6 +833,29 @@ export default async function handler(req, res) {
         await escribir(H, clave, { items: items.slice(-500) });
         res.status(200).json({ ok: true, rec }); return;
       }
+      if (b.op === "ct_aud_cumplir") {
+        // marcar tareas de una auditoría / respuesta al informe como cumplidas (o desmarcarlas)
+        const id = idOk(b.id);
+        const v = await leer(H, clave);
+        const items = ((v && v.items) || []);
+        const it = items.find((x) => x.id === id);
+        if (!it || !it.aud || !Array.isArray(it.aud.items)) { res.status(404).json({ error: "No existe esa auditoría" }); return; }
+        if (quien === "ct" && it.ctId !== ct.id) { res.status(403).json({ error: "No es tu reclamo" }); return; }
+        const t = Date.now(), si = [], no = [];
+        (Array.isArray(b.marcas) ? b.marcas : []).slice(0, 80).forEach((m) => {
+          const k = Number(m && m.i); const x = it.aud.items[k]; if (!x) return;
+          const nom = (x.n ? x.n + ". " : "") + (x.tarea || "");
+          if (m.ok && !x.cumplida) { x.cumplida = t; si.push(nom); }
+          else if (!m.ok && x.cumplida) { x.cumplida = 0; no.push(nom); }
+        });
+        if (!si.length && !no.length) { res.status(400).json({ error: "No cambiaste ninguna tarea" }); return; }
+        const nom = quien === "ct" ? ct.nombre : quien === "dir" ? "Dirección" : "Jefatura de obra";
+        const tx = (si.length ? "Tareas cumplidas: " + si.join("; ") : "") + (si.length && no.length ? " · " : "") + (no.length ? "Vuelven a pendiente: " + no.join("; ") : "");
+        it.hist = (Array.isArray(it.hist) ? it.hist : []).concat([{ t, por: quien === "ct" ? "ct" : quien, nom, tx }]).slice(-100);
+        it.editado = t;
+        await escribir(H, clave, { items });
+        res.status(200).json({ ok: true, rec: it }); return;
+      }
       if (b.op === "ct_cmt") {
         const id = idOk(b.id);
         const v = await leer(H, clave);
