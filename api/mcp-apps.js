@@ -12,6 +12,10 @@ const NX = process.env.SUPABASE_URL || "https://qaubkwiwtszebdgfrizr.supabase.co
 const BCO = "https://bxhjgxzvayszfqwlwinq.supabase.co", BCO_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
 const HUELLAS = { barracas: "561e17712ad3ead64d53ea5f861f1d2201ddebc8e394555a015a243d66023c41", finanzas: "10a3995de887f9aa2f89ee538fb63801c31650bc07fef021ecaa5a259007bcb5", seguimiento: "995743aaa829744b3f4b9a52420fb7e684b63641f14f62fe7c606d7edcad3423", contratistas: "6b8988264c0ca1cacf2489c817a62e662de4982b3ba24cad5d14624cddf7ab74" };
 const nrm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
+// Nombre de obra flexible: "Puentes 246" encuentra "Los puentes Lote 246" (ignora los/lote/casa/obra/barrio/nro y el orden).
+const SOBRA = /\b(los|las|el|la|de|del|lote|lt|casa|obra|barrio|nro|n|numero|nº|no)\b/g;
+const tok = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(SOBRA, " ").split(/\s+/).filter(Boolean);
+const coincide = (nombre, q) => { if (!q) return true; if (nrm(nombre).includes(nrm(q))) return true; const tq = tok(q), tn = tok(nombre); return tq.length > 0 && tq.every((t) => tn.some((w) => w === t || (t.length > 3 && w.startsWith(t)))); };
 const pesos = (n) => "$ " + Math.round(Number(n) || 0).toLocaleString("es-AR");
 const fl = (t) => { if (!t) return ""; if (typeof t === "string" && /^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(8, 10) + "/" + t.slice(5, 7) + "/" + t.slice(0, 4); const d = new Date(Number(t) - 108e5); return isNaN(d) ? String(t) : String(d.getUTCDate()).padStart(2, "0") + "/" + String(d.getUTCMonth() + 1).padStart(2, "0") + "/" + d.getUTCFullYear(); };
 const ts = (v) => { if (!v) return 0; if (typeof v === "number") return v; const p = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(v) ? v + "T12:00:00-03:00" : v); return isNaN(p) ? 0 : p; };
@@ -66,13 +70,13 @@ const FINANZAS = {
     if (n === "resumen") return JSON.stringify(sinB64({ obras: (d.obras || []).map((o) => o.nombre), certificados: (d.certs || []).length }));
     if (n === "certificados") {
       // montos calculados con la misma cuenta que la app (avance del período, redeterminación, anticipo, costo y margen)
-      let C = (d.certs || []).slice().sort((p, q) => String(q.fecha).localeCompare(String(p.fecha)) || (q.ts || 0) - (p.ts || 0)); if (a.obra) C = C.filter((c) => nrm(obra(c.obraId)).includes(nrm(a.obra)));
+      let C = (d.certs || []).slice().sort((p, q) => String(q.fecha).localeCompare(String(p.fecha)) || (q.ts || 0) - (p.ts || 0)); if (a.obra) C = C.filter((c) => coincide(obra(c.obraId), a.obra));
       const cac = d.cacMensual || {}, de = (id) => (d.certs || []).filter((c) => c.obraId === id).sort((p, q) => (p.fecha < q.fecha ? -1 : p.fecha > q.fecha ? 1 : (p.ts || 0) - (q.ts || 0)));
       return JSON.stringify(C.slice(0, Math.min(60, Number(a.cantidad) || 20)).map((c) => { const o = (d.obras || []).find((x) => x.id === c.obraId); const L = de(c.obraId), nro = L.findIndex((x) => x.id === c.id) + 1; let r = null; try { r = o ? calcCert(c, o, L, cac) : null; } catch { }
         return { obra: obra(c.obraId), certificado_n: nro, fecha: fl(c.fecha), fecha_de_pago: fl(c.fechaPago), avance_acumulado: r ? Math.round(r.avanceAcum) + "%" : "", monto_del_periodo: r ? pesos(r.bruto) : "", redeterminacion: r ? pesos(r.ajuste) + (r.provisorio ? " (provisoria)" : "") : "", total_certificado: r ? pesos(r.ajustado) : "", descuento_anticipo: r && r.amort ? pesos(r.amort) : "", neto_a_cobrar: r ? pesos(r.neto) : "", costo_de_obra_del_periodo: r ? pesos(r.costo) : "", margen: r ? pesos(r.margen) + " (" + Math.round(r.margenPct) + "%)" : "", fotos: (c.adjuntos || []).length }; }));
     }
     if (n === "detalle_certificado") {
-      const o = (d.obras || []).find((x) => nrm(x.nombre).includes(nrm(a.obra || ""))); if (!o) return "No encontré esa obra.";
+      const o = (d.obras || []).find((x) => coincide(x.nombre, a.obra || "")); if (!o) return "No encontré esa obra.";
       const pc = 0;
       const L = (d.certs || []).filter((c) => c.obraId === o.id).sort((p, q) => (p.fecha < q.fecha ? -1 : p.fecha > q.fecha ? 1 : (p.ts || 0) - (q.ts || 0)));
       return JSON.stringify({ obra: o.nombre, obraCampos: Object.fromEntries(Object.entries(o).filter(([k, v]) => typeof v !== "object" && !String(v).startsWith("data:"))), rubros: (o.rubros || []).map((r) => ({ id: r.id, nombre: r.nombre || r.n || r.t, peso: r.pct })), certs: L.map((c, i) => ({ n: i + 1, fecha: c.fecha, cantidades: c.cantidades, calc: (() => { try { const r = calcCert(c, o, L, d.cacMensual || {}); return { pc: Math.round(r.pc), bruto: Math.round(r.bruto), avanceAcum: r.avanceAcum }; } catch (e) { return String(e); } })() })) });
@@ -124,7 +128,7 @@ const CONTRATISTAS = {
     const resp = (x) => (x.hist || []).some((h) => h.por === "dir");
     if (n === "reclamo") { const x = X.find((y) => nrm(y.num) === nrm(a.num) || String(Number(y.num)) === String(Number(a.num))); if (!x) return "No encontré ese número."; return JSON.stringify({ num: x.num, obra: x.obraN, contratista: x.ctNombre, rubro: x.rubro, tipo: x.tipo, titulo: x.titulo, estado: x.estado, fecha: fl(x.creado), detalle: x.tipo === "auditoria" ? audTxt(x.aud) : corta(x.desc, 3000), monto: x.monto ? pesos(x.monto) : undefined, fotos: (x.fotos || []).length, historial: (x.hist || []).map((h) => fl(h.t) + " " + (h.por === "dir" ? "Dirección" : h.nom || "Contratista") + ": " + corta(h.tx, 500)) }); }
     if (a.contratista) X = X.filter((x) => nrm(x.ctNombre).includes(nrm(a.contratista)));
-    if (a.obra) X = X.filter((x) => nrm(x.obraN).includes(nrm(a.obra)));
+    if (a.obra) X = X.filter((x) => coincide(x.obraN, a.obra));
     if (a.dias) X = X.filter((x) => (x.creado || 0) >= Date.now() - Number(a.dias) * 864e5);
     if (a.solo_sin_respuesta) X = X.filter((x) => !resp(x) && !/resuelto|cerrado/.test(x.estado || ""));
     return JSON.stringify({ cantidad: X.length, items: X.slice(0, Math.min(60, Number(a.cantidad) || 20)).map((x) => ({ num: x.num, fecha: fl(x.creado), obra: x.obraN, contratista: x.ctNombre, tipo: x.tipo, titulo: x.titulo, estado: x.estado, respondido: resp(x), resumen: x.tipo === "auditoria" ? corta(audTxt(x.aud), 600) : corta(x.desc, 300) })) });

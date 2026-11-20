@@ -32,7 +32,10 @@ async function cartera(H) {
   });
 }
 const nombreDe = (O, id) => (O.find((o) => o.id === id) || {}).nombre || id;
-const buscarObra = (O, q) => { const n = nrm(q); return O.find((o) => nrm(o.id) === n || nrm(o.nombre) === n) || O.find((o) => nrm(o.nombre).includes(n) || (n.length > 3 && n.includes(nrm(o.nombre)))) || null; };
+const SOBRA = /\b(los|las|el|la|de|del|lote|lt|casa|obra|barrio|nro|n|numero|nº|no)\b/g;
+const tok = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(SOBRA, " ").split(/\s+/).filter(Boolean);
+const coincideTok = (nombre, q) => { const tq = tok(q), tn = tok(nombre); return tq.length > 0 && tq.every((t) => tn.some((w) => w === t || (t.length > 3 && w.startsWith(t)))); };
+const buscarObra = (O, q) => { const n = nrm(q); return O.find((o) => nrm(o.id) === n || nrm(o.nombre) === n) || O.find((o) => nrm(o.nombre).includes(n) || (n.length > 3 && n.includes(nrm(o.nombre)))) || O.find((o) => coincideTok(o.nombre, q)) || null; };
 
 async function reclamos(H, O) {
   const R = await filas(H, "clave=like.ctrec_*"); const out = [];
