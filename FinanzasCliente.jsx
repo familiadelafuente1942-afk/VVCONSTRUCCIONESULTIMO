@@ -55,18 +55,20 @@ function ordenarObras(arr) {
   });
 }
 const BRASS = "#B0894F";
-const T_LIGHT = { navy: "#0B1622", accent: "#1B3A5B", al: "#EEF2F7", bg: "#F5F5F7", card: "#FFFFFF", border: "#E8EAED", text: "#0B1622", sub: "#5B6673", muted: "#98A2B0", ok: "#16A34A", warn: "#B45309", rsm: 12, inpBg: "#FBFBFD", navBar: "rgba(255,255,255,.86)", dark: false };
-const T_DARK = { navy: "#05070B", accent: "#7FB0EA", al: "#1B222C", bg: "#0C0F14", card: "#161B22", border: "#2A313C", text: "#EEF1F5", sub: "#AEB6C2", muted: "#6C7683", ok: "#3DDC84", warn: "#F5B44C", rsm: 12, inpBg: "#0F141B", navBar: "rgba(18,22,29,.86)", dark: true };
+const T_LIGHT = { navy: "#9A7238", accent: "#8A6326", al: "rgba(151,105,42,.11)", bg: "rgba(236,238,243,.62)", card: "rgba(255,255,255,.66)", border: "rgba(0,0,0,.08)", text: "#17181C", sub: "#4E525B", muted: "#6A6E77", ok: "#1F8A4C", warn: "#C8620F", rsm: 12, inpBg: "rgba(255,255,255,.7)", navBar: "rgba(244,245,250,.72)", dark: false, page: "#ECEEF3", hi: "rgba(255,255,255,.95)", sh: "rgba(40,40,70,.18)" };
+const T_DARK = { navy: "#9A7238", accent: "#C79C55", al: "rgba(184,145,90,.15)", bg: "rgba(255,255,255,.045)", card: "rgba(255,255,255,.07)", border: "rgba(255,255,255,.10)", text: "#ECE8E1", sub: "#C9C4BB", muted: "#8F8B84", ok: "#3FA66B", warn: "#E5813A", rsm: 12, inpBg: "rgba(255,255,255,.07)", navBar: "rgba(18,19,23,.66)", dark: true, page: "#0D0E10", hi: "rgba(255,255,255,.30)", sh: "rgba(0,0,0,.5)" };
 let T = T_LIGHT;
-const buildInp = (t) => ({ width: "100%", background: t.inpBg, border: `1px solid ${t.border}`, borderRadius: 10, padding: "12px 13px", fontSize: 16, color: t.text, boxSizing: "border-box", marginTop: 6, outline: "none", fontVariantNumeric: "tabular-nums" });
-const buildInpSm = (t) => ({ background: t.inpBg, border: `1px solid ${t.border}`, borderRadius: 9, padding: "10px 8px", fontSize: 15, color: t.text, boxSizing: "border-box", outline: "none" });
+const buildInp = (t) => ({ width: "100%", background: t.inpBg, border: `1px solid ${t.border}`, borderRadius: 14, padding: "12px 13px", fontSize: 16, color: t.text, boxSizing: "border-box", marginTop: 6, outline: "none", fontVariantNumeric: "tabular-nums" });
+const buildInpSm = (t) => ({ background: t.inpBg, border: `1px solid ${t.border}`, borderRadius: 12, padding: "10px 8px", fontSize: 15, color: t.text, boxSizing: "border-box", outline: "none" });
 let inp = buildInp(T), inpSm = buildInpSm(T);
 const FUENTES = [["", "Inter", "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif"], ["sistema", "Sistema", "-apple-system,system-ui,'Segoe UI',Roboto,sans-serif"], ["serif", "Serif clásica", "'Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif"], ["redonda", "Redondeada", "'SF Pro Rounded','Varela Round',ui-rounded,system-ui,sans-serif"], ["elegante", "Elegante", "'Optima','Avenir Next',Avenir,system-ui,sans-serif"], ["mono", "Mono", "'SF Mono','JetBrains Mono',ui-monospace,Menlo,monospace"]];
 const FUENTE_UNICA = "'Playfair Display',Georgia,serif";
 const fuenteDe = (cfg) => FUENTE_UNICA;
 const FONDOS_DARK = [["", "Negro", "#0C0F14"], ["carbon", "Carbón", "linear-gradient(160deg,#141A22,#05070B)"], ["navy", "Navy", "linear-gradient(160deg,#0E1728,#06090F)"], ["vino", "Vino", "linear-gradient(160deg,#1C1016,#0A0608)"], ["bosque", "Bosque", "linear-gradient(160deg,#0E1613,#050807)"], ["violeta", "Violeta", "linear-gradient(160deg,#16121F,#08060C)"]];
-const SHD = "0 1px 2px rgba(11,22,34,.04), 0 8px 24px -8px rgba(11,22,34,.10)";
-const SHDsm = "0 1px 2px rgba(11,22,34,.05), 0 2px 8px -4px rgba(11,22,34,.08)";
+let SHD = "inset 0 1px 0 rgba(255,255,255,.95), inset 0 0 0 .5px rgba(0,0,0,.08), 0 10px 22px -14px rgba(40,40,70,.18)";
+let SHDsm = "inset 0 1px 0 rgba(255,255,255,.95), inset 0 0 0 .5px rgba(0,0,0,.08)";
+function aplicarTema(t) { SHD = `inset 0 1px 0 ${t.hi}, inset 0 0 0 .5px ${t.border}, 0 10px 22px -14px ${t.sh}`; SHDsm = `inset 0 1px 0 ${t.hi}, inset 0 0 0 .5px ${t.border}`; }
+const GEMA = "linear-gradient(160deg, #D4AA62 0%, #9A7238 100%)";
 /* Las dos formas en que V+V toma una obra:
    · Obra completa  → incluye la estructura de hormigón.
    · Sin estructura → la estructura la hace otro; nosotros arrancamos en albañilería. */
@@ -173,7 +175,7 @@ const FONDOS = [
   ["navy", "Navy suave", "linear-gradient(160deg,#DDE3EE,#AAB6CC)"],
   ["dorado", "Dorado", "linear-gradient(160deg,#F3EAD3,#DEC58A)"],
 ];
-function fondoDe(cfg) { const dark = cfg?.modo === "oscuro"; if (cfg?.fondoUrl) { const ov = dark ? "rgba(12,15,20,.82)" : "rgba(245,245,247,.82)"; return `linear-gradient(${ov},${ov}), url("${cfg.fondoUrl}") center/cover fixed no-repeat`; } if (dark) { const f = FONDOS_DARK.find(x => x[0] === (cfg?.fondoDark || "")); return f ? f[2] : "#0C0F14"; } const f = FONDOS.find(x => x[0] === (cfg?.fondo || "")); return f ? f[2] : "#F5F5F7"; }
+function fondoDe(cfg) { const dark = cfg?.modo === "oscuro"; const amb = dark ? "radial-gradient(50% 32% at 15% 58%,rgba(201,162,75,.20),transparent 70%),radial-gradient(45% 30% at 88% 42%,rgba(91,128,200,.20),transparent 70%),radial-gradient(40% 26% at 60% 92%,rgba(201,162,75,.14),transparent 70%),radial-gradient(120% 46% at 92% -4%,rgba(184,145,90,.16),transparent 62%),radial-gradient(90% 40% at 0% 38%,rgba(70,110,190,.12),transparent 70%),#0D0E10" : "radial-gradient(50% 32% at 15% 58%,rgba(201,162,75,.20),transparent 70%),radial-gradient(45% 30% at 88% 42%,rgba(91,128,200,.20),transparent 70%),radial-gradient(40% 26% at 60% 92%,rgba(201,162,75,.14),transparent 70%),radial-gradient(120% 46% at 92% -4%,rgba(184,145,90,.22),transparent 62%),radial-gradient(90% 40% at 0% 38%,rgba(110,150,225,.2),transparent 70%),#ECEEF3"; if (cfg?.fondoUrl) { const ov = dark ? "rgba(12,13,16,.82)" : "rgba(236,238,243,.82)"; return `linear-gradient(${ov},${ov}), url("${cfg.fondoUrl}") center/cover fixed no-repeat`; } return amb; }
 const esImprev = (cat) => IMPREV_CATS.includes(cat);
 function logH(d, accion) { const h = d.historial || []; return { ...d, historial: [...h, { id: Math.random().toString(36).slice(2, 9), accion, t: new Date().toLocaleString("es-AR"), ts: Date.now() }].slice(-250) }; }
 const mesDe = (iso) => String(iso || "").slice(0, 7);
@@ -414,7 +416,7 @@ function TablaPreciosTab({ data, save }) {
       <button onClick={guardarBase} style={{ marginTop: 10, width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Guardar valor base</button>
     </div>
 
-    <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 16, padding: 18, marginBottom: 12, textAlign: "center", boxShadow: SHD }}>
+    <div style={{ background: GEMA, color: "#fff", borderRadius: 16, padding: 18, marginBottom: 12, textAlign: "center", boxShadow: SHD }}>
       <div style={{ fontSize: 10, opacity: .7, textTransform: "uppercase", letterSpacing: "0.08em" }}>Valor hoy ({nomMesCorto(hoyMes)})</div>
       <div style={{ fontSize: 26, fontWeight: 800, marginTop: 4 }}>{money(precioHoy)}</div>
       <div style={{ fontSize: 11, opacity: .75, marginTop: 4 }}>Base {money(valorBase)} en {nomMesCorto(mesBase)} · acumulado {(factorHoy * 100 - 100).toFixed(2)}%</div>
@@ -811,7 +813,7 @@ function CajaParticular({ data, save }) {
 
   return (<div>
     {/* saldo disponible + hasta dónde alcanza */}
-    <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 14, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
+    <div style={{ background: GEMA, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 14, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Me queda disponible</div>
       <div style={{ fontSize: 38, fontWeight: 800, margin: "6px 0 2px", color: disponible >= 0 ? "#7DE0A6" : "#FCA5A5", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{money(disponible)}</div>
       {asignaciones.length > 0 && (
@@ -1102,7 +1104,7 @@ function Sel({ value, onChange, style, children, disabled }) {
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cur ? cur.l : ""}</span>
         <span style={{ fontSize: 11, opacity: 0.6 }}>▾</span>
       </button>
-      {open && <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 1000, maxHeight: 300, overflowY: "auto", background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, boxShadow: "0 12px 30px rgba(0,0,0,.25)" }}>
+      {open && <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 1000, maxHeight: 300, overflowY: "auto", background: T.page, border: `1px solid ${T.border}`, borderRadius: 10, boxShadow: "0 12px 30px rgba(0,0,0,.25)" }}>
         {items.map((it, k) => { const head = it.g && it.g !== lastG ? (lastG = it.g, <div key={"g" + k} style={{ padding: "8px 12px 4px", fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase" }}>{it.g}</div>) : null; return (<React.Fragment key={k}>{head}
           <div onClick={() => { if (it.d) return; onChange({ target: { value: it.v } }); setOpen(false); }} style={{ padding: "11px 14px", fontSize: 14, color: it.d ? T.muted : T.text, cursor: it.d ? "default" : "pointer", background: it.v === String(value ?? "") ? T.al : "transparent", fontWeight: it.v === String(value ?? "") ? 700 : 500 }}>{it.l}</div></React.Fragment>); })}
       </div>}
@@ -1353,64 +1355,297 @@ function CobrosGeneralesTab() {
 
 
 
+// ═══════════ ENTORNO (igual que NEXO 2 / Seguimiento): vidrio, barra inferior flotante, Playfair
+const ICO = {
+  ia: <path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />,
+  precios: <><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z" /><circle cx="7.5" cy="7.5" r="1.5" /></>,
+  presupuesto: <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M9 13h6M9 17h6" /></>,
+  cliente: <><rect x="6" y="4" width="12" height="17" rx="2" /><path d="M9 4V3h6v1M9 13l2 2 4-4" /></>,
+  cobrosgen: <><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18M7 15h4" /></>,
+  obra: <><path d="M3 21h18M5 21V8l7-5 7 5v13" /><path d="M9 21v-6h6v6" /></>,
+  certs: <><path d="M9 11l3 3 8-8" /><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9" /></>,
+  ajustes: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></>,
+};
+function Ico({ k, s = 22 }) { return <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ICO[k]}</svg>; }
+function cssEntorno(t) {
+  return `*{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;box-sizing:border-box}*:focus{outline:none}
+html,body,#root,*{font-family:'Playfair Display',Georgia,serif !important}
+body{margin:0;background:${t.page};overscroll-behavior:none;-webkit-text-size-adjust:100%}
+input,select,textarea{color:${t.text};background:${t.inpBg};font-size:16px}
+input:focus,select:focus,textarea:focus{border-color:${BRASS}!important;box-shadow:0 0 0 3px rgba(176,137,79,.14)}
+::selection{background:rgba(176,137,79,.22)}
+button{-webkit-tap-highlight-color:transparent;transition:opacity .15s,transform .05s;font-family:inherit}button:active{transform:scale(.985)}
+select{color-scheme:${t.dark ? "dark" : "light"}}select option,select optgroup{color:#111!important;background-color:#fff!important;-webkit-text-fill-color:#111!important}
+input::placeholder,textarea::placeholder{color:${t.muted}}
+input[type=date],input[type=month]{-webkit-appearance:none;appearance:none;min-height:46px}
+.vv-body{padding-bottom:calc(112px + env(safe-area-inset-bottom,0px));max-width:1180px;margin:0 auto}
+.vv-glass{background:${t.navBar};-webkit-backdrop-filter:blur(22px) saturate(1.8);backdrop-filter:blur(22px) saturate(1.8)}
+.vv-nav{position:fixed;left:0;right:0;bottom:0;z-index:60;display:flex;justify-content:center;padding:0 12px calc(12px + env(safe-area-inset-bottom,0px));pointer-events:none}
+.vv-nav .in{pointer-events:auto;display:flex;gap:2px;width:100%;max-width:640px;padding:6px;border-radius:999px;background:${t.navBar};-webkit-backdrop-filter:blur(24px) saturate(1.8);backdrop-filter:blur(24px) saturate(1.8);box-shadow:inset 0 1px 0 ${t.hi},inset 0 0 0 .5px ${t.border},0 16px 30px -10px ${t.sh}}
+.vv-nav button{flex:1;border:0;background:none;padding:7px 2px 6px;border-radius:999px;font-size:10.5px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px;color:${t.dark ? "#F3EFE8" : "#2A2B31"};cursor:pointer;min-width:0;white-space:nowrap}
+.vv-nav button[aria-current=page]{color:${t.dark ? "#E8C585" : "#97692A"};background:linear-gradient(158deg,${t.dark ? "rgba(255,255,255,.17)" : "rgba(255,255,255,.85)"} 0%,${t.dark ? "rgba(255,255,255,.035)" : "rgba(255,255,255,.25)"} 42%,${t.dark ? "rgba(255,255,255,.075)" : "rgba(255,255,255,.45)"} 100%);box-shadow:inset 0 1.5px 1px ${t.dark ? "rgba(255,255,255,.55)" : "#fff"},inset 0 0 0 1px ${t.dark ? "rgba(255,255,255,.26)" : "rgba(255,255,255,.95)"},0 8px 16px -10px ${t.sh}}
+.vv-rbtn{width:38px;height:38px;border-radius:999px;border:0;display:flex;align-items:center;justify-content:center;cursor:pointer;color:${t.text};background:${t.card};box-shadow:inset 0 1px 0 ${t.hi},inset 0 0 0 .5px ${t.border},0 8px 16px -12px ${t.sh};font-size:15px}
+.vv-pcard{position:relative;min-height:170px;border:0;border-radius:24px;overflow:hidden;background-size:cover;background-position:center;padding:0;text-align:left;display:flex;align-items:flex-end;cursor:pointer;width:100%;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 18px 30px -18px ${t.sh};transition:transform .25s ease}
+.vv-pcard:hover{transform:translateY(-2px)}
+.vv-pcard .sh{position:absolute;inset:0;background:linear-gradient(90deg,rgba(8,8,10,.94) 0%,rgba(8,8,10,.74) 48%,rgba(8,8,10,.2) 100%)}
+.vv-pcard .pin{position:relative;display:flex;flex-direction:column;gap:5px;padding:20px 22px;max-width:86%}
+.vv-pcard .pe{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#D9B26E;font-weight:700}
+.vv-pcard .pt{font-size:21px;letter-spacing:.04em;text-transform:uppercase;color:#F3EFE8;line-height:1.2;font-weight:600}
+.vv-pcard .pd{font-size:13.5px;color:#D6D0C6;line-height:1.4}
+.vv-pcard .pg{font-size:13px;color:#D9B26E;font-weight:700;margin-top:3px}
+.vv-gema{background:${GEMA};color:#2A1C05;border:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 8px 14px -8px rgba(199,156,85,.9)}
+@media(min-width:1700px){.vv-body{max-width:1560px}}`;
+}
+function hoyLargo() { try { return new Date().toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short", year: "numeric" }).replace(/\./g, ""); } catch { return ""; } }
+function Encabezado({ cfg, titulo, sub, logo, marca, children }) {
+  return <div className="vv-glass" style={{ position: "sticky", top: 0, zIndex: 50, borderBottom: `.5px solid ${T.border}`, padding: "calc(10px + env(safe-area-inset-top)) 16px 10px" }}>
+    <div style={{ maxWidth: 1180, margin: "0 auto" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+          <div style={{ width: 24, height: 24, borderRadius: 7, overflow: "hidden", background: logo ? "#fff" : "#111", display: "flex", alignItems: "center", justifyContent: "center", color: "#E8C585", fontSize: 8.5, fontWeight: 800 }}>{logo ? <img src={logo} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : (marca || "V+V")}</div>
+          <span style={{ fontSize: 12, letterSpacing: ".16em", textTransform: "uppercase", color: T.accent, fontWeight: 600 }}>{marca === "B" ? "Belfast" : "V + V"}</span>
+        </div>
+        <span style={{ fontSize: 12, color: T.muted }}>{hoyLargo()}</span>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 8 }}>
+        <div style={{ minWidth: 0 }}><b style={{ fontSize: 15, color: T.text }}>{titulo}</b><span style={{ fontSize: 11, letterSpacing: ".12em", textTransform: "uppercase", color: T.accent, fontWeight: 700, marginLeft: 8 }}>{sub}</span></div>
+        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>{children}</div>
+      </div>
+    </div>
+  </div>;
+}
+function NavInferior({ items, actual, onIr }) {
+  return <nav className="vv-nav"><div className="in">{items.map(([k, l, ic]) => <button key={k} aria-current={actual === k ? "page" : undefined} onClick={() => { onIr(k); try { window.scrollTo({ top: 0 }); } catch { } }}><Ico k={ic || k} /><span>{l}</span></button>)}</div></nav>;
+}
+function Portada({ onElegir }) {
+  const P = [["vv", "/finanzas/panel-constructora.jpg", "Finanzas y certificaciones", "V+V Construcciones", "Valores por m², presupuestos, certificados y cobros de V+V."], ["belfast", "/finanzas/panel-estudio.jpg", "Panel privado · con contraseña", "Belfast", "Tu presupuesto al propietario y tus certificados, armados con el avance de cada certificado de V+V."]];
+  return <div style={{ maxWidth: 640, margin: "0 auto", padding: "22px 16px 40px" }}>
+    <div style={{ fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: T.muted, fontWeight: 700, margin: "6px 0 12px" }}>Ingresá a tu panel</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {P.map(([k, img, e, t, d]) => <button key={k} className="vv-pcard" style={{ backgroundImage: `url('${img}')` }} onClick={() => onElegir(k)}>
+        <span className="sh" /><span className="pin"><span className="pe">{e}</span><span className="pt">{t}</span><span className="pd">{d}</span><span className="pg">Entrar →</span></span>
+      </button>)}
+    </div>
+  </div>;
+}
+
 export default function App() {
   const [data, save, refrescar] = useFinanzas();
   const [refrescando, setRefrescando] = useState(false);
   const [okMsg, setOkMsg] = useState("");
-  async function actualizar() { setRefrescando(true); const ok = await refrescar(); setRefrescando(false); setOkMsg(ok ? "Actualizado ✓" : "Sin cambios"); setTimeout(() => setOkMsg(""), 2000); }
+  async function actualizar() { setRefrescando(true); const ok = await refrescar(); setRefrescando(false); setOkMsg(ok ? "✓" : "="); setTimeout(() => setOkMsg(""), 2000); }
   useEffect(() => { const t = setTimeout(() => { try { storage.set("vv_finanzas_resumen", resumenFinanciero(data)); } catch { } }, 1500); return () => clearTimeout(t); }, [data]);
+  const [panel, setPanelSt] = useState(() => { try { const q = new URLSearchParams(location.search).get("panel"); if (q === "belfast" || q === "vv") return q; return localStorage.getItem("fin_panel") || ""; } catch { return ""; } });
+  const setPanel = (p) => { setPanelSt(p); try { if (p) localStorage.setItem("fin_panel", p); else localStorage.removeItem("fin_panel"); } catch { } try { window.scrollTo({ top: 0 }); } catch { } };
   const [tab, setTab] = useState("precios");
   const [certcliModo, setCertcliModo] = useState("obra"); // "obra" | "general"
-  const [certcostoModo, setCertcostoModo] = useState("obra"); // "obra" | "general"
   const [verConfig, setVerConfig] = useState(false);
   const cfg = data.config || {};
-  T = cfg.modo === "oscuro" ? T_DARK : T_LIGHT; inp = buildInp(T); inpSm = buildInpSm(T);
+  T = cfg.modo === "oscuro" ? T_DARK : T_LIGHT; inp = buildInp(T); inpSm = buildInpSm(T); aplicarTema(T);
   const obras = ordenarObras(data.obras), certs = data.certs || [], indices = data.cacMensual || {};
   const certsDe = (id) => certs.filter(c => c.obraId === id).sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : (a.ts || 0) - (b.ts || 0)));
-  return (<div style={{ minHeight: "100vh", background: fondoDe(cfg), fontFamily: fuenteDe(cfg), width: "100%", color: T.text }}>
-    <style>{`*{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}*:focus{outline:none}input:focus,select:focus{border-color:${BRASS}!important;box-shadow:0 0 0 3px rgba(176,137,79,.12)}::selection{background:rgba(176,137,79,.20)}button{-webkit-tap-highlight-color:transparent;transition:opacity .15s,transform .05s}button:active{transform:scale(.985)}body{margin:0}input,select,textarea{color:${T.text};background:${T.inpBg}}html,body,#root,*{font-family:'Playfair Display',Georgia,serif !important}select{color-scheme:light}select option,select optgroup{color:#111!important;background-color:#fff!important;-webkit-text-fill-color:#111!important}input::placeholder,textarea::placeholder{color:${T.muted}}@media(min-width:1700px){.vv-body{padding-left:calc((100% - 1560px)/2);padding-right:calc((100% - 1560px)/2)}}`}</style>
-    <div style={{ background: `linear-gradient(180deg, #0E1B2B 0%, ${T.navy} 100%)`, color: "#fff", padding: "calc(14px + env(safe-area-inset-top)) 16px 16px", textAlign: "center" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <button onClick={actualizar} title="Actualizar" style={{ background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 9, height: 34, padding: "0 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>↻ {okMsg || (refrescando ? "..." : "Actualizar")}</button>
-        <button onClick={() => setVerConfig(true)} title="Personalización" style={{ background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 9, width: 34, height: 34, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>⚙︎</button>
+  const btnPaneles = <button className="vv-rbtn" title="Paneles" onClick={() => setPanel("")}><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7" rx="2" /><rect x="14" y="3" width="7" height="7" rx="2" /><rect x="3" y="14" width="7" height="7" rx="2" /><rect x="14" y="14" width="7" height="7" rx="2" /></svg></button>;
+  return (<div style={{ minHeight: "100vh", background: fondoDe(cfg), backgroundAttachment: "fixed", fontFamily: fuenteDe(cfg), width: "100%", color: T.text }}>
+    <style>{cssEntorno(T)}</style>
+    {!panel && <>
+      <Encabezado cfg={cfg} titulo="Finanzas" sub="Certificaciones" logo={cfg.logo}>{null}</Encabezado>
+      <Portada onElegir={setPanel} />
+    </>}
+    {panel === "belfast" && <BelfastPanel data={data} obras={obras} certsDe={certsDe} btnPaneles={btnPaneles} />}
+    {panel === "vv" && <>
+      <Encabezado cfg={cfg} titulo={cfg.nombre || "V+V Construcciones"} sub={cfg.subtitulo || "Finanzas"} logo={cfg.logo}>
+        <button className="vv-rbtn" title="Actualizar" onClick={actualizar}>{okMsg || (refrescando ? "…" : "↻")}</button>
+        <button className="vv-rbtn" title="Personalización" onClick={() => setVerConfig(true)}>⚙︎</button>
+        {btnPaneles}
+      </Encabezado>
+      <div className="vv-body">
+        {tab === "ia" && <AsistenteCargaTab data={data} save={save} />}
+        {tab === "precios" && <TablaPreciosTab data={data} save={save} />}
+        {tab === "presupuesto" && <PresupuestoTab obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
+        {tab === "cliente" && <div>
+          <div style={{ display: "flex", gap: 7, padding: "14px 16px 0" }}>
+            {[["obra", "Por obra"], ["general", "Certificación general"]].map(([k, l]) => (
+              <button key={k} onClick={() => setCertcliModo(k)} className={certcliModo === k ? "vv-gema" : ""} style={{ flex: 1, background: certcliModo === k ? undefined : T.card, color: certcliModo === k ? "#2A1C05" : T.sub, border: certcliModo === k ? "none" : `1px solid ${T.border}`, borderRadius: 999, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>
+            ))}
+          </div>
+          {certcliModo === "obra"
+            ? <CertTab modo="cliente" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />
+            : <CertGeneral obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} modo="cliente" />}
+        </div>}
+        {tab === "cobrosgen" && <CobrosGeneralesTab />}
       </div>
-      <div style={{ display: "inline-flex", alignItems: "center", gap: 11 }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: cfg.logo ? "#fff" : `linear-gradient(145deg, ${BRASS}, #c9a869)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: T.navy, letterSpacing: "-0.02em", boxShadow: "0 2px 8px rgba(176,137,79,.35)", overflow: "hidden" }}>{cfg.logo ? <img src={cfg.logo} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : "V+V"}</div>
-        <div style={{ textAlign: "left" }}>
-          <div style={{ fontSize: 15.5, fontWeight: 700, letterSpacing: "-0.01em", lineHeight: 1.15 }}>{cfg.nombre || "V+V Construcciones"}</div>
-          <div style={{ fontSize: 9.5, fontWeight: 600, color: BRASS, letterSpacing: "0.18em", textTransform: "uppercase", marginTop: 1 }}>{cfg.subtitulo || "Finanzas y Certificaciones"}</div>
-        </div>
-      </div>
-    </div>
-    <div style={{ background: T.navBar, backdropFilter: "saturate(180%) blur(12px)", WebkitBackdropFilter: "saturate(180%) blur(12px)", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, zIndex: 50 }}>
-      {[
-        [["ia", "✨ IA"], ["precios", "Valores", "por m²"], ["presupuesto", "Presup."], ["cliente", "Certificado"], ["cobrosgen", "Cobros y", "Certificado"]],
-      ].map((fila, fi) => (
-        <div key={fi} style={{ display: "flex", borderTop: fi > 0 ? `1px solid ${T.border}` : "none" }}>
-          {fila.map(([k, l1, l2]) => (
-            <button key={k} onClick={() => setTab(k)} style={{ flex: 1, background: "none", border: "none", color: tab === k ? T.text : T.muted, padding: "9px 1px 8px", fontSize: 11, fontWeight: tab === k ? 700 : 600, cursor: "pointer", position: "relative", letterSpacing: "-0.01em", lineHeight: 1.2 }}>{l1}{l2 ? <><br />{l2}</> : ""}{tab === k && <span style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: 24, height: 2.5, background: BRASS, borderRadius: "2px 2px 0 0" }} />}</button>
-          ))}
-        </div>
-      ))}
-    </div>
-    <div className="vv-body">
-      {tab === "ia" && <AsistenteCargaTab data={data} save={save} />}
-      {tab === "precios" && <TablaPreciosTab data={data} save={save} />}
-      {tab === "presupuesto" && <PresupuestoTab obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
-      {tab === "cliente" && <div>
-        <div style={{ display: "flex", gap: 7, padding: "14px 16px 0" }}>
-          {[["obra", "Por obra"], ["general", "Certificación general"]].map(([k, l]) => (
-            <button key={k} onClick={() => setCertcliModo(k)} style={{ flex: 1, background: certcliModo === k ? T.navy : "transparent", color: certcliModo === k ? "#fff" : T.sub, border: `1px solid ${certcliModo === k ? T.navy : T.border}`, borderRadius: 9, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>
-          ))}
-        </div>
-        {certcliModo === "obra"
-          ? <CertTab modo="cliente" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />
-          : <CertGeneral obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} modo="cliente" />}
-      </div>}
-      {tab === "cobrosgen" && <CobrosGeneralesTab />}
-    </div>
-    {verConfig && <ConfigModal data={data} save={save} onClose={() => setVerConfig(false)} />}
+      <NavInferior actual={tab} onIr={setTab} items={[["ia", "IA"], ["precios", "Valores"], ["presupuesto", "Presup."], ["cliente", "Certificado"], ["cobrosgen", "Cobros"]]} />
+      {verConfig && <ConfigModal data={data} save={save} onClose={() => setVerConfig(false)} />}
+    </>}
   </div>);
+}
+
+// ═══════════ PANEL BELFAST (privado)
+// Todo lo que carga Belfast se guarda CIFRADO con su contraseña (AES-GCM, clave derivada con PBKDF2).
+// V+V no tiene la contraseña: en la base solo queda texto ilegible. Ni la IA ni el resumen de V+V lo leen.
+const BF_AUTH = "belfast_panel_auth", BF_DATA = "belfast_panel_data";
+const b64de = (u8) => { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+const deB64 = (s) => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+async function bfClave(usuario, pass, salt) {
+  const enc = new TextEncoder();
+  const base = await crypto.subtle.importKey("raw", enc.encode(String(usuario).trim().toLowerCase() + "|" + pass), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({ name: "PBKDF2", salt: deB64(salt), iterations: 250000, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+}
+async function bfCifrar(key, obj) { const iv = crypto.getRandomValues(new Uint8Array(12)); const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(JSON.stringify(obj))); return JSON.stringify({ iv: b64de(iv), ct: b64de(new Uint8Array(ct)) }); }
+async function bfDescifrar(key, txt) { const o = JSON.parse(txt); const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: deB64(o.iv) }, key, deB64(o.ct)); return JSON.parse(new TextDecoder().decode(pt)); }
+async function bfLeer(k) { const r = await storage.get(k); return r && r.value ? r.value : ""; }
+
+function BelfastPanel({ data, obras, certsDe, btnPaneles }) {
+  const [auth, setAuth] = useState(null); // null = cargando, "" = no existe, string = existe
+  const [key, setKey] = useState(null);
+  const [bd, setBd] = useState(null);
+  const [f, setF] = useState({ u: "", p: "", p2: "" });
+  const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState("presupuesto");
+  const [obraId, setObraId] = useState("");
+  const [estado, setEstado] = useState("");
+  const [pdf, setPdf] = useState(null);
+  const tGuardar = useRef(null);
+  useEffect(() => { bfLeer(BF_AUTH).then(v => setAuth(v || "")).catch(() => setAuth("")); }, []);
+  useEffect(() => { if (!obraId && obras.length) setObraId(obras[0].id); }, [obras.length]);
+  async function crear() {
+    setErr(""); if (f.u.trim().length < 3) return setErr("El usuario tiene que tener al menos 3 letras."); if (f.p.length < 6) return setErr("La contraseña tiene que tener al menos 6 caracteres."); if (f.p !== f.p2) return setErr("Las dos contraseñas no coinciden.");
+    setBusy(true);
+    try {
+      const ya = await bfLeer(BF_AUTH); if (ya) { setAuth(ya); setBusy(false); return setErr("Ya hay un usuario creado. Ingresá con él."); }
+      const salt = b64de(crypto.getRandomValues(new Uint8Array(16))); const k = await bfClave(f.u, f.p, salt);
+      const rec = JSON.stringify({ v: 1, salt, check: await bfCifrar(k, { ok: 1 }) });
+      const inicial = { empresa: "Belfast Construction Management", obras: {}, cobros: {} };
+      await storage.set(BF_DATA, await bfCifrar(k, inicial)); await storage.set(BF_AUTH, rec);
+      setAuth(rec); setKey(k); setBd(inicial); setF({ u: "", p: "", p2: "" });
+    } catch (e) { setErr("No se pudo crear. Revisá la conexión y probá de nuevo."); }
+    setBusy(false);
+  }
+  async function entrar() {
+    setErr(""); setBusy(true);
+    try {
+      const rec = JSON.parse(await bfLeer(BF_AUTH) || auth); const k = await bfClave(f.u, f.p, rec.salt);
+      try { await bfDescifrar(k, rec.check); } catch { setBusy(false); return setErr("Usuario o contraseña incorrectos."); }
+      const txt = await bfLeer(BF_DATA); const d = txt ? await bfDescifrar(k, txt) : { obras: {}, cobros: {} };
+      setKey(k); setBd({ empresa: "Belfast Construction Management", obras: {}, cobros: {}, ...d }); setF({ u: "", p: "", p2: "" });
+    } catch (e) { setErr("No se pudo abrir. Revisá la conexión y probá de nuevo."); }
+    setBusy(false);
+  }
+  async function olvide() {
+    if (!confirm("Si olvidaste la contraseña no hay forma de recuperar lo cargado: nadie la tiene, ni V+V.\n\n¿Borrar el panel de Belfast y crear un usuario nuevo?")) return;
+    if (prompt('Para confirmar escribí BORRAR') !== "BORRAR") return;
+    await storage.set(BF_AUTH, ""); await storage.set(BF_DATA, ""); setAuth(""); setErr("");
+  }
+  function cambiar(nuevo) {
+    setBd(nuevo); setEstado("Guardando…");
+    clearTimeout(tGuardar.current);
+    tGuardar.current = setTimeout(async () => { try { await storage.set(BF_DATA, await bfCifrar(key, nuevo)); setEstado("Guardado ✓"); setTimeout(() => setEstado(""), 1800); } catch { setEstado("No se pudo guardar"); } }, 700);
+  }
+  function salir() { setKey(null); setBd(null); }
+
+  const encab = <Encabezado titulo={bd?.empresa || "Belfast"} sub="Panel privado" marca="B" logo={bd?.logo}>
+    {key && <button className="vv-rbtn" title="Cerrar sesión" onClick={salir}>⏻</button>}
+    {btnPaneles}
+  </Encabezado>;
+
+  if (!key) {
+    const nuevo = auth === "";
+    return <>{encab}
+      <div style={{ maxWidth: 440, margin: "0 auto", padding: "10vh 18px 40px" }}>
+        <div style={{ fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: T.muted, fontWeight: 700 }}>Belfast · Panel privado</div>
+        <h1 style={{ fontSize: 30, lineHeight: 1.1, margin: "6px 0 8px", color: T.text }}>{auth === null ? "Cargando…" : nuevo ? "Creá tu acceso" : "Entrá a tu panel"}</h1>
+        {auth !== null && <>
+          <div style={{ fontSize: 14, color: T.sub, lineHeight: 1.45, marginBottom: 14 }}>{nuevo ? "Es la primera vez. Elegí un usuario y una contraseña: quedan solo en tu poder. V+V no los conoce y no puede ver tus montos." : "Ingresá tu usuario y contraseña."}</div>
+          <Field label="Usuario"><input value={f.u} onChange={e => setF({ ...f, u: e.target.value })} autoCapitalize="none" autoComplete="username" style={inp} /></Field>
+          <Field label="Contraseña"><input type="password" value={f.p} onChange={e => setF({ ...f, p: e.target.value })} autoComplete={nuevo ? "new-password" : "current-password"} onKeyDown={e => { if (e.key === "Enter" && !nuevo) entrar(); }} style={inp} /></Field>
+          {nuevo && <Field label="Repetí la contraseña"><input type="password" value={f.p2} onChange={e => setF({ ...f, p2: e.target.value })} autoComplete="new-password" onKeyDown={e => { if (e.key === "Enter") crear(); }} style={inp} /></Field>}
+          {err && <div style={{ color: "#D03A2F", fontSize: 13, margin: "4px 0 10px" }}>{err}</div>}
+          <button disabled={busy} onClick={nuevo ? crear : entrar} className="vv-gema" style={{ width: "100%", borderRadius: 999, padding: "14px", fontSize: 16, fontWeight: 700, cursor: "pointer" }}>{busy ? "…" : nuevo ? "Crear y entrar" : "Entrar"}</button>
+          <div style={{ fontSize: 12, color: T.muted, marginTop: 14, lineHeight: 1.45, border: `1px dashed ${T.border}`, borderRadius: 10, padding: "8px 10px" }}>{nuevo ? "Guardala bien: si la olvidás no se puede recuperar (nadie más la tiene)." : <>¿Olvidaste la contraseña? <button onClick={olvide} style={{ background: "none", border: "none", color: T.accent, textDecoration: "underline", cursor: "pointer", padding: 0, fontSize: 12 }}>Empezar de cero</button></>}</div>
+        </>}
+      </div>
+    </>;
+  }
+
+  const obra = obras.find(o => o.id === obraId);
+  const bo = (bd.obras || {})[obraId] || {};
+  const setBo = (patch) => cambiar({ ...bd, obras: { ...(bd.obras || {}), [obraId]: { ...bo, ...patch } } });
+  const rubros = (obra?.rubros || []);
+  const montoR = (r) => num((bo.rubros || {})[r.id]);
+  const totalB = rubros.reduce((s, r) => s + montoR(r), 0);
+  const cs = obra ? certsDe(obra.id) : [];
+  const selObra = <Field label="Obra"><Sel value={obraId} onChange={e => setObraId(e.target.value)} style={inp}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>;
+  const card = { background: T.card, borderRadius: 18, padding: "14px 16px", marginBottom: 12, boxShadow: SHD, WebkitBackdropFilter: "blur(18px) saturate(1.6)", backdropFilter: "blur(18px) saturate(1.6)" };
+  const pct0 = (v) => Math.round(v) + "%";
+
+  function certB(c) {
+    const det = detalleRubros(c, obra, cs);
+    const filas = det.map(d => { const m = montoR({ id: d.id }); return { ...d, monto: m, este: m * d.per / 100, acumM: m * d.pctAcum / 100, resta: m * (1 - d.pctAcum / 100) }; });
+    const este = filas.reduce((s, x) => s + x.este, 0), acum = filas.reduce((s, x) => s + x.acumM, 0);
+    return { filas, este, acum, resta: totalB - acum, pEste: totalB > 0 ? este / totalB * 100 : 0, pAcum: totalB > 0 ? acum / totalB * 100 : 0 };
+  }
+  function pdfCert(c, n) {
+    const x = certB(c); const emp = (bd.empresa || "Belfast Construction Management");
+    const logo = bd.logo ? `<img src="${bd.logo}" style="height:42px;width:42px;object-fit:contain;background:#fff;border-radius:8px;padding:2px;margin-right:10px"/>` : "";
+    const rows = x.filas.filter(r => r.monto > 0).map(r => `<tr><td>${r.nombre}</td><td class="rgt">${money(r.monto)}</td><td class="ctr">${pct0(r.per)}</td><td class="ctr">${pct0(r.pctAcum)}</td><td class="rgt"><b>${money(r.este)}</b></td><td class="rgt">${money(r.resta)}</td></tr>`).join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Certificado ${n} · ${obra.nombre}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Playfair Display',Georgia,serif;color:#17181C;padding:0 0 34px}.head{background:#111;color:#fff;padding:20px 36px;border-bottom:4px solid #B0894F;display:flex;justify-content:space-between;align-items:center}.brand{display:flex;align-items:center;font-size:20px;font-weight:800;letter-spacing:.04em}.doc{text-align:right;font-size:11px;color:#d8d2c6}.doc b{display:block;font-size:15px;color:#fff}.wrap{padding:0 36px}.meta{display:flex;justify-content:space-between;gap:14px;margin:20px 0 8px;font-size:12.5px;flex-wrap:wrap}.meta span{color:#6A6E77}h2{font-size:11.5px;color:#6A6E77;text-transform:uppercase;letter-spacing:1px;margin:18px 0 8px;border-bottom:1px solid #E3E1DC;padding-bottom:5px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#F3EDE2;color:#7A5A22;text-align:left;padding:7px 8px;font-size:10px;text-transform:uppercase}td{padding:7px 8px;border-bottom:1px solid #EFECE6}.ctr{text-align:center}.rgt{text-align:right}.boxes{display:flex;gap:10px;margin:16px 0}.box{flex:1;border:1px solid #E3D6BF;background:#FBF7F0;border-radius:10px;padding:10px 12px}.box small{display:block;font-size:10px;color:#6A6E77;text-transform:uppercase;letter-spacing:.06em}.box b{font-size:17px}.box i{display:block;font-style:normal;font-size:11px;color:#7A5A22;margin-top:2px}.foot{display:flex;justify-content:space-between;margin-top:60px;font-size:11px;color:#6A6E77}.foot div{width:230px;border-top:1px solid #17181C;padding-top:6px;text-align:center}@media(max-width:620px){.head{padding:16px 14px}.brand{font-size:16px}.wrap{padding:0 12px}.boxes{flex-wrap:wrap}.box{min-width:45%}table{font-size:10.5px}td,th{padding:6px 4px}.foot div{width:45%}}</style><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div class="head"><div class="brand">${logo}${emp}</div><div class="doc"><b>CERTIFICADO DE OBRA N° ${n}</b>Fecha: ${fmtISO(c.fecha)}</div></div><div class="wrap"><div class="meta"><div><span>Obra:</span> <b>${obra.nombre}</b></div><div><span>Propietario:</span> <b>${bo.propietario || "—"}</b></div></div><div class="boxes"><div class="box"><small>Este certificado</small><b>${money(x.este)}</b><i>${pct0(x.pEste)} de la obra</i></div><div class="box"><small>Avance general</small><b>${money(x.acum)}</b><i>${pct0(x.pAcum)} de la obra</i></div><div class="box"><small>Resta</small><b>${money(x.resta)}</b><i>${pct0(100 - x.pAcum)} de la obra</i></div></div><h2>Detalle por rubro</h2><table><thead><tr><th>Rubro</th><th class="rgt">Presupuesto</th><th class="ctr">Este cert.</th><th class="ctr">Acumulado</th><th class="rgt">Importe</th><th class="rgt">Resta</th></tr></thead><tbody>${rows || `<tr><td colspan="6">Sin montos cargados en el presupuesto.</td></tr>`}</tbody></table><table style="margin-top:8px"><tr><td class="rgt">Presupuesto total</td><td class="rgt" style="width:150px"><b>${money(totalB)}</b></td></tr><tr><td class="rgt" style="font-size:15px"><b>TOTAL ESTE CERTIFICADO</b></td><td class="rgt" style="font-size:17px"><b>${money(x.este)}</b></td></tr></table><div class="foot"><div>${emp}</div><div>Propietario${bo.propietario ? "<br><b style='color:#17181C'>" + bo.propietario + "</b>" : ""}</div></div></div></body></html>`;
+    setPdf(html);
+  }
+
+  return <>{encab}
+    <div className="vv-body" style={{ padding: "14px 16px calc(112px + env(safe-area-inset-bottom,0px))", maxWidth: 820 }}>
+      {estado && <div style={{ position: "fixed", top: "calc(84px + env(safe-area-inset-top))", left: "50%", transform: "translateX(-50%)", zIndex: 70, background: T.page, color: T.text, borderRadius: 999, padding: "6px 14px", fontSize: 12.5, fontWeight: 700, boxShadow: SHD }}>{estado}</div>}
+      {!obras.length && <div style={card}>Todavía no hay obras cargadas por V+V.</div>}
+      {obra && tab !== "ajustes" && <div style={card}>{selObra}</div>}
+      {obra && tab === "presupuesto" && <>
+        <div style={card}>
+          <div style={{ fontSize: 11, letterSpacing: ".12em", textTransform: "uppercase", color: T.muted, fontWeight: 700, marginBottom: 6 }}>Tu presupuesto al propietario</div>
+          <div style={{ fontSize: 13, color: T.sub, lineHeight: 1.45, marginBottom: 12 }}>Cargá cuánto le cobrás al propietario por cada rubro que hace V+V. Cuando V+V certifica un % de un rubro, acá se arma tu certificado con ese mismo % sobre tus valores.</div>
+          <Field label="Propietario"><input value={bo.propietario || ""} onChange={e => setBo({ propietario: e.target.value })} placeholder="Nombre del propietario" style={inp} /></Field>
+          <RepartirTotal rubros={rubros} onRepartir={(tot) => setBo({ rubros: Object.fromEntries(rubros.map(r => [r.id, Math.round(tot * num(r.pct) / 100)])) })} />
+        </div>
+        <div style={card}>
+          {rubros.map(r => <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
+            <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 600 }}>{r.nombre}</div><div style={{ fontSize: 11.5, color: T.muted }}>{totalB > 0 ? pct0(montoR(r) / totalB * 100) + " de tu presupuesto" : ""}</div></div>
+            <input value={montoR(r) ? fmtMiles(montoR(r)) : ""} onChange={e => setBo({ rubros: { ...(bo.rubros || {}), [r.id]: numMoney(e.target.value) } })} inputMode="numeric" placeholder="$ 0" style={{ ...inpSm, width: 150, textAlign: "right" }} />
+          </div>)}
+          <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 12, fontSize: 16 }}><b>Total</b><b style={{ color: T.accent }}>{money(totalB)}</b></div>
+        </div>
+      </>}
+      {obra && tab === "certs" && <>
+        {!cs.length && <div style={card}>V+V todavía no emitió certificados de esta obra.</div>}
+        {totalB === 0 && cs.length > 0 && <div style={{ ...card, color: T.warn }}>Primero cargá tu presupuesto (pestaña Presupuesto) para ver los importes.</div>}
+        {cs.slice().reverse().map(c => { const n = cs.findIndex(x => x.id === c.id) + 1; const x = certB(c); const cob = (bd.cobros || {})[c.id]; return <div key={c.id} style={card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+            <div><div style={{ fontSize: 11, color: T.muted, letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 700 }}>Cert. N° {n} · {fmtISO(c.fecha)}</div><div style={{ fontSize: 22, fontWeight: 700, color: T.accent, marginTop: 2 }}>{money(x.este)}</div></div>
+            <button onClick={() => pdfCert(c, n)} className="vv-gema" style={{ borderRadius: 999, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📄 PDF</button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 8, marginTop: 10 }}>
+            <Box t="Este certificado" v={pct0(x.pEste)} /><Box t="Avance general" v={pct0(x.pAcum)} /><Box t="Resta" v={money(x.resta)} />
+          </div>
+          <details style={{ marginTop: 10 }}><summary style={{ cursor: "pointer", fontSize: 13, color: T.sub, fontWeight: 600 }}>Ver por rubro</summary>
+            {x.filas.filter(r => r.per > 0 || r.pctAcum > 0).map(r => <div key={r.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13, padding: "6px 0", borderBottom: `1px solid ${T.border}` }}><span style={{ minWidth: 0 }}>{r.nombre}<br /><span style={{ color: T.muted, fontSize: 11.5 }}>{pct0(r.per)} este cert. · {pct0(r.pctAcum)} acumulado</span></span><b style={{ whiteSpace: "nowrap" }}>{money(r.este)}</b></div>)}
+          </details>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 13, color: T.sub }}><input type="checkbox" checked={!!cob} onChange={e => cambiar({ ...bd, cobros: { ...(bd.cobros || {}), [c.id]: e.target.checked ? hoyISO() : undefined } })} style={{ width: 20, height: 20 }} />{cob ? `Cobrado al propietario (${fmtISO(cob)})` : "Marcar como cobrado al propietario"}</label>
+        </div>; })}
+      </>}
+      {tab === "ajustes" && <div style={card}>
+        <Field label="Nombre de tu empresa (sale en el PDF)"><input value={bd.empresa || ""} onChange={e => cambiar({ ...bd, empresa: e.target.value })} style={inp} /></Field>
+        <Field label="Logo (sale en el PDF)"><input type="file" accept="image/*" onChange={async e => { const fl = e.target.files && e.target.files[0]; if (!fl) return; setEstado("Subiendo…"); const u = await subirArchivo(fl); if (u) cambiar({ ...bd, logo: u }); else setEstado("No se pudo subir"); }} style={{ ...inp, padding: 10 }} /></Field>
+        {bd.logo && <img src={bd.logo} style={{ height: 56, borderRadius: 10, background: "#fff", padding: 4 }} />}
+        <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.5, marginTop: 12 }}>Tus datos se guardan cifrados con tu contraseña. V+V solo ve un texto ilegible. Si cerrás la app, te la vuelve a pedir.</div>
+      </div>}
+    </div>
+    <NavInferior actual={tab} onIr={setTab} items={[["presupuesto", "Presupuesto", "presupuesto"], ["certs", "Certificados", "certs"], ["ajustes", "Ajustes", "ajustes"]]} />
+    {pdf && <PdfOverlay html={pdf} onClose={() => setPdf(null)} nombre="Belfast-certificado.pdf" />}
+  </>;
+}
+function RepartirTotal({ rubros, onRepartir }) {
+  const [v, setV] = useState("");
+  return <div style={{ background: T.bg, borderRadius: 14, padding: "10px 12px" }}>
+    <div style={{ fontSize: 12, color: T.sub, marginBottom: 6 }}>¿Tenés solo el total? Escribilo y lo reparto según las incidencias de cada rubro (después podés corregir cada uno).</div>
+    <div style={{ display: "flex", gap: 8 }}><input value={v} onChange={e => setV(fmtMiles(e.target.value))} inputMode="numeric" placeholder="$ Total" style={{ ...inpSm, flex: 1 }} /><button onClick={() => { const t = numMoney(v); if (!t) return; if (confirm("Esto reemplaza los montos de todos los rubros. ¿Seguir?")) { onRepartir(t); setV(""); } }} className="vv-gema" style={{ borderRadius: 999, padding: "0 16px", fontWeight: 700, cursor: "pointer" }}>Repartir</button></div>
+  </div>;
 }
 
 // ═══════════ 1 · PRESUPUESTO
@@ -2206,7 +2441,7 @@ function ConfigModal({ data, save, onClose }) {
   async function subirLogo(e) { const f = e.target.files && e.target.files[0]; if (!f) return; setSubiendo(true); const url = await subirArchivo(f); if (url) setCfg("logo", url); else alert("No se pudo subir. Revisá la conexión."); setSubiendo(false); e.target.value = ""; }
   async function subirFondo(e) { const f = e.target.files && e.target.files[0]; if (!f) return; setSubiendoFondo(true); const url = await subirArchivo(f); if (url) { save({ ...data, config: { ...(data.config || {}), fondoUrl: url, fondo: "" } }); } else alert("No se pudo subir. Revisá la conexión."); setSubiendoFondo(false); e.target.value = ""; }
   return (<div style={{ position: "fixed", inset: 0, background: "rgba(11,22,34,.55)", zIndex: 450, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
-    <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", padding: 20, width: "100%", maxWidth: 680, maxHeight: "90vh", overflowY: "auto" }}>
+    <div onClick={e => e.stopPropagation()} style={{ background: T.page, borderRadius: "18px 18px 0 0", padding: 20, width: "100%", maxWidth: 680, maxHeight: "90vh", overflowY: "auto" }}>
       <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 3, letterSpacing: "-0.01em" }}>Personalización</div>
       <div style={{ fontSize: 12, color: T.muted, marginBottom: 18 }}>Cambiá el logo y los datos que aparecen en la app y en los PDF.</div>
       <Field label="Logo de la empresa">
@@ -2264,7 +2499,7 @@ function ConfigModal({ data, save, onClose }) {
     </div>
   </div>);
 }
-function PdfOverlay({ html, onClose }) {
+function PdfOverlay({ html, onClose, nombre }) {
   const ref = useRef(null); const [gen, setGen] = useState(false);
   const imprimir = () => { try { const w = ref.current && ref.current.contentWindow; if (w) { w.focus(); w.print(); } } catch { alert("No se pudo abrir la impresión."); } };
   async function compartirWA() {
@@ -2275,14 +2510,14 @@ function PdfOverlay({ html, onClose }) {
       if (!win.html2pdf) { await new Promise((res, rej) => { const s = doc.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"; s.onload = res; s.onerror = () => rej(new Error("no se pudo cargar el generador")); doc.head.appendChild(s); }); }
       const opt = { margin: 6, image: { type: "jpeg", quality: 0.95 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" } };
       const blob = await win.html2pdf().set(opt).from(doc.body).outputPdf("blob");
-      const file = new File([blob], "VV-reporte.pdf", { type: "application/pdf" });
+      const file = new File([blob], nombre || "VV-reporte.pdf", { type: "application/pdf" });
       if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: "Reporte V+V" }); }
-      else { const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "VV-reporte.pdf"; document.body.appendChild(a); a.click(); setTimeout(() => { try { a.remove(); } catch { } URL.revokeObjectURL(url); }, 1500); }
+      else { const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = nombre || "VV-reporte.pdf"; document.body.appendChild(a); a.click(); setTimeout(() => { try { a.remove(); } catch { } URL.revokeObjectURL(url); }, 1500); }
     } catch (e) { if (!(e && e.name === "AbortError")) alert('No pude generar el PDF para compartir directo (a veces pasa por las fotos). Usá "Guardar / Imprimir" y desde ahí tocá Compartir → WhatsApp o Guardar en Archivos.'); }
     setGen(false);
   }
   return (<div style={{ position: "fixed", inset: 0, background: "#0F1B2D", zIndex: 500, display: "flex", flexDirection: "column" }}>
-    <div style={{ display: "flex", gap: 8, padding: "10px 12px", paddingTop: "max(10px, env(safe-area-inset-top))", background: T.navy, borderBottom: `1px solid rgba(255,255,255,.1)`, alignItems: "center", flexWrap: "wrap" }}>
+    <div style={{ display: "flex", gap: 8, padding: "10px 12px", paddingTop: "max(10px, env(safe-area-inset-top))", background: "#111", borderBottom: `1px solid rgba(255,255,255,.1)`, alignItems: "center", flexWrap: "wrap" }}>
       <button onClick={onClose} style={{ background: "rgba(255,255,255,.14)", color: "#fff", border: "none", borderRadius: 9, padding: "10px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✕</button>
       <button onClick={imprimir} style={{ background: BRASS, color: "#fff", border: "none", borderRadius: 9, padding: "10px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Guardar / Imprimir</button>
       <div style={{ flex: 1 }} />
@@ -2318,7 +2553,7 @@ function FirmasModal({ cert, obra, onClose, onSave, titulo }) {
   const [conNom, setConNom] = useState(f0.contratista?.nombre || ""); const [conImg, setConImg] = useState(f0.contratista?.dataUrl || "");
   function guardar() { const stamp = new Date().toLocaleString("es-AR"); const firmas = { ...(cert.firmas || {}) }; if (cliNom.trim() && cliImg) firmas.cliente = { nombre: cliNom.trim(), dataUrl: cliImg, ts: stamp, codigo: f0.cliente?.codigo || genCodigo(cert.fecha) }; if (conNom.trim() && conImg) firmas.contratista = { nombre: conNom.trim(), dataUrl: conImg, ts: stamp, codigo: f0.contratista?.codigo || genCodigo(cert.fecha) }; onSave(firmas); }
   return (<div style={{ position: "fixed", inset: 0, background: "rgba(15,27,45,.55)", zIndex: 400, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
-    <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "16px 16px 0 0", padding: 18, width: "100%", maxWidth: 680, maxHeight: "90vh", overflowY: "auto" }}>
+    <div onClick={e => e.stopPropagation()} style={{ background: T.page, borderRadius: "16px 16px 0 0", padding: 18, width: "100%", maxWidth: 680, maxHeight: "90vh", overflowY: "auto" }}>
       <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 3 }}>{titulo || "Conformidad del certificado"}</div>
       <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 16 }}>{obra?.nombre} · {fmtISO(cert.fecha)}. Cada parte firma con el dedo. Queda con fecha/hora y código.</div>
       <div style={{ marginBottom: 16 }}>
@@ -2378,7 +2613,7 @@ function CajaTab({ obras, data, save, certs, certsDe, indices }) {
   const colorDe = (k) => k === "cobro" ? T.ok : "#EF4444";
   const signo = (k) => k === "cobro" ? "+ " : "− ";
   return (<div style={{ padding: "14px 16px 40px" }}>
-    <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 16, boxShadow: SHD, border: `1px solid rgba(176,137,79,.28)` }}>
+    <div style={{ background: GEMA, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 16, boxShadow: SHD, border: `1px solid rgba(176,137,79,.28)` }}>
       <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Saldo de caja real</div>
       <div style={{ fontSize: 30, fontWeight: 800, margin: "6px 0 4px", color: saldo >= 0 ? "#7DE0A6" : "#FCA5A5" }}>{money(saldo)}</div>
       <div style={{ fontSize: 11, color: "rgba(255,255,255,.7)" }}>Plata que entró menos lo que salió (pagos + gastos).</div>
@@ -2570,7 +2805,7 @@ function GeneralPanel({ data, save, obras, certs, certsDe, indices }) {
       </div>
       <div style={{ display: "flex", gap: 6, marginTop: 8 }}>{presets.map(([l, d, h]) => <button key={l} onClick={() => { setDesde(d); setHasta(h); }} style={{ flex: 1, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "8px 4px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}</div>
     </div>
-    <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 14, boxShadow: SHD, border: `1px solid rgba(176,137,79,.28)` }}>
+    <div style={{ background: GEMA, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 14, boxShadow: SHD, border: `1px solid rgba(176,137,79,.28)` }}>
       <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Flujo del período {desde || hasta ? `(${fmtISO(desde) || "inicio"} → ${fmtISO(hasta) || "hoy"})` : "(todo)"}</div>
       <div style={{ fontSize: 28, fontWeight: 800, margin: "6px 0 10px", color: flujo >= 0 ? "#7DE0A6" : "#FCA5A5" }}>{money(flujo)}</div>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "2px 0", borderTop: "1px solid rgba(255,255,255,.12)", paddingTop: 8 }}><span style={{ color: "rgba(255,255,255,.75)" }}>Cobrado en el período</span><b>{money(totCob)}</b></div>
@@ -2808,7 +3043,7 @@ function PresupuestosPanel({ data, save }) {
     {atrasados.length > 0 && <div style={{ background: "rgba(239,68,68,.12)", border: "1px solid rgba(239,68,68,.4)", borderRadius: 10, padding: "10px 12px", marginTop: 10, fontSize: 12.5, color: "#EF4444", fontWeight: 700 }}>⚠ {atrasados.length} presupuesto{atrasados.length > 1 ? "s" : ""} atrasado{atrasados.length > 1 ? "s" : ""} — vencidos y sin presentar</div>}
     {presentados.length > 0 && <div style={{ background: T.al, border: `1px solid ${T.border}`, borderRadius: 10, padding: "9px 12px", marginTop: 8, fontSize: 12, color: T.sub }}>⏳ {presentados.length} sin definición, esperando respuesta del cliente</div>}
     <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-      <div style={{ flex: 1, background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 12, padding: "13px 14px" }}>
+      <div style={{ flex: 1, background: GEMA, color: "#fff", borderRadius: 12, padding: "13px 14px" }}>
         <div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, textTransform: "uppercase", letterSpacing: "0.06em" }}>Efectividad</div>
         <div style={{ fontSize: 26, fontWeight: 800, color: "#7DE0A6", margin: "3px 0" }}>{efectividad.toFixed(0)}%</div>
         <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.7)" }}>{ganados.length} ganados de {definidos} definidos</div>
@@ -3296,7 +3531,7 @@ function IvaPanel({ data, save }) {
 
   return (<div style={{ padding: "14px 16px 40px" }}>
     {/* Resumen */}
-    <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 14, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
+    <div style={{ background: GEMA, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 14, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>IVA a cobrar</div>
       <div style={{ fontSize: 38, fontWeight: 800, margin: "6px 0 2px", color: saldo > 0 ? "#F2C879" : "#7DE0A6", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{money(saldo)}</div>
       <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.65)", marginBottom: 4 }}>IVA de las facturas menos lo que fuiste cobrando de ese IVA.</div>
@@ -3470,7 +3705,7 @@ function DiferenciaCertPanel({ obras, certsDe, indices, mensual }) {
 
   return (<div>
     {/* headline: total a guardar = tu utilidad neta (lo que te queda para vos) */}
-    <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 14, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
+    <div style={{ background: GEMA, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 14, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Total a guardar para vos</div>
       <div style={{ fontSize: 34, fontWeight: 800, margin: "6px 0 2px", color: totNeta >= 0 ? "#7DE0A6" : "#FCA5A5", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{money(totNeta)}</div>
       <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.65)" }}>{verHist ? "Tu utilidad neta de todos los certificados: lo que te queda para vos, después de sacar costo, estructura e imprevistos." : `Utilidad neta de la última quincena (certificados del ${maxFecha ? fmtISO(maxFecha) : "—"}). Abajo, en el resumen general, está el acumulado de todo.`}</div>
@@ -3511,7 +3746,7 @@ function DiferenciaCertPanel({ obras, certsDe, indices, mensual }) {
     </div>))}
 
     {/* ── RESUMEN GENERAL: sigue el modo — en "Último" suma los últimos, en "Historial" suma todos ── */}
-    <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginTop: 4, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
+    <div style={{ background: GEMA, color: "#fff", borderRadius: 18, padding: 20, marginTop: 4, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
       <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 3 }}>{verHist ? "Resumen general · acumulado de todo" : "Resumen general · última quincena"}</div>
       <div style={{ fontSize: 11, color: "rgba(255,255,255,.55)", marginBottom: 10 }}>{verHist ? `Sumando los ${totalCertsTodos} certificados de ${obrasConCert} obra${obrasConCert !== 1 ? "s" : ""} (todo el historial).` : `Solo los certificados de la última fecha (${maxFecha ? fmtISO(maxFecha) : "—"}), sumando ${grupos.reduce((s, g) => s + g.filas.length, 0)} obra${grupos.reduce((s, g) => s + g.filas.length, 0) !== 1 ? "s" : ""}.`}</div>
       {[
@@ -3743,7 +3978,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
     {subtab === "cliente" && <>
     {/* ── UTILIDAD ESPERADA — el número que más se mira ── */}
     {obras.length > 0 && (() => {
-      return (<div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 22, marginBottom: 14, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
+      return (<div style={{ background: GEMA, color: "#fff", borderRadius: 18, padding: 22, marginBottom: 14, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
 
         {/* ── LAS 4 LÍNEAS DEL RESULTADO ── */}
         {(() => {
@@ -3879,7 +4114,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
         <div style={{ fontSize: 10, color: T.muted, marginTop: 10, lineHeight: 1.45 }}>“Cobré” es lo facturado con ajuste (certificados + histórico). “Pagué” es el costo de obra. La utilidad es la diferencia, antes de estructura, impuestos e imprevistos.</div>
       </div>);
     })()}
-    <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 16, boxShadow: SHD, border: `1px solid rgba(176,137,79,.28)` }}>
+    <div style={{ background: GEMA, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 16, boxShadow: SHD, border: `1px solid rgba(176,137,79,.28)` }}>
       <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Resultado operativo</div>
       <div style={{ fontSize: 30, fontWeight: 800, margin: "6px 0 4px", color: totRes >= 0 ? "#7DE0A6" : "#FCA5A5" }}>{money(totRes)}</div>
       <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>Lo que podés guardar sin comprometer nada. Descontado TODO: costos de obra, impuestos, imprevistos y el costo fijo de estructura.</div>
