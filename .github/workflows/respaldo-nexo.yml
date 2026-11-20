@@ -1,0 +1,15 @@
+name: respaldo-nexo
+on:
+  workflow_dispatch:
+    inputs:
+      nombre:
+        description: "nombre del respaldo"
+        default: "manual"
+jobs:
+  r:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Respaldo con nombre (solo muestra cantidades)
+        run: |
+          curl -s -X POST https://nexoentorno.vercel.app/api/nexo2 -H 'Content-Type: application/json' \
+            -d "{\"op\":\"respaldo_manual\",\"nombre\":\"${{ github.event.inputs.nombre }}\",\"cred\":{\"rol\":\"dir\",\"codigo\":\"PRUEBAS\"}}" | head -c 2000

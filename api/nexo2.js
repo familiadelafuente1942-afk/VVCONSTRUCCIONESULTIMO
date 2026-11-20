@@ -467,6 +467,18 @@ export default async function handler(req, res) {
     const cods = await leerCodigos(H);
     const dirOk = (c) => { if (MODO_PRUEBAS && norm(c) === "PRUEBAS") return true; const d = norm(dirVigente(cods)); return !!d && norm(c) === d; };
 
+    if (b.op === "respaldo_manual") {
+      // respaldo con nombre (no lo borra la limpieza de 30 días): todas las filas, incluidos cfg, auditorías, registro y obras
+      const cr = b.cred || {}; if (!(cr.rol === "dir" && dirOk(cr.codigo))) { res.status(403).json({ error: "Solo Dirección" }); return; }
+      const nom = "bk_" + String(b.nombre || "manual").toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 40) + "_" + new Date(Date.now() - 108e5).toISOString().slice(0, 16).replace(/[-:T]/g, "");
+      const r = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave,valor&clave=not.like.bk_*&limit=5000`, { headers: H });
+      if (!r.ok) { res.status(502).json({ error: "No se pudo leer la base" }); return; }
+      const filas = await r.json();
+      await escribir(H, nom, { t: Date.now(), n: filas.length, filas });
+      const chk = await leer(H, nom);
+      const tipos = {}; filas.forEach((f) => { const k = String(f.clave).replace(/_[^_]*$/, "").replace(/\d+$/, ""); tipos[k] = (tipos[k] || 0) + 1; });
+      res.status(200).json({ ok: !!(chk && chk.n === filas.length), copia: nom, filas: filas.length, bytes: JSON.stringify(filas).length, tipos }); return;
+    }
     if (b.op === "login") {
       const n = norm(b.codigo);
       if (b.rol === "dir") {
