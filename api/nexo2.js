@@ -1225,6 +1225,28 @@ export default async function handler(req, res) {
       await escribir(H, "audfot_" + obra, { t: Date.now(), fotos: m });
       res.status(200).json({ ok: true }); return;
     }
+    // ===== 9.3 · cronograma armado en la nube (fuente única de fechas y avance) =====
+    if (b.op === "crono_get") {
+      const ids = (Array.isArray(b.obras) ? b.obras : []).map(String).filter((x) => /^[A-Za-z0-9_-]{1,40}$/.test(x)).slice(0, 40);
+      const out = {};
+      await Promise.all(ids.map(async (id) => { const v = await leer(H, "crono_" + id); if (v) out[id] = v; }));
+      res.status(200).json({ ok: true, crono: out }); return;
+    }
+    if (b.op === "crono_save") {
+      const obra = String(b.obra || "");
+      if (!/^[A-Za-z0-9_-]{1,40}$/.test(obra)) { res.status(400).json({ error: "Obra inválida" }); return; }
+      const cr = b.cred || {};
+      const ok = (cr.rol === "dir" && dirOk(cr.codigo)) || (cr.rol === "jefe" && norm(cr.codigo) && norm(((cods.obras || {})[obra] || {}).j) === norm(cr.codigo));
+      if (!ok) { await pausa(600); res.status(403).json({ error: "Solo Dirección o la jefatura de la obra" }); return; }
+      const str = (x, n) => String(x == null ? "" : x).slice(0, n), num = (x) => (x == null || x === "" ? null : Math.min(4e12, Math.max(-4e12, Number(x) || 0)));
+      const tareas = (Array.isArray(b.tareas) ? b.tareas : []).slice(0, 800).map((t) => ({ id: str(t.id, 60), n: str(t.n, 140), s: num(t.s), e: num(t.e), bs: num(t.bs), be: num(t.be), ri: num(t.ri), rf: num(t.rf), av: num(t.av) }));
+      const prev = await leer(H, "crono_" + obra);
+      const build = str(b.build, 20);
+      if (prev && prev.build && build && prev.build > build) { res.status(409).json({ error: "Hay una versión más nueva de la app", build: prev.build }); return; }
+      const val = { t: Date.now(), build, por: cr.rol === "dir" ? "dir" : "jefe", n: tareas.length, tareas };
+      await escribir(H, "crono_" + obra, val);
+      res.status(200).json({ ok: true, t: val.t }); return;
+    }
     if (b.op === "snap_save") {
       const obra = String(b.obra || "");
       if (!/^[A-Za-z0-9_-]{1,40}$/.test(obra)) { res.status(400).json({ error: "Obra inválida" }); return; }
