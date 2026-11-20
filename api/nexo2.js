@@ -24,6 +24,9 @@ const SEED = {
   o5: { clave: "SB88-2406", j: "J-SB88-7342", a: "A-SB88-3961" },
 };
 const FIELD = { prop: "clave", jefe: "j", aud: "a", est: "e" };
+// MODO PRUEBAS (temporal): con true, la app entra sin códigos. El código "PRUEBAS" vale como Dirección y los contratistas
+// entran con "PRUEBAS:<id>". Los códigos reales NO se tocan ni se mandan al navegador. Poner false para volver a pedir códigos.
+const MODO_PRUEBAS = true;
 
 function headers(sk) {
   return { apikey: sk, Authorization: "Bearer " + sk, "Content-Type": "application/json" };
@@ -462,7 +465,7 @@ export default async function handler(req, res) {
     }
 
     const cods = await leerCodigos(H);
-    const dirOk = (c) => { const d = norm(dirVigente(cods)); return !!d && norm(c) === d; };
+    const dirOk = (c) => { if (MODO_PRUEBAS && norm(c) === "PRUEBAS") return true; const d = norm(dirVigente(cods)); return !!d && norm(c) === d; };
 
     if (b.op === "login") {
       const n = norm(b.codigo);
@@ -730,6 +733,12 @@ export default async function handler(req, res) {
       const reg = (await leer(H, "ctcods")) || { items: [] };
       const lista = Array.isArray(reg.items) ? reg.items : [];
       const cr = b.cred || {};
+      if (MODO_PRUEBAS) {
+        // modo pruebas: "PRUEBAS:<id del contratista>" se cambia acá por su código real (nunca sale del servidor)
+        const real = (c) => { const m = /^PRUEBAS:(.+)$/i.exec(String(c || "")); if (!m) return c; const x = lista.find((y) => String(y.id).toLowerCase() === m[1].toLowerCase()); return x ? x.cod : c; };
+        if (b.op === "ct_pruebas_list") { res.status(200).json({ ok: true, items: lista.map((c) => ({ id: c.id, nombre: c.nombre, rubro: c.rubro, obra: c.obra, obraNombre: c.obraNombre })) }); return; }
+        b.codigo = real(b.codigo); cr.codigo = real(cr.codigo); if (Array.isArray(cr.codigos)) cr.codigos = cr.codigos.map(real);
+      }
       let quien = "", ct = null;
       // Todas las obras de un contratista: las que tienen su código y las cargadas con el mismo nombre (ej. "V+V" con un código distinto en cada obra)
       const nomN = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9+]/g, "");
