@@ -8,7 +8,7 @@ jobs:
       - name: Diagnóstico de obras de la app general (nombres y fechas, sin montos)
         run: |
           K=sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5; U=https://bxhjgxzvayszfqwlwinq.supabase.co/rest/v1/bco_storage
-          g(){ curl -s "$U?key=eq.$1&select=value,updated_at&limit=1" -H "apikey: $K" -H "Authorization: Bearer $K"; }
+          g(){ curl -s "$U?key=eq.$1&select=value&limit=1" -H "apikey: $K" -H "Authorization: Bearer $K"; }
           g vv_obras > o.json; g vv_obras_del > d.json; g vv_obras__ts > t.json
           curl -s "$U?key=like.respaldo_obras:*&select=key,value" -H "apikey: $K" -H "Authorization: Bearer $K" > r.json
           curl -s "$U?key=like.vv_bak__vv_obras__*&select=key,value" -H "apikey: $K" -H "Authorization: Bearer $K" > b.json
@@ -19,7 +19,7 @@ jobs:
             except Exception as e: return []
           o=L('o.json'); d=L('d.json'); t=L('t.json')
           obras=json.loads(o[0]['value']) if o and o[0].get('value') else []
-          print('NUBE vv_obras',len(obras),'actualizado',o[0].get('updated_at') if o else None,'ts',t[0]['value'] if t else None)
+          print('NUBE vv_obras',len(obras),'ts',t[0]['value'] if t else None)
           for x in obras: print('  OBRA',x.get('id'),'|',x.get('nombre') or x.get('name'),'|',x.get('estado',''))
           tum=json.loads(d[0]['value']) if d and d[0].get('value') else {}
           print('TUMBAS',len(tum))
