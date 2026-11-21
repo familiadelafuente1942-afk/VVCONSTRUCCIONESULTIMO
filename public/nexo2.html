@@ -4870,7 +4870,7 @@ function nxLiberar(){let lib=0;try{
   Object.keys(localStorage).filter(k=>/^vv_bak__/.test(k)).forEach(k=>{lib+=(rawGet.call(localStorage,k)||'').length;localStorage.removeItem(k)});
   ['vv_certif_sem','vv_avance','vv_bitacora','vv_cobros_generales'].forEach(k=>{const v=rawGet.call(localStorage,k);if(v&&v.length>100000){lib+=v.length;localStorage.removeItem(k);localStorage.removeItem(k+'__ts')}});
 }catch(e){}return lib}
-function nxGuardarLocal(k,v){try{nxGuardarLocal(k,v)}catch(e){}if(rawGet.call(localStorage,k)!==v){nxLiberar();try{nxGuardarLocal(k,v)}catch(e){}}return rawGet.call(localStorage,k)===v}
+function nxGuardarLocal(k,v){try{rawSet.call(localStorage,k,v)}catch(e){}if(rawGet.call(localStorage,k)!==v){nxLiberar();try{rawSet.call(localStorage,k,v)}catch(e){}}return rawGet.call(localStorage,k)===v}
 const lget=k=>{try{return rawGet.call(localStorage,k)}catch(e){return null}};
 const lset=(k,v)=>{try{nxGuardarLocal(k,v)}catch(e){}};
 let listo=false;const sucio=new Set();const tim={};
@@ -5011,7 +5011,7 @@ const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearIn
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261121-164057';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261121-164523';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>document.querySelector('#layer .sheet,input:focus,textarea:focus');
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 const barra=()=>{if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
