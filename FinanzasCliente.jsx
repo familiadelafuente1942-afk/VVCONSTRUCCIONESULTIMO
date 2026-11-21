@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 // Visor de fotos a pantalla completa (toque para cerrar)
 function verFotoGrande(url) {
@@ -1079,12 +1080,15 @@ function Money({ v, c }) { return <span style={{ fontWeight: 700, color: c || T.
 const _esIOS = () => typeof navigator !== "undefined" && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
 function Sel({ value, onChange, style, children, disabled }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+  const ref = useRef(null), lst = useRef(null);
+  const [pos, setPos] = useState(null);
   useEffect(() => {
     if (!open) return;
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const ubicar = () => { const b = ref.current && ref.current.getBoundingClientRect(); if (!b) return; const abajo = window.innerHeight - b.bottom, arriba = b.top; const h = Math.min(300, Math.max(abajo, arriba) - 12); setPos({ left: b.left, width: b.width, top: abajo >= 220 || abajo >= arriba ? b.bottom + 4 : undefined, bottom: abajo >= 220 || abajo >= arriba ? undefined : window.innerHeight - b.top + 4, maxHeight: Math.max(160, h) }); };
+    ubicar(); window.addEventListener("resize", ubicar); window.addEventListener("scroll", ubicar, true);
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target) && !(lst.current && lst.current.contains(e.target))) setOpen(false); };
     document.addEventListener("mousedown", h); document.addEventListener("touchstart", h);
-    return () => { document.removeEventListener("mousedown", h); document.removeEventListener("touchstart", h); };
+    return () => { document.removeEventListener("mousedown", h); document.removeEventListener("touchstart", h); window.removeEventListener("resize", ubicar); window.removeEventListener("scroll", ubicar, true); };
   }, [open]);
   if (_esIOS()) return <select value={value} onChange={onChange} style={style} disabled={disabled}>{children}</select>;
   const items = [];
@@ -1104,10 +1108,10 @@ function Sel({ value, onChange, style, children, disabled }) {
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cur ? cur.l : ""}</span>
         <span style={{ fontSize: 11, opacity: 0.6 }}>▾</span>
       </button>
-      {open && <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 1000, maxHeight: 300, overflowY: "auto", background: T.page, border: `1px solid ${T.border}`, borderRadius: 10, boxShadow: "0 12px 30px rgba(0,0,0,.25)" }}>
+      {open && pos && createPortal(<div ref={lst} style={{ position: "fixed", left: pos.left, width: pos.width, top: pos.top, bottom: pos.bottom, zIndex: 100000, maxHeight: pos.maxHeight, overflowY: "auto", background: T.page, border: `1px solid ${T.border}`, borderRadius: 10, boxShadow: "0 12px 30px rgba(0,0,0,.25)" }}>
         {items.map((it, k) => { const head = it.g && it.g !== lastG ? (lastG = it.g, <div key={"g" + k} style={{ padding: "8px 12px 4px", fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase" }}>{it.g}</div>) : null; return (<React.Fragment key={k}>{head}
           <div onClick={() => { if (it.d) return; onChange({ target: { value: it.v } }); setOpen(false); }} style={{ padding: "11px 14px", fontSize: 14, color: it.d ? T.muted : T.text, cursor: it.d ? "default" : "pointer", background: it.v === String(value ?? "") ? T.al : "transparent", fontWeight: it.v === String(value ?? "") ? 700 : 500 }}>{it.l}</div></React.Fragment>); })}
-      </div>}
+      </div>, document.body)}
     </div>
   );
 }
