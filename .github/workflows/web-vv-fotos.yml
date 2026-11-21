@@ -14,20 +14,17 @@ jobs:
           mkdir -p public/web/img
           B="https://ee49b3883c.clvaw-cdnwnd.com/c2ebebd1ca6c6bfa12bfd005fcf362fd"
           bajar(){ curl -sSL --fail -A "Mozilla/5.0" -o "public/web/img/$1" "$B/$2?ph=ee49b3883c" && echo "ok $1" || echo "FALLO $1"; }
-          bajar portada.jpg "200000530-8961c8961e/WhatsApp%20Image%202021-08-03%20at%2014.26.10.jpeg"
-          bajar nosotros.jpg "200000488-cccabcccaf/image-crop-200000484.jpeg"
-          bajar porfolio.jpg "200000489-8ba7e8ba83/image-crop-200000487.jpeg"
-          bajar mayling.jpg "200001205-2518625189/Imagen%20de%20WhatsApp%202024-07-08%20a%20las%2011.13.08_9e33793d.jpeg"
-          bajar albanueva.jpg "200001207-9725e97261/Imagen%20de%20WhatsApp%202024-07-08%20a%20las%2011.23.37_96f05a29.jpeg"
-          bajar pacheco.jpg "200001211-432f6432f9/Imagen%20de%20WhatsApp%202024-07-08%20a%20las%2011.40.27_4ae1656d.jpeg"
-          bajar corea.jpg "200001209-c8e83c8e86/Imagen%20de%20WhatsApp%202024-07-08%20a%20las%2011.28.06_3d0bc00d.jpeg"
-          bajar particulares.jpg "200000005-0c8540c856/IMG_4600.JPG"
-          bajar barrios.jpg "200000055-10b9910b9b/edificio-uso-mixto-chile.jpg"
-          bajar edificios.jpg "200000051-d2d3fd2d41/IMG_0135.jpg"
-          bajar remodelaciones.jpg "200000054-0513b0513d/WhatsApp%20Image%202020-07-16%20at%2008.35.49.jpeg"
-          bajar naves.jpg "200000052-b2ed6b2ed8/IMG_0137.jpg"
+          bajar e22-1.jpg "200000471-e3a27e3a29/IMG_0878.JPG"
+          bajar e22-2.jpg "200000151-df7fedf801/IMG_1531.JPG"
+          bajar e22-3.jpg "200000135-560d9560dc/IMG_0560.JPG"
+          bajar terralagos-1.jpg "200001197-44a4044a43/KSKS.jpg"
+          bajar terralagos-2.jpg "200001195-9b59f9b5a2/JEJEW.jpg"
+          bajar terralagos-3.jpg "200001199-30b4530b49/JSKS.jpg"
+          yt(){ curl -sSL --fail -o "public/web/img/$1" "https://img.youtube.com/vi/$2/hqdefault.jpg" && echo "ok $1" || echo "FALLO $1"; }
+          yt video-e22.jpg lDGgzu1nnvM
+          yt video-g5.jpg m85tuLKKw_A
           sudo apt-get install -y -qq imagemagick >/dev/null 2>&1 || true
-          for f in public/web/img/*.jpg; do convert "$f" -auto-orient -resize '1600x1600>' -quality 80 -strip "$f" || true; done
+          for f in public/web/img/e22-*.jpg public/web/img/terralagos-*.jpg public/web/img/video-*.jpg; do convert "$f" -auto-orient -resize '1600x1600>' -quality 80 -strip "$f" || true; done
           ls -la public/web/img
       - name: Guardar en el repo
         run: |
