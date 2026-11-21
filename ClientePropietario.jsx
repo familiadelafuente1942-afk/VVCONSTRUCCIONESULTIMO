@@ -53,6 +53,11 @@ if (typeof window !== "undefined") {
 // Margen superior seguro (iPad/iPhone con la app instalada): evita que la hora tape los botones.
 const SAFE_TOP_PX = (() => { try { return (window.navigator.standalone || window.matchMedia("(display-mode: standalone)").matches) ? 50 : 0; } catch (e) { return 0; } })();
 const TOPPAD = (extra) => `calc(${extra}px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px))`;
+// Obras sin repetidos: si una obra aparece varias veces (mismo id), queda una sola (la última, que es la más nueva).
+// Evita que la lista crezca sin control en la nube (llegó a 1126 copias de 9 obras y a 18 MB).
+function dedupObrasJSON(value) {
+  try { const a = JSON.parse(value); if (!Array.isArray(a)) return value; const m = new Map(); a.forEach(o => { if (o && o.id != null) { m.delete(o.id); m.set(o.id, o); } }); const out = [...m.values()]; return out.length === a.length ? value : JSON.stringify(out); } catch { return value; }
+}
 const storage = {
   get: async (key) => {
     try {
@@ -70,7 +75,7 @@ const storage = {
       return { ok: true, value: (d && d.length > 0) ? d[0].value : null };
     } catch { return { ok: false, value: null }; }
   },
-  set: async (key, value) => {
+  set: async (key, value) => { if (key === "vv_obras") value = dedupObrasJSON(value);
     try { localStorage.setItem(key, value); } catch { }
     try {
       const r = await fetch(SUPA_URL + "/rest/v1/bco_storage", { method: "POST", headers: { ...SH(), "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify({ key, value }) });

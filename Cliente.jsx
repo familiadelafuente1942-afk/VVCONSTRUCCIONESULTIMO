@@ -194,8 +194,13 @@ function SyncBanner() {
   </div>);
 }
 
+// Obras sin repetidos: si una obra aparece varias veces (mismo id), queda una sola (la última, que es la más nueva).
+// Evita que la lista crezca sin control en la nube (llegó a 1126 copias de 9 obras y a 18 MB).
+function dedupObrasJSON(value) {
+  try { const a = JSON.parse(value); if (!Array.isArray(a)) return value; const m = new Map(); a.forEach(o => { if (o && o.id != null) { m.delete(o.id); m.set(o.id, o); } }); const out = [...m.values()]; return out.length === a.length ? value : JSON.stringify(out); } catch { return value; }
+}
 const storage = {
-  set: async (key, value) => {
+  set: async (key, value) => { if (key === "vv_obras") value = dedupObrasJSON(value);
     // ANTES no revisaba si el servidor aceptó el guardado (solo atrapaba fallas de RED,
     // no un error HTTP como 403/413/500). Eso podía fallar en silencio: quedaba guardado
     // acá, pero nunca llegaba a la nube. Ahora revisa la respuesta y reintenta una vez.

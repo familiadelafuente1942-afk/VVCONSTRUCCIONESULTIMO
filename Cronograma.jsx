@@ -61,6 +61,11 @@ function avisarErrorSync() {
   try { window.dispatchEvent(new CustomEvent("vv-sync-error")); } catch { }
 }
 
+// Obras sin repetidos: si una obra aparece varias veces (mismo id), queda una sola (la última, que es la más nueva).
+// Evita que la lista crezca sin control en la nube (llegó a 1126 copias de 9 obras y a 18 MB).
+function dedupObrasJSON(value) {
+  try { const a = JSON.parse(value); if (!Array.isArray(a)) return value; const m = new Map(); a.forEach(o => { if (o && o.id != null) { m.delete(o.id); m.set(o.id, o); } }); const out = [...m.values()]; return out.length === a.length ? value : JSON.stringify(out); } catch { return value; }
+}
 const storage = {
   get: async (key) => {
     try {
@@ -72,7 +77,7 @@ const storage = {
     try { const v = localStorage.getItem(key); if (v != null) return { value: v }; } catch { }
     return null;
   },
-  set: async (key, value) => {
+  set: async (key, value) => { if (key === "vv_obras") value = dedupObrasJSON(value);
     try { localStorage.setItem(key, value); } catch { }
     const intentar = () => fetch(SUPA_URL + "/rest/v1/bco_storage", {
       method: "POST", headers: { ...SH(), Prefer: "resolution=merge-duplicates" },

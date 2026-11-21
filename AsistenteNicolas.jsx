@@ -9,8 +9,13 @@ import React, { useState, useEffect, useRef } from "react";
 const SUPA_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co";
 const SUPA_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
 const SH = () => ({ "Content-Type": "application/json", "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY });
+// Obras sin repetidos: si una obra aparece varias veces (mismo id), queda una sola (la última, que es la más nueva).
+// Evita que la lista crezca sin control en la nube (llegó a 1126 copias de 9 obras y a 18 MB).
+function dedupObrasJSON(value) {
+  try { const a = JSON.parse(value); if (!Array.isArray(a)) return value; const m = new Map(); a.forEach(o => { if (o && o.id != null) { m.delete(o.id); m.set(o.id, o); } }); const out = [...m.values()]; return out.length === a.length ? value : JSON.stringify(out); } catch { return value; }
+}
 const storage = {
-  set: async (key, value) => { try { localStorage.setItem(key, value); } catch { } try { await fetch(SUPA_URL + "/rest/v1/bco_storage", { method: "POST", headers: { ...SH(), "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify({ key, value }) }); } catch { } return { value }; },
+  set: async (key, value) => { if (key === "vv_obras") value = dedupObrasJSON(value); try { localStorage.setItem(key, value); } catch { } try { await fetch(SUPA_URL + "/rest/v1/bco_storage", { method: "POST", headers: { ...SH(), "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify({ key, value }) }); } catch { } return { value }; },
   get: async (key) => { try { const r = await fetch(SUPA_URL + "/rest/v1/bco_storage?key=eq." + encodeURIComponent(key) + "&select=value&limit=1", { headers: SH(), mode: "cors" }); if (r.ok) { const d = await r.json(); if (d && d.length) return { value: d[0].value }; } } catch { } try { const v = localStorage.getItem(key); return v ? { value: v } : null; } catch { return null; } },
 };
 const uid = () => Math.random().toString(36).slice(2, 9);
