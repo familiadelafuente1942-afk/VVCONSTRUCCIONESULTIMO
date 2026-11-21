@@ -1633,9 +1633,9 @@ function BelfastPanel({ data, obras, certsDe, btnPaneles }) {
             return <div style={{ background: T.bg, borderRadius: 14, padding: "12px", margin: "4px 0 12px" }}>
               <div style={{ fontSize: 11, letterSpacing: ".12em", textTransform: "uppercase", color: T.accent, fontWeight: 800, marginBottom: 8 }}>Precio por m²</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 8 }}>
-                <Field label="Metros²"><input value={m2 ? fmtMiles(m2) : ""} onChange={e => setBo({ m2: numMoney(e.target.value.replace(/m²/g, "")) })} inputMode="numeric" placeholder="m²" style={{ ...inpSm, width: "100%", minWidth: 0, boxSizing: "border-box" }} /></Field>
-                <Field label="U$s por m²"><input value={usd ? "U$s " + fmtMiles(usd) : ""} onChange={e => setBo({ usdM2: numMoney(e.target.value.replace(/^U\$s\s*/, "")) })} inputMode="numeric" placeholder="U$s" style={{ ...inpSm, width: "100%", minWidth: 0, boxSizing: "border-box" }} /></Field>
-                <Field label="Dólar ($ por U$s)"><input value={tc ? "$ " + fmtMiles(tc) : ""} onChange={e => setBo({ tc: numMoney(e.target.value) })} inputMode="numeric" placeholder="$" style={{ ...inpSm, width: "100%", minWidth: 0, boxSizing: "border-box" }} /></Field>
+                <Field label="Metros²"><input value={m2 ? fmtMiles(m2) : ""} onChange={e => { const v = numMoney(e.target.value.replace(/m²/g, "")); setBo(v && usd && tc ? { m2: v } : { m2: v, rubros: {} }); }} inputMode="numeric" placeholder="m²" style={{ ...inpSm, width: "100%", minWidth: 0, boxSizing: "border-box" }} /></Field>
+                <Field label="U$s por m²"><input value={usd ? "U$s " + fmtMiles(usd) : ""} onChange={e => { const v = numMoney(e.target.value.replace(/^U\$s\s*/, "")); setBo(v && m2 && tc ? { usdM2: v } : { usdM2: v, rubros: {} }); }} inputMode="numeric" placeholder="U$s" style={{ ...inpSm, width: "100%", minWidth: 0, boxSizing: "border-box" }} /></Field>
+                <Field label="Dólar ($ por U$s)"><input value={tc ? "$ " + fmtMiles(tc) : ""} onChange={e => { const v = numMoney(e.target.value); setBo(v && m2 && usd ? { tc: v } : { tc: v, rubros: {} }); }} inputMode="numeric" placeholder="$" style={{ ...inpSm, width: "100%", minWidth: 0, boxSizing: "border-box" }} /></Field>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 4 }}>
                 <Box t="Total en dólares" v={totUsd ? "U$s " + fmtMiles(Math.round(totUsd)) : "—"} />
