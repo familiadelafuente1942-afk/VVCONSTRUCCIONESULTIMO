@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es"><head><meta name="app-build" content="20261120-173749"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<html lang="es"><head><meta name="app-build" content="20261121-002027"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Nexo · Contratistas</title><meta name="theme-color" content="#0d0e10"><script>/* MODO PRUEBAS (temporal): true = se elige contratista y obra sin código. false = pide código como siempre. */var MODO_PRUEBAS=true;</script><script>/* tema claro/oscuro antes de dibujar (sin parpadeo); por defecto sigue al equipo */(function(){var p="";try{p=localStorage.getItem("ct_tema")||""}catch(e){}var t=p||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"claro":"oscuro");document.documentElement.setAttribute("data-tema",t);var m=document.querySelector("meta[name=theme-color]");if(m)m.setAttribute("content",t==="claro"?"#eceef3":"#0d0e10")})()</script><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Contratistas"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -60,7 +60,22 @@ button{font:inherit;cursor:pointer}
 
 /* listas desplegables: siempre letra oscura sobre fondo claro (se leen en modo claro y oscuro, PC y Apple) */
 select option,select optgroup{background-color:#fff!important;color:#16171a!important}
-</style></head><body>
+</style><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style id="b3css">
+/* Bloque 3 · diseño de las maquetas: fondo beige, tarjetas blancas, Inter + Playfair */
+:root,:root[data-tema],:root[data-tema="claro"]{--bg:#F3EEE5;--card:#FFFFFF;--line:#E4DCCD;--ink:#1E1B16;--mut:#5E574C;--gold:#7A5718;--ok:#2E6B3E;--warn:#B85C00;--bad:#B3261E;--in:#FFFFFF;--btn:#FFFFFF;--on:#F6E9CC;--onfg:#7A5718;--goldfg:#1E1B16;--bar:#FFFFFF;color-scheme:light;
+ --g-a:#fff;--g-b:#fff;--g-c:#fff;--g-edge:#E4DCCD;--g-rim:transparent;--g-low:transparent;--g-fx:none;--g-sh:transparent}
+html,body{background:#F3EEE5!important;color:#1E1B16}
+body{font-family:Inter,system-ui,-apple-system,sans-serif!important}
+h1,h2,h3{font-family:"Playfair Display",Georgia,serif!important;font-weight:700}
+.card,.btn:not(.gold),.tipos button,#tema,#estado{background:#FFFFFF!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;box-shadow:none!important;border:1px solid #E4DCCD!important}
+.card{border-radius:16px!important}
+.btn{min-height:44px;font-family:Inter,system-ui,sans-serif!important;font-weight:600;border-radius:999px!important}
+.btn.gold{background:linear-gradient(160deg,#E6C47E 0%,#C99A48 100%)!important;color:#1E1B16!important;border:0!important;box-shadow:0 10px 20px -10px rgba(140,100,30,.6)!important}
+input,select,textarea{background:#FFFFFF!important;border:1px solid #D8CFC0!important;color:#1E1B16!important;border-radius:12px!important;font-family:Inter,system-ui,sans-serif}
+a{color:#7A5718}
+</style>
+</head><body>
 <div id="app"></div><div id="estado"></div>
 <script>
 const API='/api/nexo2',LS='nexo2_ct';

@@ -455,6 +455,12 @@ export default async function handler(req, res) {
           const dn = new Set([...(P.delN || []), ...(N.delN || [])]); let ch = false;
           for (const x of (P.nuevas || [])) if (x && x.id && !dn.has(x.id) && !N.nuevas.some((y) => y && y.id === x.id)) { N.nuevas.push(x); ch = true; }
           if (dn.size && JSON.stringify([...dn]) !== JSON.stringify(N.delN || [])) { N.delN = [...dn].slice(-300); ch = true; }
+          // los avisos entre roles se suman (nunca se pisan): si dos aparatos guardan casi juntos, no se pierde ninguno
+          if (Array.isArray(P.avisos) && P.avisos.length) {
+            const L = Array.isArray(N.avisos) ? N.avisos.slice() : []; const ids = new Set(L.map((x) => x && x.id)); let add = 0;
+            for (const x of P.avisos) if (x && x.id && !ids.has(x.id) && Date.now() - Number(x.t || 0) < 14 * 864e5) { L.push(x); add++; }
+            if (add) { L.sort((x, y) => Number(x.t || 0) - Number(y.t || 0)); N.avisos = L.slice(-40); ch = true; }
+          }
           if (ch) { vOut = JSON.stringify(N); await escribir(H, "cfg_prev", prev); }
         }
       } catch { /* si no se puede leer, se guarda como vino */ }
