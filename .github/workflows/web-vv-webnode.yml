@@ -1,0 +1,27 @@
+name: web-vv-webnode
+on:
+  workflow_dispatch:
+jobs:
+  w:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recorrer la web Webnode de V+V
+        run: |
+          mkdir -p wn && cd wn
+          B=https://www.vvconstruccionesweb.com
+          curl -sSL -A "Mozilla/5.0" "$B/sitemap.xml" -o sitemap.xml; echo "SITEMAP"; grep -o '<loc>[^<]*' sitemap.xml | sed 's/<loc>//' | tee urls.txt
+          for p in "" porfolio obras-en-ejecucion sobre-nosotros proyectos-a-la-venta proximos-proyectos decoracion tendencias contacto videos2; do echo "$B/$p/" >> urls.txt; done
+          sort -u urls.txt -o urls.txt
+          i=0; while read u; do i=$((i+1)); curl -sSL -A "Mozilla/5.0" "$u" -o "p$i.html"; echo "PAGEURL p$i $u"; done < urls.txt
+          python3 - <<'PY'
+          import re,glob,html
+          for f in sorted(glob.glob('p*.html'),key=lambda x:int(x[1:-5])):
+            s=open(f,encoding='utf-8',errors='ignore').read()
+            t=re.search(r'<title>(.*?)</title>',s,re.S); print('### PAGE',f,'|',html.unescape(t.group(1)).strip() if t else '')
+            for m in re.finditer(r'(clvaw-cdnwnd\.com/[^"\'\s)]+)',s):
+              u=m.group(1)
+              if '/700/' in u or 'system_preview' in u: continue
+              ctx=re.sub('<[^>]+>',' ',s[max(0,m.start()-600):m.start()+900]); ctx=re.sub(r'\s+',' ',html.unescape(ctx))
+              cap=re.findall(r'(?:title|alt|data-caption)="([^"]{2,80})"',s[max(0,m.start()-400):m.start()+600])
+              print('IMG https://ee49b3883c.'+u,'|',' / '.join(sorted(set(cap)))[:120])
+          PY
