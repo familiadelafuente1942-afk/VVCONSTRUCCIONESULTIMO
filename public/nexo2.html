@@ -4862,8 +4862,17 @@ const API='/api/nexo2';
 const MAP={nexo2_obras_cfg:'cfg'};
 const VACIO='{"mod":{},"nuevas":[]}';
 const rawSet=Storage.prototype.setItem,rawGet=Storage.prototype.getItem;
+/* este dominio lo comparten varias apps (V+V, Finanzas, Contratistas…) y el navegador da ~5 MB en total.
+   Si se llena, NEXO 2 no puede guardar lo que baja de la nube y queda desfasado ("Pendiente de sincronizar").
+   Cuando pasa eso se liberan copias que ya están en la nube (respaldos locales y cachés grandes de las otras apps,
+   esas apps las guardan siempre en la nube y las vuelven a bajar solas) y se reintenta. */
+function nxLiberar(){let lib=0;try{
+  Object.keys(localStorage).filter(k=>/^vv_bak__/.test(k)).forEach(k=>{lib+=(rawGet.call(localStorage,k)||'').length;localStorage.removeItem(k)});
+  ['vv_certif_sem','vv_avance','vv_bitacora','vv_cobros_generales'].forEach(k=>{const v=rawGet.call(localStorage,k);if(v&&v.length>100000){lib+=v.length;localStorage.removeItem(k);localStorage.removeItem(k+'__ts')}});
+}catch(e){}return lib}
+function nxGuardarLocal(k,v){try{nxGuardarLocal(k,v)}catch(e){}if(rawGet.call(localStorage,k)!==v){nxLiberar();try{nxGuardarLocal(k,v)}catch(e){}}return rawGet.call(localStorage,k)===v}
 const lget=k=>{try{return rawGet.call(localStorage,k)}catch(e){return null}};
-const lset=(k,v)=>{try{rawSet.call(localStorage,k,v)}catch(e){}};
+const lset=(k,v)=>{try{nxGuardarLocal(k,v)}catch(e){}};
 let listo=false;const sucio=new Set();const tim={};
 window.__sync={est:'cargando',ok:0,ocupado:0};
 /* cambios sin subir: quedan anotados en el aparato para subirlos al volver a abrir (si la app se cerró antes de llegar a la nube) */
@@ -4940,7 +4949,7 @@ async function subir(k){
     if(d&&d.v&&(+d.t||0)>(+lget('nexo2_sync_t_'+k)||0)&&d.v!==v){
       /* otro usuario guardó algo desde la última vez: se junta con lo mío en vez de pisarlo */
       const m=merge3(lget(BASE_K+k),v,d.v)||fusion(v,d.v);
-      if(m&&m!==v){rawSet.call(localStorage,k,m);v=m;recargar=true}}}}catch(e){}
+      if(m&&m!==v){nxGuardarLocal(k,m);v=m;recargar=true}}}}catch(e){}
   const t=Date.now();const nuevos=(window.__nuevoCron||[]).slice();
   window.__sync.ocupado++;
   try{const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:MAP[k],t,v,nuevos})});
@@ -4949,17 +4958,17 @@ async function subir(k){
       /* la obra ya tiene un cronograma en la nube: gana el que ya existe y se avisa */
       try{const g=await fetch(API,{cache:'no-store'}),d=(await g.json())[MAP[k]];const R=JSON.parse(d.v),M=JSON.parse(merge3(lget(BASE_K+k),v,d.v)||v);
         (j.ids||[]).forEach(id=>{M.mod=M.mod||{};if(R.mod&&R.mod[id])M.mod[id]=R.mod[id];else delete M.mod[id]});
-        rawSet.call(localStorage,k,JSON.stringify(M));lset('nexo2_sync_t_'+k,String(d.t));lset(BASE_K+k,d.v);window.__nuevoCron=(window.__nuevoCron||[]).filter(x=>!nuevos.includes(x));marcar(k)}catch(e){/* no se pudo leer la nube: se conserva la marca de 'primer cronograma' y se reintenta (el servidor lo vuelve a rechazar) */}
+        nxGuardarLocal(k,JSON.stringify(M));lset('nexo2_sync_t_'+k,String(d.t));lset(BASE_K+k,d.v);window.__nuevoCron=(window.__nuevoCron||[]).filter(x=>!nuevos.includes(x));marcar(k)}catch(e){/* no se pudo leer la nube: se conserva la marca de 'primer cronograma' y se reintenta (el servidor lo vuelve a rechazar) */}
       estado('');try{toast('Esta obra ya tenía un cronograma generado: se cargó el existente y NO se guardó el tuyo. Nada se perdió.')}catch(e){}
       setTimeout(()=>recargarCuando(),1500);return false}
     if(r.ok){let j={};try{j=await r.json()}catch(e){}
       window.__nuevoCron=(window.__nuevoCron||[]).filter(x=>!nuevos.includes(x));
-      if(typeof j.v==='string'&&j.v!==v){/* la nube conservó obras que este aparato no tenía: se bajan */const loc=lget(k);const f=loc===v?j.v:(merge3(v,loc,j.v)||fusion(loc,j.v));rawSet.call(localStorage,k,f);v=j.v;recargar=true}
+      if(typeof j.v==='string'&&j.v!==v){/* la nube conservó obras que este aparato no tenía: se bajan */const loc=lget(k);const f=loc===v?j.v:(merge3(v,loc,j.v)||fusion(loc,j.v));nxGuardarLocal(k,f);v=j.v;recargar=true}
       lset('nexo2_sync_t_'+k,String(+j.t||t));lset(BASE_K+k,v);if(lget(k)===v)limpio(k);else marcar(k);falloAviso=false;window.__sync.ok=Date.now();estado('ok');if(recargar)recargarCuando();return true}else throw new Error('http')}catch(e){if(window.__sync.ocupado>0)window.__sync.ocupado--;estado('pend');if(!falloAviso){falloAviso=true;try{toast('No se pudo guardar en la nube. El cambio quedó en este aparato y se sube solo al volver la conexión.')}catch(x){}}return false}
 }
 let falloAviso=false;
 Storage.prototype.setItem=function(k,v){
-  if(this===localStorage&&MAP[k]){const antes=lget(k);v=fusion(antes,v);rawSet.call(this,k,v);if(lget(k)!==v){try{toast('No se pudo guardar en este aparato (memoria llena). El cambio puede perderse al cerrar.')}catch(e){}}if(antes!==v){marcar(k);if(listo){clearTimeout(tim[k]);tim[k]=setTimeout(()=>subir(k),700)}}return}
+  if(this===localStorage&&MAP[k]){const antes=lget(k);v=fusion(antes,v);nxGuardarLocal(k,v);if(lget(k)!==v){try{toast('No se pudo guardar en este aparato (memoria llena). El cambio puede perderse al cerrar.')}catch(e){}}if(antes!==v){marcar(k);if(listo){clearTimeout(tim[k]);tim[k]=setTimeout(()=>subir(k),700)}}return}
   return rawSet.call(this,k,v);
 };
 async function bajar(){
@@ -4975,12 +4984,12 @@ async function bajar(){
         const lt=+lget('nexo2_sync_t_'+k)||0;
         /* aparato que quedó desfasado: cree estar al día pero en la nube hay obras que no tiene */
         if(d.t===lt){try{const L=JSON.parse(lget(k)||'{}')||{},R=JSON.parse(d.v)||{},dn=new Set([...(L.delN||[]),...(R.delN||[])]),ya=new Set((L.nuevas||[]).map(x=>x&&x.id));
-          if((R.nuevas||[]).some(x=>x&&x.id&&!ya.has(x.id)&&!dn.has(x.id))){const loc=lget(k);const f=fusion(loc,d.v);if(f!==loc){rawSet.call(localStorage,k,f);cambio=true}lset(BASE_K+k,d.v);if(f!==d.v)marcar(k);else limpio(k);continue}}catch(e){}}
+          if((R.nuevas||[]).some(x=>x&&x.id&&!ya.has(x.id)&&!dn.has(x.id))){const loc=lget(k);const f=fusion(loc,d.v);if(f!==loc){nxGuardarLocal(k,f);cambio=true}lset(BASE_K+k,d.v);if(f!==d.v)marcar(k);else limpio(k);continue}}catch(e){}}
         if(d.t!==lt){/* cualquier diferencia con lo último que vio este aparato cuenta como cambio (no se compara por reloj) */
           const loc=lget(k);let f=null;
           if(sucio.has(k)&&lget(BASE_K+k))f=merge3(lget(BASE_K+k),loc,d.v);
           if(!f)f=fusion(loc,d.v);
-          if(f!==loc){rawSet.call(localStorage,k,f);cambio=true}
+          if(f!==loc){nxGuardarLocal(k,f);cambio=true}
           lset('nexo2_sync_t_'+k,String(d.t));lset(BASE_K+k,d.v);if(f!==d.v)marcar(k);else limpio(k);
         }
       }
@@ -5002,7 +5011,7 @@ const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearIn
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261121-013154';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261121-164057';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>document.querySelector('#layer .sheet,input:focus,textarea:focus');
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 const barra=()=>{if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
