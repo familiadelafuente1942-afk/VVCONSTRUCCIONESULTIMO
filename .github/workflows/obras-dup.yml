@@ -33,15 +33,17 @@ jobs:
           out=json.dumps(keep,ensure_ascii=False)
           print('LIMPIO_MB',round(len(out)/1e6,2),'items',len(keep))
           if os.environ.get('MODO')=='limpiar':
-            K=os.environ.get('K') or 'sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5'
+            K='sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5'
             H={'apikey':K,'Authorization':'Bearer '+K,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'}
             U='https://bxhjgxzvayszfqwlwinq.supabase.co/rest/v1/bco_storage'
-            bk='bk_manual_vv_obras_'+time.strftime('%Y%m%d_%H%M')
-            for key,val in ((bk,raw),('vv_obras',out),('vv_obras__ts',str(int(time.time()*1000)))):
-              if key.startswith('bk_'): continue
+            def esc(key,val):
               try:
-                r=urllib.request.urlopen(urllib.request.Request(U,data=json.dumps({'key':key,'value':val}).encode(),headers=H,method='POST'))
-                print('ESCRITO',key,r.status)
-              except urllib.error.HTTPError as e:
-                print('ERROR',key,e.code,e.read().decode()[:400])
+                r=urllib.request.urlopen(urllib.request.Request(U,data=json.dumps({'key':key,'value':val}).encode(),headers=H,method='POST')); return r.status
+              except urllib.error.HTTPError as e: return 'ERR %s %s'%(e.code,e.read().decode()[:200])
+            # el candado de la base no deja achicar más de la mitad de una vez: se baja a la mitad por pasos
+            n=len(arr); paso=0
+            while n>len(keep):
+              n=max(len(keep),(n+1)//2); lista=[keep[k%len(keep)] for k in range(n)] if n>len(keep) else keep
+              paso+=1; print('PASO',paso,n,esc('vv_obras',json.dumps(lista,ensure_ascii=False)))
+            print('TS',esc('vv_obras__ts',str(int(time.time()*1000))))
           PY
