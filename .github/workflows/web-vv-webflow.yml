@@ -1,0 +1,19 @@
+name: web-vv-webflow
+on:
+  workflow_dispatch:
+jobs:
+  w:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bajar las páginas de la web Webflow de V+V
+        run: |
+          mkdir -p wf && cd wf
+          B=https://vvconstrucciones.webflow.io
+          for p in "" portfolio sobre-nosotros contact zonas/hudson zonas/brandsen zonas/canning zonas/citybell zonas/quilmes zonas/berazategui barrios/terralagos barrios/nuevo-quilmes barrios/lomas-de-city-bell barrios/fincas-de-iraola-2 barrios/area-60 barrios/greenville barrios/fincas-de-hudson proyectos/canning-terralagos-lote-815 proyectos/fincas-de-hudson-lote-e22 proyectos/area-60-lote-289 proyectos/fincas-de-hudson-lote-g5 proyectos/greenville-lote-e39 proyectos/nuevo-quilmes-lote-1j01 proyectos/area-60-la-reserva-lote-254 proyectos/area-60-la-victoria-lote-25 proyectos/nuevo-quilmes-lote-2d02 proyectos/greenville-lote-a1 proyectos/area-60-la-victoria-lote-135; do
+            n=$(echo "${p:-home}" | tr '/' '_'); curl -sSL -A "Mozilla/5.0" "$B/$p" -o "$n.html" && echo "ok $n $(wc -c < $n.html)"
+          done
+          grep -ho 'https://[a-z0-9.-]*website-files.com/[^"'"'"' )]*' *.html | sort -u > urls.txt; wc -l urls.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wf
+          path: wf
