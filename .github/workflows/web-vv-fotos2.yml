@@ -1,0 +1,91 @@
+name: web-vv-fotos2
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  f:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bajar fotos de obras de las webs anteriores de V+V
+        run: |
+          mkdir -p public/web/img/obras
+          bajar(){ curl -sSL --fail -A "Mozilla/5.0" -o "public/web/img/obras/$1" "$2" && echo "ok $1" || echo "FALLO $1"; }
+          bajar "area-60-la-reserva-lote-254-01.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe95a40f6fd35e3d77b352_1.jpg"
+          bajar "area-60-la-reserva-lote-254-02.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe95aa17986ec6c51598b8_2.jpg"
+          bajar "area-60-la-reserva-lote-254-03.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe95aadc0e8e503461bfd0_4.jpg"
+          bajar "area-60-la-reserva-lote-254-04.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe95aa4aea2e09f3af7e27_5.jpg"
+          bajar "area-60-la-victoria-lote-135-01.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe7e0fcb2edb91aa0e3931_imagen%201.jpeg"
+          bajar "area-60-la-victoria-lote-135-02.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe7e151d37c561078e3fd7_imagen%202.jpeg"
+          bajar "area-60-la-victoria-lote-135-03.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe7e157344b2c0eb90f539_imagen%203.jpeg"
+          bajar "area-60-la-victoria-lote-135-04.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe7e155412dc447744bcc7_imagen%204.jpeg"
+          bajar "area-60-la-victoria-lote-135-05.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe7e1549e9746bf9f01848_imagen%205.jpeg"
+          bajar "area-60-la-victoria-lote-135-06.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe7e15679a11cb0972d7f2_imagen%207.jpeg"
+          bajar "area-60-la-victoria-lote-25-01.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe92b2c8f2e4e4fc24f7ed_Screen%20Shot%202022-08-18%20at%204.27.31%20PM.png"
+          bajar "area-60-la-victoria-lote-25-02.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe920c9e1eace47b538826_lote%2025.jpeg"
+          bajar "area-60-la-victoria-lote-25-03.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe920c7d26d85b2d34a1a7_WhatsApp%20Image%202021-06-22%20at%2016.52.58.jpeg"
+          bajar "area-60-la-victoria-lote-25-04.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe920c8581a4075e7cc81c_WhatsApp%20Image%202021-06-22%20at%2016.53.00%20(1).jpeg"
+          bajar "area-60-la-victoria-lote-25-05.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe920c7946eb3cd9a15f51_WhatsApp%20Image%202021-06-22%20at%2016.53.00.jpeg"
+          bajar "area-60-la-victoria-lote-25-06.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe920cbc6b526e09423ddd_WhatsApp%20Image%202021-06-22%20at%2016.53.01%20(1).jpeg"
+          bajar "area-60-la-victoria-lote-25-07.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe920c6c039e7c91851949_WhatsApp%20Image%202021-06-22%20at%2016.53.01.jpeg"
+          bajar "area-60-lote-289-01.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62f94e29b5d6720080dde87b_A60%20lote%20289%203.jpeg"
+          bajar "area-60-lote-289-02.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62f94e335d479b2ac03ab09c_A60%20lote%20289.jpeg"
+          bajar "area-60-lote-289-03.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62f94e33ed5cbd3ded516786_A60%20lote%20289%202.jpeg"
+          bajar "area-60-lote-289-04.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62f94e3318d02f5ef9722b96_A60%20lote%20289%204.jpeg"
+          bajar "canning-terralagos-lote-815-01.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe935e7946ebde52a16b93_Exteriores%20V2_1%20-%20Foto.JPG"
+          bajar "canning-terralagos-lote-815-02.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe935e63e52b6265f36bb8_Exteriores%20V2_2%20-%20Foto.JPG"
+          bajar "canning-terralagos-lote-815-03.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe935e144f2439e0e25c9c_Exteriores%20V2_4%20-%20Foto.JPG"
+          bajar "canning-terralagos-lote-815-04.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe935e0b5b688fc513ccf9_Exteriores%20V2_5%20-%20Foto.JPG"
+          bajar "canning-terralagos-lote-815-05.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe935e9e1eac211f538d97_Interiores%20V1_6%20-%20Foto.JPG"
+          bajar "canning-terralagos-lote-815-06.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe93370b5b686ae313cb50_PHOTO-2022-07-29-11-21-33.jpg"
+          bajar "canning-terralagos-lote-815-07.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe935ef2eb1d65ac4b1e61_Preliminares%20V3_7%20-%20Cocina%20Comedor.JPG"
+          bajar "canning-terralagos-lote-815-08.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe935efdd273ee743ecbdb_Preliminares%20V3_8%20-%20Hall.JPG"
+          bajar "canning-terralagos-lote-815-09.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe935ebc6b520631425801_Preliminares%20V3_11%20-%20Habitacio%CC%81n%20PB.JPG"
+          bajar "canning-terralagos-lote-815-10.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe935dcad10b650ff91bcb_Preliminares%20V3_12%20-%20Habitacio%CC%81n%20Principal.JPG"
+          bajar "canning-terralagos-lote-815-11.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe935da4e56d856bdd3ea7_Preliminares%20V3_13%20-%20Habitacio%CC%81n%20Principal%202.JPG"
+          bajar "canning-terralagos-lote-815-12.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe935d0b5b684ccf13ccf8_Preliminares%20V3_14%20-%20Habitacio%CC%81n%20PA%202.JPG"
+          bajar "canning-terralagos-lote-815-13.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe935ed12c7132c2b07d31_Preliminares%20V3_15%20-%20Ban%CC%83o%20Principal%201.JPG"
+          bajar "canning-terralagos-lote-815-14.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe935ea4e56d05fadd3eb6_Preliminares%20V3_16%20-%20Ban%CC%83o%20Principal%202.JPG"
+          bajar "canning-terralagos-lote-815-15.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe935ef2eb1d015d4b1e60_Preliminares%20V3_17%20-%20Habitacio%CC%81n%20PA%201.JPG"
+          bajar "fincas-de-hudson-lote-e22-01.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62f9523d094f866870075526_Fincas%20de%20hudson%20E22.jpeg"
+          bajar "fincas-de-hudson-lote-e22-02.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62f952533280f2a92a80910a_Fincas%20de%20hudson%20E22%202.jpeg"
+          bajar "fincas-de-hudson-lote-e22-03.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62f952523f7a58558c5e29f7_Fincas%20de%20hudson%20E22%203.jpeg"
+          bajar "fincas-de-hudson-lote-e22-04.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62f95252750abd3ef6d46f8c_Fincas%20de%20hudson%20E22%204.jpeg"
+          bajar "fincas-de-hudson-lote-e22-05.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62f95252a3e05d5cd071480a_Fincas%20de%20hudson%20E22%206.jpeg"
+          bajar "fincas-de-hudson-lote-g5-01.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62f91ae2eb2ac167ab39fd1c_Fincas%20hudson%20g5.jpeg"
+          bajar "fincas-de-hudson-lote-g5-02.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62f91ae29fb1b045cbdcb82e_Fincas%20hudson%20g5%202.jpeg"
+          bajar "fincas-de-hudson-lote-g5-03.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62f91ae20c74fd86fab52f01_incas%20de%20hudson%20g5%203.jpeg"
+          bajar "fincas-de-hudson-lote-g5-04.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62f91ae2b5d6724921daa17c_incas%20hudson%20g5%204.jpeg"
+          bajar "fincas-de-hudson-lote-g5-05.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62f91ae28c6d8421dc036197_Fincas%20de%20hudson%20g5%205.jpeg"
+          bajar "greenville-lote-a1-01.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe7ecb9dbb7ce6fee0d061_Vista%20!.jpg"
+          bajar "greenville-lote-a1-02.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe7ecfcad10be145f80970_Vista%202.jpg"
+          bajar "greenville-lote-a1-03.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe7f05400550c0aa0c0c65_Screen%20Shot%202022-08-18%20at%203.03.18%20PM.png"
+          bajar "greenville-lote-a1-04.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62fe7f05bbfd091c71c96202_Screen%20Shot%202022-08-18%20at%203.03.34%20PM.png"
+          bajar "greenville-lote-e39-01.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62f94eff5d479baf833abb51_GV%20Lote%20E39.jpeg"
+          bajar "greenville-lote-e39-02.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62f94f083280f2842080556a_GV%20Lote%20E39%202.jpeg"
+          bajar "greenville-lote-e39-03.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62f94f07b83f2d7e5984359f_GV%20Lote%20E39%203.jpeg"
+          bajar "greenville-lote-e39-04.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/62f94f073280f2a31c805569_GV%20Lote%20E39%204.jpeg"
+          bajar "nuevo-quilmes-lote-1j01-01.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/6310f25ae06739c1a5056ecf_WhatsApp%20Image%202020-07-17%20at%2020.01.00%20(1).jpeg"
+          bajar "nuevo-quilmes-lote-1j01-02.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/6310f25a641d6c05980c5f5e_WhatsApp%20Image%202020-07-17%20at%2020.01.00.jpeg"
+          bajar "nuevo-quilmes-lote-1j01-03.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/6310f27942c7fe569322a5d3_WhatsApp%20Image%202020-07-17%20at%2019.56.28%20(5).jpeg"
+          bajar "nuevo-quilmes-lote-2d02-01.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/6310ef9fea994c5c84d9c58b_IMG_4599.JPG"
+          bajar "nuevo-quilmes-lote-2d02-02.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/6310ef9fd3af675675a43ebb_IMG_4600.JPG"
+          bajar "nuevo-quilmes-lote-2d02-03.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/6310ef9f4c9a8b0d33f4c209_IMG_4606.JPG"
+          bajar "nuevo-quilmes-lote-2d02-04.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/6310ef9fe587867a28067907_IMG_9703.JPG"
+          bajar "nuevo-quilmes-lote-2d02-05.jpg" "https://cdn.prod.website-files.com/62f592fd7640270b420ce973/6310ef9f18357badeeb75712_IMG_9707.JPG"
+          bajar "obra2020-01.jpg" "https://ee49b3883c.clvaw-cdnwnd.com/c2ebebd1ca6c6bfa12bfd005fcf362fd/200000464-3ffcd3ffcf/WhatsApp%20Image%202020-07-19%20at%2014.00.47.jpeg?ph=ee49b3883c"
+          bajar "obra2020-02.jpg" "https://ee49b3883c.clvaw-cdnwnd.com/c2ebebd1ca6c6bfa12bfd005fcf362fd/200000465-2e6b92e6bc/WhatsApp%20Image%202020-07-19%20at%2014.14.05.jpeg?ph=ee49b3883c"
+          bajar "obra2020-03.jpg" "https://ee49b3883c.clvaw-cdnwnd.com/c2ebebd1ca6c6bfa12bfd005fcf362fd/200000468-30b3030b32/WhatsApp%20Image%202020-07-19%20at%2014.24.06.jpeg?ph=ee49b3883c"
+          bajar "obra2020-04.jpg" "https://ee49b3883c.clvaw-cdnwnd.com/c2ebebd1ca6c6bfa12bfd005fcf362fd/200000469-86b5a86b5c/WhatsApp%20Image%202020-07-19%20at%2014.19.56.jpeg?ph=ee49b3883c"
+          bajar "obra2020-05.jpg" "https://ee49b3883c.clvaw-cdnwnd.com/c2ebebd1ca6c6bfa12bfd005fcf362fd/200000470-532085320a/IMG_1954-7.JPG?ph=ee49b3883c"
+          bajar "obra2020-06.jpg" "https://ee49b3883c.clvaw-cdnwnd.com/c2ebebd1ca6c6bfa12bfd005fcf362fd/200000472-4249342495/WhatsApp%20Image%202020-07-19%20at%2014.58.58.jpeg?ph=ee49b3883c"
+          bajar "obra2020-07.jpg" "https://ee49b3883c.clvaw-cdnwnd.com/c2ebebd1ca6c6bfa12bfd005fcf362fd/200000473-a4ebea4ec0/WhatsApp%20Image%202020-07-19%20at%2015.05.57.jpeg?ph=ee49b3883c"
+          bajar "obra2020-08.jpg" "https://ee49b3883c.clvaw-cdnwnd.com/c2ebebd1ca6c6bfa12bfd005fcf362fd/200000474-adb19adb1c/WhatsApp%20Image%202020-07-19%20at%2015.11.41.jpeg?ph=ee49b3883c"
+          sudo apt-get install -y -qq imagemagick >/dev/null 2>&1 || true
+          for f in public/web/img/obras/*.jpg; do convert "$f" -auto-orient -resize '1600x1600>' -quality 80 -strip "$f.tmp.jpg" && mv "$f.tmp.jpg" "$f" || echo "conv $f"; done
+          ls public/web/img/obras | wc -l
+      - name: Guardar
+        run: |
+          git config user.name "github-actions"; git config user.email "actions@github.com"
+          git add public/web/img/obras; git commit -m "Web V+V: fotos de obras de las webs anteriores" || echo nada; git push
