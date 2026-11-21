@@ -558,9 +558,9 @@ function csvDe(data) {
   R("OBRAS EN SOCIEDAD"); R("Obra", "Presup inicial", "Costo estimado", "Adicionales", "Costo real", "Cobrado", "Utilidad");
   (data.sociedad || []).forEach(s => { const pi = num(s.presupuestoInicial != null ? s.presupuestoInicial : s.presupuesto); const ad = (s.adicionales || []).reduce((a, x) => a + num(x.monto), 0); const cr = (s.gastos || []).reduce((a, x) => a + num(x.monto), 0); const cob = (s.cobros || []).reduce((a, x) => a + num(x.monto), 0); R(s.nombre, M(pi), M(s.costoEstimado), M(ad), M(cr), M(cob), M(pi + ad - cr)); });
   (data.sociedad || []).forEach(s => { R(""); R("Detalle " + s.nombre); (s.adicionales || []).forEach(a => R("Adicional", a.texto, M(a.monto), a.fecha)); (s.gastos || []).forEach(g => R("Gasto", g.texto, g.tipo, M(g.monto), g.fecha)); (s.cobros || []).forEach(c => R("Cobro", c.texto, M(c.monto), c.fecha)); (s.socios || []).forEach(so => R("Socio", so.nombre, num(so.pct) + "%", so.tel)); (s.retiros || []).forEach(r => { const so = (s.socios || []).find(x => x.id === r.socioId); R("Retiro", so ? so.nombre : r.texto, M(r.monto), r.fecha); }); }); R("");
-  R("OBRAS PARTICULARES"); R("Obra", "Rubro", "US$", "$", "Cotiz", "Nota");
+  R("OBRAS PARTICULARES"); R("Obra", "Rubro", "U$s", "$", "Cotiz", "Nota");
   (data.propias || []).forEach(p => { (p.costos || []).forEach(c => R(p.nombre, c.cat, M(c.montoUsd), M(c.montoArs), c.cotiz, c.nota || "")); R(p.nombre, "VENTA ESTIMADA", M(p.ventaUsd), M(p.ventaArs)); }); R("");
-  R("EDIFICIOS"); R("Edificio", "Tipo", "Detalle", "US$", "$", "Estado");
+  R("EDIFICIOS"); R("Edificio", "Tipo", "Detalle", "U$s", "$", "Estado");
   (data.edificios || []).forEach(e => { (e.unidades || []).forEach(u => R(e.nombre, "Unidad", u.nombre, M(u.precioUsd), M(u.precioArs), u.estado)); (e.costos || []).forEach(c => R(e.nombre, "Costo", c.cat, M(c.montoUsd), M(c.montoArs))); });
   return "\uFEFF" + rows.join("\n");
 }
@@ -594,8 +594,8 @@ async function exportarExcel(data) {
     add("Gastos", [["Categoria", "Obra", "Monto", "Fecha", "Nota"], ...(data.gastos || []).map(g => [g.cat, nom(g.obraId), M(g.monto), g.fecha, g.nota || ""])], [18, 22, 14, 12, 26]);
     add("Sociedad", [["Obra", "Presup inicial", "Costo estimado", "Adicionales", "Costo real", "Cobrado", "Utilidad", "Retiros"], ...(data.sociedad || []).map(s => { const pi = num(s.presupuestoInicial != null ? s.presupuestoInicial : s.presupuesto); const ad = (s.adicionales || []).reduce((a, x) => a + num(x.monto), 0); const cr = (s.gastos || []).reduce((a, x) => a + num(x.monto), 0); const cob = (s.cobros || []).reduce((a, x) => a + num(x.monto), 0); const ret = (s.retiros || s.pagos || []).reduce((a, x) => a + num(x.monto), 0); return [s.nombre, M(pi), M(s.costoEstimado), M(ad), M(cr), M(cob), M(pi + ad - cr), M(ret)]; })], [22, 16, 16, 14, 14, 14, 14, 14]);
     const det = [["Obra", "Tipo", "Detalle", "Monto", "Fecha"]]; (data.sociedad || []).forEach(s => { (s.adicionales || []).forEach(a => det.push([s.nombre, "Adicional", a.texto || "", M(a.monto), a.fecha || ""])); (s.gastos || []).forEach(g => det.push([s.nombre, "Gasto " + (g.tipo || ""), g.texto || "", M(g.monto), g.fecha || ""])); (s.cobros || []).forEach(c => det.push([s.nombre, "Cobro", c.texto || "", M(c.monto), c.fecha || ""])); (s.socios || []).forEach(so => det.push([s.nombre, "Socio", so.nombre + " (" + num(so.pct) + "%)", so.tel || "", ""])); (s.retiros || []).forEach(r => { const so = (s.socios || []).find(x => x.id === r.socioId); det.push([s.nombre, "Retiro", so ? so.nombre : (r.texto || ""), M(r.monto), r.fecha || ""]); }); }); add("Sociedad detalle", det, [22, 16, 26, 14, 12]);
-    const prop = [["Obra", "Rubro", "US$", "$", "Cotiz", "Nota"]]; (data.propias || []).forEach(p => { (p.costos || []).forEach(c => prop.push([p.nombre, c.cat, M(c.montoUsd), M(c.montoArs), num(c.cotiz), c.nota || ""])); prop.push([p.nombre, "VENTA ESTIMADA", M(p.ventaUsd), M(p.ventaArs), "", ""]); }); add("Particulares", prop, [22, 28, 14, 14, 10, 24]);
-    const ed = [["Edificio", "Tipo", "Detalle", "US$", "$", "Estado"]]; (data.edificios || []).forEach(e => { (e.unidades || []).forEach(u => ed.push([e.nombre, "Unidad", u.nombre, M(u.precioUsd), M(u.precioArs), u.estado || ""])); (e.costos || []).forEach(c => ed.push([e.nombre, "Costo", c.cat, M(c.montoUsd), M(c.montoArs), ""])); }); add("Edificios", ed, [22, 10, 28, 14, 14, 12]);
+    const prop = [["Obra", "Rubro", "U$s", "$", "Cotiz", "Nota"]]; (data.propias || []).forEach(p => { (p.costos || []).forEach(c => prop.push([p.nombre, c.cat, M(c.montoUsd), M(c.montoArs), num(c.cotiz), c.nota || ""])); prop.push([p.nombre, "VENTA ESTIMADA", M(p.ventaUsd), M(p.ventaArs), "", ""]); }); add("Particulares", prop, [22, 28, 14, 14, 10, 24]);
+    const ed = [["Edificio", "Tipo", "Detalle", "U$s", "$", "Estado"]]; (data.edificios || []).forEach(e => { (e.unidades || []).forEach(u => ed.push([e.nombre, "Unidad", u.nombre, M(u.precioUsd), M(u.precioArs), u.estado || ""])); (e.costos || []).forEach(c => ed.push([e.nombre, "Costo", c.cat, M(c.montoUsd), M(c.montoArs), ""])); }); add("Edificios", ed, [22, 10, 28, 14, 14, 12]);
     add("Presupuestos", [["Nombre", "Cliente", "Monto", "Estado", "Fecha", "Motivo"], ...(data.presupuestosSoc || []).map(p => [p.nombre, p.cliente || "", M(p.monto), (EST_PRES.find(e => e[0] === p.estado) || ["", p.estado])[1], p.fechaLimite || "", p.motivo || ""])], [24, 18, 14, 14, 12, 26]);
     XLSX.writeFile(wb, `VV-Finanzas-${hoyISO()}.xlsx`);
   } catch (e) { alert("No pude generar el Excel (" + (e && e.message) + "). Te bajo el CSV como alternativa."); descargarArchivo(`VV-Finanzas-${hoyISO()}.csv`, csvDe(data), "text/csv;charset=utf-8"); }
@@ -668,8 +668,8 @@ function reportePropiaTexto(p) {
   const costos = p.costos || []; const rub = {}; costos.forEach(c => { rub[c.cat] = (rub[c.cat] || 0) + num(c.montoArs); });
   const inv = costos.reduce((s, c) => s + num(c.montoArs), 0), invU = costos.reduce((s, c) => s + num(c.montoUsd), 0);
   const vA = num(p.ventaArs), vU = num(p.ventaUsd);
-  const L = [`*${p.nombre} — Obra particular*`, "", `*Inversión total:* ${money(inv)} / US$${Math.round(invU).toLocaleString("es-AR")}`];
-  if (vU) L.push(`*Venta est.:* US$${Math.round(vU).toLocaleString("es-AR")} · *Resultado:* US$${Math.round(vU - invU).toLocaleString("es-AR")}`);
+  const L = [`*${p.nombre} — Obra particular*`, "", `*Inversión total:* ${money(inv)} / U$s${Math.round(invU).toLocaleString("es-AR")}`];
+  if (vU) L.push(`*Venta est.:* U$s${Math.round(vU).toLocaleString("es-AR")} · *Resultado:* U$s${Math.round(vU - invU).toLocaleString("es-AR")}`);
   if (vA) L.push(`*Venta est.:* ${money(vA)} · *Resultado:* ${money(vA - inv)}`);
   L.push("", "*Costos por rubro:*"); Object.entries(rub).filter(([, v]) => v > 0).forEach(([k, v]) => L.push(`• ${k}: ${money(v)}`));
   const media = p.adjuntos || []; if (media.length) { L.push("", "*Fotos y videos:*"); media.forEach(m => L.push(`${m.tipo === "video" ? "🎥" : "📷"} ${m.url}`)); }
@@ -678,14 +678,14 @@ function reportePropiaTexto(p) {
 function seccionesPropia(p) {
   const costos = p.costos || []; const rub = {}; costos.forEach(c => { rub[c.cat] = (rub[c.cat] || 0) + num(c.montoArs); });
   const inv = costos.reduce((s, c) => s + num(c.montoArs), 0), invU = costos.reduce((s, c) => s + num(c.montoUsd), 0), vA = num(p.ventaArs), vU = num(p.ventaUsd);
-  return [{ titulo: "Resumen", filas: [{ label: "Inversión total US$", value: "US$" + Math.round(invU).toLocaleString("es-AR") }, { label: "Inversión total $", value: money(inv) }, ...(vU ? [{ label: "Venta estimada US$", value: "US$" + Math.round(vU).toLocaleString("es-AR") }, { label: "Resultado US$", value: "US$" + Math.round(vU - invU).toLocaleString("es-AR"), strong: true }] : []), ...(vA ? [{ label: "Venta estimada $", value: money(vA) }, { label: "Resultado $", value: money(vA - inv), strong: true }] : [])] }, { titulo: "Costos por rubro", filas: Object.entries(rub).filter(([, v]) => v > 0).map(([k, v]) => ({ label: k, value: money(v) })) }];
+  return [{ titulo: "Resumen", filas: [{ label: "Inversión total U$s", value: "U$s" + Math.round(invU).toLocaleString("es-AR") }, { label: "Inversión total $", value: money(inv) }, ...(vU ? [{ label: "Venta estimada U$s", value: "U$s" + Math.round(vU).toLocaleString("es-AR") }, { label: "Resultado U$s", value: "U$s" + Math.round(vU - invU).toLocaleString("es-AR"), strong: true }] : []), ...(vA ? [{ label: "Venta estimada $", value: money(vA) }, { label: "Resultado $", value: money(vA - inv), strong: true }] : [])] }, { titulo: "Costos por rubro", filas: Object.entries(rub).filter(([, v]) => v > 0).map(([k, v]) => ({ label: k, value: money(v) })) }];
 }
 function reporteEdificioTexto(e) {
   const costos = e.costos || [], unidades = e.unidades || [];
   const inv = costos.reduce((s, c) => s + num(c.montoArs), 0), invU = costos.reduce((s, c) => s + num(c.montoUsd), 0);
   const vtaU = unidades.reduce((s, u) => s + num(u.precioUsd), 0), vtaA = unidades.reduce((s, u) => s + num(u.precioArs), 0), nV = unidades.filter(u => u.estado === "vendido").length;
-  const L = [`*${e.nombre} — Edificio*`, "", `*Inversión total:* ${money(inv)} / US$${Math.round(invU).toLocaleString("es-AR")}`, `*Venta proyectada:* US$${Math.round(vtaU).toLocaleString("es-AR")} (${unidades.length} un., ${nV} vend.)`, `*Resultado:* US$${Math.round(vtaU - invU).toLocaleString("es-AR")} / ${money(vtaA - inv)}`, "", "*Unidades:*"];
-  unidades.forEach(u => L.push(`• ${u.nombre} (${(u.estado || "disponible")}): US$${Math.round(num(u.precioUsd)).toLocaleString("es-AR")}`));
+  const L = [`*${e.nombre} — Edificio*`, "", `*Inversión total:* ${money(inv)} / U$s${Math.round(invU).toLocaleString("es-AR")}`, `*Venta proyectada:* U$s${Math.round(vtaU).toLocaleString("es-AR")} (${unidades.length} un., ${nV} vend.)`, `*Resultado:* U$s${Math.round(vtaU - invU).toLocaleString("es-AR")} / ${money(vtaA - inv)}`, "", "*Unidades:*"];
+  unidades.forEach(u => L.push(`• ${u.nombre} (${(u.estado || "disponible")}): U$s${Math.round(num(u.precioUsd)).toLocaleString("es-AR")}`));
   const media = e.adjuntos || []; if (media.length) { L.push("", "*Fotos y videos:*"); media.forEach(m => L.push(`${m.tipo === "video" ? "🎥" : "📷"} ${m.url}`)); }
   return L.join("\n");
 }
@@ -693,7 +693,7 @@ function seccionesEdificio(e) {
   const costos = e.costos || [], unidades = e.unidades || [];
   const inv = costos.reduce((s, c) => s + num(c.montoArs), 0), invU = costos.reduce((s, c) => s + num(c.montoUsd), 0), vtaU = unidades.reduce((s, u) => s + num(u.precioUsd), 0), vtaA = unidades.reduce((s, u) => s + num(u.precioArs), 0);
   const rub = {}; costos.forEach(c => { rub[c.cat] = (rub[c.cat] || 0) + num(c.montoArs); });
-  return [{ titulo: "Resumen", filas: [{ label: "Inversión total US$", value: "US$" + Math.round(invU).toLocaleString("es-AR") }, { label: "Inversión total $", value: money(inv) }, { label: "Venta proyectada US$", value: "US$" + Math.round(vtaU).toLocaleString("es-AR") }, { label: "Resultado US$", value: "US$" + Math.round(vtaU - invU).toLocaleString("es-AR"), strong: true }, { label: "Resultado $", value: money(vtaA - inv), strong: true }] }, { titulo: "Unidades", filas: unidades.map(u => ({ label: `${u.nombre} · ${(u.estado || "disponible")}`, value: "US$" + Math.round(num(u.precioUsd)).toLocaleString("es-AR") })) }, { titulo: "Costos por rubro", filas: Object.entries(rub).filter(([, v]) => v > 0).map(([k, v]) => ({ label: k, value: money(v) })) }];
+  return [{ titulo: "Resumen", filas: [{ label: "Inversión total U$s", value: "U$s" + Math.round(invU).toLocaleString("es-AR") }, { label: "Inversión total $", value: money(inv) }, { label: "Venta proyectada U$s", value: "U$s" + Math.round(vtaU).toLocaleString("es-AR") }, { label: "Resultado U$s", value: "U$s" + Math.round(vtaU - invU).toLocaleString("es-AR"), strong: true }, { label: "Resultado $", value: money(vtaA - inv), strong: true }] }, { titulo: "Unidades", filas: unidades.map(u => ({ label: `${u.nombre} · ${(u.estado || "disponible")}`, value: "U$s" + Math.round(num(u.precioUsd)).toLocaleString("es-AR") })) }, { titulo: "Costos por rubro", filas: Object.entries(rub).filter(([, v]) => v > 0).map(([k, v]) => ({ label: k, value: money(v) })) }];
 }
 function mensajeCertificadoTexto(obra, data, certsDe, indices) {
   const cs = certsDe(obra.id); const ult = cs[cs.length - 1];
@@ -749,7 +749,7 @@ function AgendaTab({ obras, certs, certsDe, indices, data, save }) {
   </div>);
 }
 const RUBROS_PROPIA = ["Lote", "Movimiento de suelo", "Materiales gruesos", "Materiales de plomería", "Materiales de electricidad", "Mano de obra gruesa", "Pintura", "Plomería", "Electricidad", "Aire acondicionado", "Aberturas", "Pisos", "Artefactos sanitarios", "Revestimientos exterior", "Impermeabilización", "Muebles de interior (cocina y vestidores)", "Muebles de decoración", "Decoración", "Revestimientos especiales", "Iluminación", "Durlock", "Barandas de escalera", "Barandas de balcón", "Piscina", "Parquización", "Planta", "Artefactos eléctricos", "Electrodomésticos"];
-const usdFmt = (n) => "US$" + Math.round(n || 0).toLocaleString("es-AR");
+const usdFmt = (n) => "U$s" + Math.round(n || 0).toLocaleString("es-AR");
 function arsUnif(c, cotU) { const n = num(c.monto); if (c.moneda === "ars") return n; if (c.moneda === "usd") return cotU > 0 ? n * cotU : num(c.montoArs); return num(c.montoArs); }
 function usdUnif(c, cotU) { const n = num(c.monto); if (c.moneda === "usd") return n; if (c.moneda === "ars") return cotU > 0 ? n / cotU : num(c.montoUsd); return num(c.montoUsd); }
 function RubroRow({ rubro, items, onAdd, onDel, cotizDef, setCotizDef, m2, cotU, extra, onDelRubro }) {
@@ -768,18 +768,18 @@ function RubroRow({ rubro, items, onAdd, onDel, cotizDef, setCotizDef, m2, cotU,
     {open && <div style={{ marginTop: 8, background: T.bg, borderRadius: 9, padding: 10 }}>
       {M2 > 0 && <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>{[["total", "Cargar total"], ["m2", "Cargar por m²"]].map(([k, l]) => <button key={k} onClick={() => setBase(k)} style={{ flex: 1, background: base === k ? T.accent : T.card, color: base === k ? "#fff" : T.sub, border: `1px solid ${base === k ? T.accent : T.border}`, borderRadius: 7, padding: "7px 3px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}</div>}
       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-        <div style={{ display: "flex", background: T.card, borderRadius: 8, padding: 2, border: `1px solid ${T.border}` }}>{[["usd", "US$"], ["ars", "$"]].map(([k, l]) => <button key={k} onClick={() => setMoneda(k)} style={{ background: moneda === k ? T.navy : "transparent", color: moneda === k ? "#fff" : T.sub, border: "none", borderRadius: 6, padding: "7px 11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}</div>
-        <input value={monto} onChange={e => setMonto(fmtMiles(e.target.value))} inputMode="numeric" placeholder={(base === "m2" ? "Precio x m² " : "Monto ") + (moneda === "usd" ? "US$" : "$")} style={{ ...inpSm, flex: 1 }} />
+        <div style={{ display: "flex", background: T.card, borderRadius: 8, padding: 2, border: `1px solid ${T.border}` }}>{[["usd", "U$s"], ["ars", "$"]].map(([k, l]) => <button key={k} onClick={() => setMoneda(k)} style={{ background: moneda === k ? T.navy : "transparent", color: moneda === k ? "#fff" : T.sub, border: "none", borderRadius: 6, padding: "7px 11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}</div>
+        <input value={monto} onChange={e => setMonto(fmtMiles(e.target.value))} inputMode="numeric" placeholder={(base === "m2" ? "Precio x m² " : "Monto ") + (moneda === "usd" ? "U$s" : "$")} style={{ ...inpSm, flex: 1 }} />
       </div>
       {base === "m2" && M2 > 0 && numMoney(monto) > 0 && <div style={{ fontSize: 10.5, color: T.accent, marginTop: 5 }}>Total: {moneda === "usd" ? usdFmt(numMoney(monto) * M2) : money(numMoney(monto) * M2)} ({fmtMiles(M2)} m² × {moneda === "usd" ? usdFmt(numMoney(monto)) : money(numMoney(monto))})</div>}
       {numMoney(monto) > 0 && numMoney(cotiz) > 0 && (() => { const tn = (base === "m2" && M2 > 0 ? numMoney(monto) * M2 : numMoney(monto)); const ct = numMoney(cotiz); return <div style={{ fontSize: 10.5, color: T.ok, marginTop: 5 }}>≈ {moneda === "ars" ? usdFmt(tn / ct) : money(tn * ct)} a esta cotización</div>; })()}
       <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 7 }}>
-        <span style={{ fontSize: 11.5, color: T.sub, whiteSpace: "nowrap" }}>Cotiz. $/US$</span>
+        <span style={{ fontSize: 11.5, color: T.sub, whiteSpace: "nowrap" }}>Cotiz. $/U$s</span>
         <input value={cotiz} onChange={e => setCotiz(fmtMiles(e.target.value))} inputMode="numeric" placeholder="ej: 1450" style={{ ...inpSm, width: 92, textAlign: "right" }} />
         <button onClick={agregar} style={{ flex: 1, background: T.accent, color: "#fff", border: "none", borderRadius: 8, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Agregar</button>
       </div>
       <input value={nota} onChange={e => setNota(e.target.value)} placeholder="Nota (ej: Corralón X - factura 0012)" style={{ ...inpSm, width: "100%", boxSizing: "border-box", marginTop: 7 }} />
-      {items.map(c => <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: T.sub, marginTop: 6 }}><span style={{ minWidth: 0 }}>{usdFmt(usdUnif(c, CU))} · {money(arsUnif(c, CU))}{M2 > 0 ? ` · ${money(arsUnif(c, CU) / M2)}/m²` : ""}{c.moneda ? ` · cargado en ${c.moneda === "usd" ? "US$" : "$"}` : ""}{c.nota ? <span style={{ color: T.muted }}> · {c.nota}</span> : ""}</span><button onClick={() => onDel(c.id)} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 13, flexShrink: 0 }}>✕</button></div>)}
+      {items.map(c => <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: T.sub, marginTop: 6 }}><span style={{ minWidth: 0 }}>{usdFmt(usdUnif(c, CU))} · {money(arsUnif(c, CU))}{M2 > 0 ? ` · ${money(arsUnif(c, CU) / M2)}/m²` : ""}{c.moneda ? ` · cargado en ${c.moneda === "usd" ? "U$s" : "$"}` : ""}{c.nota ? <span style={{ color: T.muted }}> · {c.nota}</span> : ""}</span><button onClick={() => onDel(c.id)} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 13, flexShrink: 0 }}>✕</button></div>)}
     </div>}
   </div>;
 }
@@ -907,7 +907,7 @@ function PropiasPanel({ data, save }) {
 
     {vista === "obras" && <>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <div><div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obras particulares (para vender)</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Las que hacés para vos, llave en mano con lote. Cargás en $ o US$ con la cotización del momento.</div></div>
+      <div><div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obras particulares (para vender)</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Las que hacés para vos, llave en mano con lote. Cargás en $ o U$s con la cotización del momento.</div></div>
       <button onClick={() => setAbrir(o => !o)} style={{ background: T.al, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 11px", fontSize: 12, fontWeight: 700, color: T.accent, cursor: "pointer", flexShrink: 0 }}>{abrir ? "Cerrar" : "+ Nueva"}</button>
     </div>
 
@@ -920,7 +920,7 @@ function PropiasPanel({ data, save }) {
         const cotU = num(p.cotizUnif) || 0;
         invUsd += cs.reduce((s, c) => s + usdUnif(c, cotU), 0);
         invArs += cs.reduce((s, c) => s + arsUnif(c, cotU), 0);
-        // el precio de venta puede estar cargado en $ o en US$: completo el que falte
+        // el precio de venta puede estar cargado en $ o en U$s: completo el que falte
         // con la cotización de la obra o, si no tiene, con la general
         const cot = cotU || num(data.config?.cotizUSD) || 0;
         const vU = num(p.ventaUsd), vA = num(p.ventaArs);
@@ -993,7 +993,7 @@ function PropiasPanel({ data, save }) {
             {sl && (loteArs > 0 ? <div style={{ fontSize: 10.5, color: T.muted, textAlign: "right", marginTop: 3 }}>Lote excluido: {money(loteArs)}</div> : <div style={{ fontSize: 10.5, color: T.warn, textAlign: "right", marginTop: 3 }}>No encontré un rubro con "Lote" cargado en esta obra.</div>)}</> : <div style={{ fontSize: 11, color: T.muted, textAlign: "center", padding: "6px 0" }}>Sin inversión cargada hasta esa fecha.</div>}
         </div>); })()}
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <div style={{ flex: 1 }}><div style={{ fontSize: 10.5, color: T.sub, marginBottom: 3 }}>Venta est. US$</div><input defaultValue={p.ventaUsd ? fmtMiles(p.ventaUsd) : ""} onBlur={e => setVenta(p.id, "ventaUsd", e.target.value)} inputMode="numeric" placeholder="US$" style={{ ...inpSm, width: "100%", boxSizing: "border-box", textAlign: "right" }} /></div>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 10.5, color: T.sub, marginBottom: 3 }}>Venta est. U$s</div><input defaultValue={p.ventaUsd ? fmtMiles(p.ventaUsd) : ""} onBlur={e => setVenta(p.id, "ventaUsd", e.target.value)} inputMode="numeric" placeholder="U$s" style={{ ...inpSm, width: "100%", boxSizing: "border-box", textAlign: "right" }} /></div>
           <div style={{ flex: 1 }}><div style={{ fontSize: 10.5, color: T.sub, marginBottom: 3 }}>Venta est. $</div><input defaultValue={p.ventaArs ? fmtMiles(p.ventaArs) : ""} onBlur={e => setVenta(p.id, "ventaArs", e.target.value)} inputMode="numeric" placeholder="$" style={{ ...inpSm, width: "100%", boxSizing: "border-box", textAlign: "right" }} /></div>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 9, paddingTop: 9, borderTop: `1px solid ${T.border}` }}><span style={{ fontSize: 13, fontWeight: 800 }}>Resultado esperado{vU > 0 ? ` · ${mgU.toFixed(0)}%` : ""}</span><span style={{ fontSize: 13.5, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{vU > 0 && <span style={{ color: resU >= 0 ? T.ok : "#EF4444" }}>{usdFmt(resU)}</span>}{vA > 0 && <span style={{ color: resA >= 0 ? T.ok : "#EF4444", marginLeft: 8 }}>{money(resA)}</span>}{vU <= 0 && vA <= 0 && <span style={{ color: T.muted, fontSize: 11, fontWeight: 600 }}>cargá la venta</span>}</span></div>
@@ -1640,9 +1640,9 @@ function BelfastPanel({ data, obras, certsDe, btnPaneles }) {
             return <div style={{ background: T.bg, borderRadius: 14, padding: "12px", margin: "4px 0 12px" }}>
               <div style={{ fontSize: 11, letterSpacing: ".12em", textTransform: "uppercase", color: T.accent, fontWeight: 800, marginBottom: 8 }}>Precio por m²</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 8 }}>
-                <Field label="Metros²"><input value={m2 ? fmtMiles(m2) : ""} onChange={e => setBo({ m2: numMoney(e.target.value) })} inputMode="numeric" placeholder="m²" style={{ ...inpSm, width: "100%", minWidth: 0, boxSizing: "border-box" }} /></Field>
-                <Field label="U$s por m²"><input value={usd ? fmtMiles(usd) : ""} onChange={e => setBo({ usdM2: numMoney(e.target.value) })} inputMode="numeric" placeholder="U$s" style={{ ...inpSm, width: "100%", minWidth: 0, boxSizing: "border-box" }} /></Field>
-                <Field label="Dólar ($ por U$s)"><input value={tc ? fmtMiles(tc) : ""} onChange={e => setBo({ tc: numMoney(e.target.value) })} inputMode="numeric" placeholder="$" style={{ ...inpSm, width: "100%", minWidth: 0, boxSizing: "border-box" }} /></Field>
+                <Field label="Metros²"><input value={m2 ? fmtMiles(m2) : ""} onChange={e => setBo({ m2: numMoney(e.target.value.replace(/m²/g, "")) })} inputMode="numeric" placeholder="m²" style={{ ...inpSm, width: "100%", minWidth: 0, boxSizing: "border-box" }} /></Field>
+                <Field label="U$s por m²"><input value={usd ? "U$s " + fmtMiles(usd) : ""} onChange={e => setBo({ usdM2: numMoney(e.target.value.replace(/^U\$s\s*/, "")) })} inputMode="numeric" placeholder="U$s" style={{ ...inpSm, width: "100%", minWidth: 0, boxSizing: "border-box" }} /></Field>
+                <Field label="Dólar ($ por U$s)"><input value={tc ? "$ " + fmtMiles(tc) : ""} onChange={e => setBo({ tc: numMoney(e.target.value) })} inputMode="numeric" placeholder="$" style={{ ...inpSm, width: "100%", minWidth: 0, boxSizing: "border-box" }} /></Field>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 4 }}>
                 <Box t="Total en dólares" v={totUsd ? "U$s " + fmtMiles(Math.round(totUsd)) : "—"} />
@@ -1651,12 +1651,11 @@ function BelfastPanel({ data, obras, certsDe, btnPaneles }) {
               {tc > 0 && usd > 0 && <div style={{ fontSize: 12, color: T.muted, marginTop: 6 }}>U$s {fmtMiles(usd)} por m² = {money(usd * tc)} por m²</div>}
               {totArs > 0 && <button onClick={() => { if (totalB > 0 && !confirm("Esto reemplaza los montos de todos los rubros con el total en pesos. ¿Seguir?")) return; setBo({ rubros: Object.fromEntries(rubros.map(r => [r.id, Math.round(totArs * num(r.pct) / 100)])) }); }} className="vv-gema" style={{ width: "100%", marginTop: 10, borderRadius: 999, padding: "11px", fontWeight: 700, cursor: "pointer" }}>Repartir {money(totArs)} en los rubros</button>}
             </div>; })()}
-          <RepartirTotal rubros={rubros} onRepartir={(tot) => setBo({ rubros: Object.fromEntries(rubros.map(r => [r.id, Math.round(tot * num(r.pct) / 100)])) })} />
         </div>
         <div style={card}>
           {rubros.map(r => <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
             <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 600 }}>{r.nombre}</div><div style={{ fontSize: 11.5, color: T.muted }}>{totalB > 0 ? pct0(montoR(r) / totalB * 100) + " de tu presupuesto" : ""}</div></div>
-            <input value={montoR(r) ? fmtMiles(montoR(r)) : ""} onChange={e => setBo({ rubros: { ...(bo.rubros || {}), [r.id]: numMoney(e.target.value) } })} inputMode="numeric" placeholder="$ 0" style={{ ...inpSm, width: 150, textAlign: "right" }} />
+            <input value={montoR(r) ? "$ " + fmtMiles(montoR(r)) : ""} onChange={e => setBo({ rubros: { ...(bo.rubros || {}), [r.id]: numMoney(e.target.value) } })} inputMode="numeric" placeholder="$ 0" style={{ ...inpSm, width: 150, textAlign: "right" }} />
           </div>)}
           <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 12, fontSize: 16 }}><b>Total</b><b style={{ color: T.accent }}>{money(totalB)}</b></div>
         </div>
@@ -3014,7 +3013,7 @@ function UnidadAdder({ onAdd, cotizDef }) {
       <input value={m2} onChange={e => setM2(fmtMiles(e.target.value))} inputMode="numeric" placeholder="m²" style={{ ...inpSm, width: 70, textAlign: "right" }} />
     </div>
     <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
-      <div style={{ display: "flex", background: T.card, borderRadius: 8, padding: 2, border: `1px solid ${T.border}` }}>{[["usd", "US$"], ["ars", "$"]].map(([k, l]) => <button key={k} onClick={() => setMoneda(k)} style={{ background: moneda === k ? T.navy : "transparent", color: moneda === k ? "#fff" : T.sub, border: "none", borderRadius: 6, padding: "7px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}</div>
+      <div style={{ display: "flex", background: T.card, borderRadius: 8, padding: 2, border: `1px solid ${T.border}` }}>{[["usd", "U$s"], ["ars", "$"]].map(([k, l]) => <button key={k} onClick={() => setMoneda(k)} style={{ background: moneda === k ? T.navy : "transparent", color: moneda === k ? "#fff" : T.sub, border: "none", borderRadius: 6, padding: "7px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}</div>
       <input value={precio} onChange={e => setPrecio(fmtMiles(e.target.value))} inputMode="numeric" placeholder="Precio venta" style={{ ...inpSm, flex: 1 }} />
     </div>
     <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
@@ -3042,7 +3041,7 @@ function EdificiosPanel({ data, save }) {
   const colEstado = { disponible: T.muted, reservado: T.warn, vendido: T.ok };
   return (<div style={{ background: T.card, borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: SHDsm, borderTop: `3px solid ${BRASS}` }}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <div><div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Edificios de departamentos</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Costo por rubros + unidades a vender. Todo en $ y US$.</div></div>
+      <div><div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Edificios de departamentos</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Costo por rubros + unidades a vender. Todo en $ y U$s.</div></div>
       <button onClick={() => setAbrir(o => !o)} style={{ background: T.al, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 11px", fontSize: 12, fontWeight: 700, color: T.accent, cursor: "pointer", flexShrink: 0 }}>{abrir ? "Cerrar" : "+ Nuevo"}</button>
     </div>
     {abrir && <div style={{ background: T.bg, borderRadius: 11, padding: 12, marginTop: 10 }}>
@@ -3060,7 +3059,7 @@ function EdificiosPanel({ data, save }) {
         <div style={{ display: "flex", justifyContent: "space-between", background: T.card, borderRadius: 9, padding: "9px 11px", marginTop: 6 }}><span style={{ fontSize: 12.5, fontWeight: 700 }}>Venta proyectada <span style={{ fontSize: 10.5, color: T.muted }}>· {unidades.length} un. ({nV} vend.)</span></span><span style={{ fontSize: 12.5, fontVariantNumeric: "tabular-nums" }}><b style={{ color: T.accent }}>{usdFmt(vtaUsd)}</b> <span style={{ color: T.muted }}>/ {money(vtaArs)}</span></span></div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 9, paddingTop: 9, borderTop: `1px solid ${T.border}` }}><span style={{ fontSize: 13, fontWeight: 800 }}>Resultado esperado</span><span style={{ fontSize: 13.5, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}><span style={{ color: resU >= 0 ? T.ok : "#EF4444" }}>{usdFmt(resU)}</span><span style={{ color: resA >= 0 ? T.ok : "#EF4444", marginLeft: 8 }}>{money(resA)}</span></span></div>
         {(() => { const porEstado = { disponible: 0, reservado: 0, vendido: 0 }; unidades.forEach(u => { porEstado[u.estado || "disponible"] += num(u.precioUsd); }); const rt = {}; costos.forEach(c => { rt[c.cat] = (rt[c.cat] || 0) + arsUnif(c, cotU); }); const arr = Object.entries(rt).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]); const top = arr.map(([k, v]) => ({ label: k, value: v })); return <div style={{ marginTop: 10 }}>
-          <GraficoTorta titulo="Unidades por estado (US$)" items={[{ label: "Vendido", value: porEstado.vendido, color: T.ok }, { label: "Reservado", value: porEstado.reservado, color: T.warn }, { label: "Disponible", value: porEstado.disponible, color: T.muted }].map(x => ({ ...x, valueLabel: usdFmt(x.value) }))} centro={unidades.length + ""} centroSub="unidades" />
+          <GraficoTorta titulo="Unidades por estado (U$s)" items={[{ label: "Vendido", value: porEstado.vendido, color: T.ok }, { label: "Reservado", value: porEstado.reservado, color: T.warn }, { label: "Disponible", value: porEstado.disponible, color: T.muted }].map(x => ({ ...x, valueLabel: usdFmt(x.value) }))} centro={unidades.length + ""} centroSub="unidades" />
           <GraficoTorta titulo="Costos por rubro" items={top} centro={money(totArs)} centroSub="inversión" />
           <GraficoBarras titulo="Costos por rubro (ranking)" items={top} />
           <GraficoBarras titulo="Inversión vs venta proyectada" items={[{ label: "Inversión", value: totArs, color: "#C2410C" }, { label: "Venta proyectada", value: vtaArs, color: T.ok }]} />
@@ -3080,7 +3079,7 @@ function EdificiosPanel({ data, save }) {
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <label style={{ flex: 1, textAlign: "center", background: T.card, color: T.accent, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{subiendo === e.id ? "Subiendo…" : "📷 Foto/video"}<input type="file" accept="image/*,video/*" multiple onChange={ev => { subirAdj(e.id, ev.target.files); ev.target.value = ""; }} style={{ display: "none" }} /></label>
           <a href={waLink("", reporteEdificioTexto(e))} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: "center", background: "#25D366", color: "#fff", borderRadius: 9, padding: "10px", fontSize: 12, fontWeight: 700, textDecoration: "none" }}>WhatsApp</a>
-          <button onClick={() => { const pe = { disponible: 0, reservado: 0, vendido: 0 }; unidades.forEach(u => { pe[u.estado || "disponible"] += num(u.precioUsd); }); const rt = {}; costos.forEach(c => { rt[c.cat] = (rt[c.cat] || 0) + num(c.montoArs); }); const arr = Object.entries(rt).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]); const top = arr.map(([k, v]) => ({ label: k, value: v })); setPdfHtml(reporteHTML(e.nombre + " — Edificio", "", seccionesEdificio(e), e.adjuntos, data.config, [{ tipo: "torta", titulo: "Unidades por estado (US$)", items: [{ label: "Vendido", value: pe.vendido, color: "#16A34A", valueLabel: usdFmt(pe.vendido) }, { label: "Reservado", value: pe.reservado, color: "#C2410C", valueLabel: usdFmt(pe.reservado) }, { label: "Disponible", value: pe.disponible, color: "#98A2B0", valueLabel: usdFmt(pe.disponible) }] }, { tipo: "torta", titulo: "Costos por rubro", items: top }])); }} style={{ flex: 1, background: T.navy, color: "#fff", border: "none", borderRadius: 9, padding: "10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>PDF</button>
+          <button onClick={() => { const pe = { disponible: 0, reservado: 0, vendido: 0 }; unidades.forEach(u => { pe[u.estado || "disponible"] += num(u.precioUsd); }); const rt = {}; costos.forEach(c => { rt[c.cat] = (rt[c.cat] || 0) + num(c.montoArs); }); const arr = Object.entries(rt).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]); const top = arr.map(([k, v]) => ({ label: k, value: v })); setPdfHtml(reporteHTML(e.nombre + " — Edificio", "", seccionesEdificio(e), e.adjuntos, data.config, [{ tipo: "torta", titulo: "Unidades por estado (U$s)", items: [{ label: "Vendido", value: pe.vendido, color: "#16A34A", valueLabel: usdFmt(pe.vendido) }, { label: "Reservado", value: pe.reservado, color: "#C2410C", valueLabel: usdFmt(pe.reservado) }, { label: "Disponible", value: pe.disponible, color: "#98A2B0", valueLabel: usdFmt(pe.disponible) }] }, { tipo: "torta", titulo: "Costos por rubro", items: top }])); }} style={{ flex: 1, background: T.navy, color: "#fff", border: "none", borderRadius: 9, padding: "10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>PDF</button>
         </div>
       </div>);
     })}
@@ -3197,7 +3196,7 @@ function aplicarAccion(data, a) {
   return null;
 }
 function descAccion(a) {
-  const m = num(a.monto); const mtxt = m ? (money(m) + (a.moneda === "usd" ? " US$" : "")) : "";
+  const m = num(a.monto); const mtxt = m ? (money(m) + (a.moneda === "usd" ? " U$s" : "")) : "";
   if (a.operacion === "contacto") return (a.tipo === "borrar" ? "Borrar contacto: " : "Agregar contacto: ") + (a.nombre || a.objetivo || "");
   if (a.operacion === "socio") return (a.tipo === "borrar" ? "Borrar socio " : "Agregar socio ") + (a.nombre || "") + (a.pct ? ` (${num(a.pct)}%)` : "") + " · " + (a.objetivo || "");
   if (a.operacion === "unidad") return "Agregar unidad " + (a.rubro || a.nombre || "") + (mtxt ? " " + mtxt : "") + " · " + (a.objetivo || "");
