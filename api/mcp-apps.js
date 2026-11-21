@@ -152,11 +152,11 @@ function pdfAud({ num, obraN, ctNombre, rubro, fecha, personal, inf, its, concl 
     const d = new PDFDocument({ size: "A4", margin: 42 }); const ch = []; d.on("data", (c) => ch.push(c)); d.on("end", () => ok(Buffer.concat(ch))); d.on("error", ko);
     const W = d.page.width - 84;
     d.rect(0, 0, d.page.width, 70).fill("#111111"); d.rect(0, 70, d.page.width, 4).fill("#B0894F");
-    d.fillColor("#FFFFFF").font("Helvetica-Bold").fontSize(13).text(`NEXO · RECLAMO N° ${num} · RESPUESTA AL INFORME DE JEFATURA`, 42, 22, { width: W });
+    d.fillColor("#FFFFFF").font("Helvetica-Bold").fontSize(13).text(`NEXO · CUMPLIMIENTO SEMANAL N° ${num}`, 42, 22, { width: W });
     d.fillColor("#D9B26E").fontSize(11).text(String(obraN || "").toUpperCase(), 42, 44);
     d.fillColor("#17181C").moveDown(0); d.y = 92;
     const cs = (k) => its.filter((x) => (k === "otro" ? x.est === "otro" || x.est === "terminado" : x.est === k)).length;
-    d.font("Helvetica-Bold").fontSize(12).text(`Respuesta al informe${inf.semana ? " · " + inf.semana.replace(/\..*$/, "") : ""} · ${its.length - its.filter((x) => x.est !== "avanza" && x.est !== "terminado").length} se hacen, ${its.filter((x) => x.est !== "avanza" && x.est !== "terminado").length} no`);
+    d.font("Helvetica-Bold").fontSize(12).text(`Cumplimiento semanal${inf.semana ? " · " + inf.semana.replace(/\..*$/, "") : ""} · ${its.length - its.filter((x) => x.est !== "avanza" && x.est !== "terminado").length} se hacen, ${its.filter((x) => x.est !== "avanza" && x.est !== "terminado").length} no`);
     d.moveDown(0.4); d.font("Helvetica").fontSize(9.5).fillColor("#333");
     [["Informe", inf.semana || "—"], ["Responsable", inf.resp || "—"], ["Responde", `${ctNombre}${rubro ? " (" + rubro + ")" : ""}`], ["Fecha", fAR(fecha)], ["Personas en obra", String(personal || "—")]].forEach(([k, v]) => { const y = d.y; d.font("Helvetica-Bold").text(k, 42, y, { width: 120 }); d.font("Helvetica").text(v, 165, y, { width: W - 123 }); });
     d.moveDown(0.6); let y = d.y;
@@ -189,10 +189,10 @@ async function responderInforme(a) {
   const inf = { semana: String(a.semana || ""), resp: String(a.responsable || ""), obraTxt: ct.obraN };
   const concl = String(a.conclusion || "").trim() || conclusionAud(personal, its);
   const bl = its.filter((x) => x.est !== "avanza" && x.est !== "terminado");
-  const titulo = `Respuesta al informe${inf.semana ? " · " + inf.semana.replace(/\..*$/, "") : ""} · ${its.length - bl.length} se hacen${bl.length ? ", " + bl.length + " no" : ""}`;
+  const titulo = `Cumplimiento semanal${inf.semana ? " · " + inf.semana.replace(/\..*$/, "") : ""} · ${its.length - bl.length} se hacen${bl.length ? ", " + bl.length + " no" : ""}`;
   const resumen = `${ct.nombre} · ${ct.obraN}${inf.semana ? " · " + inf.semana : ""} · ${personal || "?"} personas en obra.\n` + its.map((x) => `${x.n ? x.n + ". " : ""}${x.tarea}: ${TXE[x.est].toLowerCase()}${x.est === "avanza" ? `, ${x.gente} personas, termina el ${fAR(x.fin)}` : ""}${x.est === "material" && x.falta ? `, falta ${x.falta}${x.pedido ? " (pedido el " + fAR(x.pedido) + ")" : ""}` : ""}${x.nota ? " — " + x.nota : ""}`).join("\n") + `\nConclusión: ${concl}`;
   if (!a.confirmado) return "TODAVÍA NO SE CARGÓ. Leele esto a Sebastián y preguntale si lo cargás (si dice que sí, llamá de nuevo con confirmado=true y los mismos datos):\n" + resumen;
-  const desc = `Respuesta al informe de la jefatura${inf.semana ? " (" + inf.semana + ")" : ""}${inf.resp ? " · Responsable: " + inf.resp : ""}\nFecha: ${fAR(fecha)} · Personas en obra: ${personal || "—"}\n` + its.map((x) => `- ${x.tarea}: ${TXE[x.est].toLowerCase()}${x.est === "avanza" ? ` — ${x.gente} persona${x.gente === 1 ? "" : "s"} asignada${x.gente === 1 ? "" : "s"}, termina el ${fAR(x.fin)}` : ""}${x.est === "material" && x.falta ? " — falta " + x.falta + (x.pedido ? " (pedido el " + fAR(x.pedido) + ", hace " + diasDesdeAR(x.pedido) + " días)" : "") : ""}${x.nota ? " — " + x.nota : ""}`).join("\n") + `\n\nConclusión: ${concl}`;
+  const desc = `Cumplimiento semanal del informe de la jefatura${inf.semana ? " (" + inf.semana + ")" : ""}${inf.resp ? " · Responsable: " + inf.resp : ""}\nFecha: ${fAR(fecha)} · Personas en obra: ${personal || "—"}\n` + its.map((x) => `- ${x.tarea}: ${TXE[x.est].toLowerCase()}${x.est === "avanza" ? ` — ${x.gente} persona${x.gente === 1 ? "" : "s"} asignada${x.gente === 1 ? "" : "s"}, termina el ${fAR(x.fin)}` : ""}${x.est === "material" && x.falta ? " — falta " + x.falta + (x.pedido ? " (pedido el " + fAR(x.pedido) + ", hace " + diasDesdeAR(x.pedido) + " días)" : "") : ""}${x.nota ? " — " + x.nota : ""}`).join("\n") + `\n\nConclusión: ${concl}`;
   const cred = { rol: "ct", codigo: ct.cod };
   const d = await nx2({ op: "ct_new", cred, obra: ct.obra, rec: { tipo: "auditoria", titulo, desc, archivos: [], fotos: [], aud: { fecha, personal, ociosos: 0, concl, items: its, reclamos: [], fotosP: [], inf } } });
   let pdfU = "";
@@ -202,7 +202,7 @@ async function responderInforme(a) {
     const up = await fetch(u.up, { method: "PUT", headers: { "Content-Type": "application/pdf" }, body: buf }); if (!up.ok) throw new Error("subida");
     await nx2({ op: "ct_pdf", cred, obra: ct.obra, id: d.rec.id, url: u.pub }); pdfU = u.pub;
   } catch (e) { pdfU = ""; }
-  return `CARGADO ✓ Reclamo N° ${d.rec.num} · ${ct.obraN} · ${titulo}. Le llegó a la Dirección y a la Jefatura.${pdfU ? " PDF: " + pdfU : " (El PDF no se pudo armar ahora: se arma solo al abrir el reclamo en la app de Contratistas.)"}`;
+  return `CARGADO ✓ Cumplimiento semanal N° ${d.rec.num} · ${ct.obraN} · ${titulo}. Le llegó a la Dirección y a la Jefatura.${pdfU ? " PDF: " + pdfU : " (El PDF no se pudo armar ahora: se arma solo al abrir el reclamo en la app de Contratistas.)"}`;
 }
 const CONTRATISTAS = {
   tools: [
