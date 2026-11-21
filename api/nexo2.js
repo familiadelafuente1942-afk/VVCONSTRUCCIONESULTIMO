@@ -868,16 +868,32 @@ export default async function handler(req, res) {
         const it = items.find((x) => x.id === id);
         if (!it || !it.aud || !Array.isArray(it.aud.items)) { res.status(404).json({ error: "No existe esa auditoría" }); return; }
         if (quien === "ct" && it.ctId !== ct.id) { res.status(403).json({ error: "No es tu reclamo" }); return; }
-        const t = Date.now(), si = [], no = [];
+        const t = Date.now(), si = [], no = [], pz = [], fo = [];
         (Array.isArray(b.marcas) ? b.marcas : []).slice(0, 80).forEach((m) => {
           const k = Number(m && m.i); const x = it.aud.items[k]; if (!x) return;
           const nom = (x.n ? x.n + ". " : "") + (x.tarea || "");
-          if (m.ok && !x.cumplida) { x.cumplida = t; si.push(nom); }
-          else if (!m.ok && x.cumplida) { x.cumplida = 0; no.push(nom); }
+          // fotos de terminada / de lo hecho (solo direcciones de la nube)
+          if (Array.isArray(m.fotos)) {
+            const F = m.fotos.filter((u) => typeof u === "string" && /^https:\/\//.test(u) && u.length < 600).slice(0, 6);
+            const antes = JSON.stringify(x.fotosFin || []);
+            if (JSON.stringify(F) !== antes) { const nuevas = F.filter((u) => !(x.fotosFin || []).includes(u)).length; x.fotosFin = F; if (nuevas) fo.push(nom + " (" + nuevas + " foto" + (nuevas > 1 ? "s" : "") + ")"); }
+          }
+          const pa = Math.round(Number(m.parcial) || 0);
+          if (m.e === "par" && pa > 0 && pa < 100) {
+            if (x.cumplida) x.cumplida = 0;
+            if (Number(x.parcial) !== pa) { x.parcial = pa; pz.push(nom + " (" + pa + "%)"); }
+          } else if (m.ok) {
+            if (x.parcial) x.parcial = 0;
+            if (!x.cumplida) { x.cumplida = t; si.push(nom); }
+          } else {
+            if (x.cumplida) { x.cumplida = 0; no.push(nom); }
+            if (x.parcial) { x.parcial = 0; if (!no.includes(nom)) no.push(nom); }
+            if (m.e === "no" && (x.est === "terminado" || x.est === "parcial")) { x.est = "avanza"; if (!no.includes(nom)) no.push(nom); }
+          }
         });
-        if (!si.length && !no.length) { res.status(400).json({ error: "No cambiaste ninguna tarea" }); return; }
+        if (!si.length && !no.length && !pz.length && !fo.length) { res.status(400).json({ error: "No cambiaste ninguna tarea" }); return; }
         const nom = quien === "ct" ? ct.nombre : quien === "dir" ? "Dirección" : "Jefatura de obra";
-        const tx = (si.length ? "Tareas cumplidas: " + si.join("; ") : "") + (si.length && no.length ? " · " : "") + (no.length ? "Vuelven a pendiente: " + no.join("; ") : "");
+        const tx = [si.length ? "Tareas cumplidas: " + si.join("; ") : "", pz.length ? "Cumplimiento parcial: " + pz.join("; ") : "", no.length ? "Vuelven a pendiente: " + no.join("; ") : "", fo.length ? "Fotos de cómo quedó: " + fo.join("; ") : ""].filter(Boolean).join(" · ");
         it.hist = (Array.isArray(it.hist) ? it.hist : []).concat([{ t, por: quien === "ct" ? "ct" : quien, nom, tx }]).slice(-100);
         it.editado = t;
         await escribir(H, clave, { items });
