@@ -1664,6 +1664,17 @@ function BelfastPanel({ data, obras, certsDe, btnPaneles }) {
           {pv.r.cobrado === 0 && <div style={{ fontSize: 12.5, color: T.warn, marginTop: 8 }}>V+V todavía no registró pagos de esta obra.</div>}
           <div style={{ fontSize: 11.5, color: T.muted, marginTop: 6 }}>Se actualiza solo con los pagos que V+V registra.</div>
         </div>}
+        {cs.length > 0 && (() => { const L = cs.map(c => ({ c, x: certB(c), cob: (bd.cobros || {})[c.id] })); const tot = L.reduce((t, k) => t + k.x.este, 0), habil = L.reduce((t, k) => t + k.x.aCobrar, 0), cobr = L.filter(k => k.cob).reduce((t, k) => t + k.x.este, 0);
+          return <div style={card}>
+            <div style={{ fontSize: 11, letterSpacing: ".12em", textTransform: "uppercase", color: T.accent, fontWeight: 800, marginBottom: 8 }}>Tu cuenta con el propietario</div>
+            {totalB === 0 ? <div style={{ fontSize: 13, color: T.warn }}>Cargá tu presupuesto (pestaña Presupuesto) para ver cuánto te debería haber pagado el propietario.</div> : <>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 8 }}>
+                <Box t="Debería haberte pagado (según avance)" v={money(tot)} /><Box t="Cobrado al propietario" v={money(cobr)} /><Box t="Saldo a cobrar" v={money(Math.max(0, tot - cobr))} />
+              </div>
+              <div style={{ fontSize: 12.5, color: T.sub, marginTop: 8 }}>Suma de tus {L.length} certificados · avance {pct0(totalB > 0 ? tot / totalB * 100 : 0)} de tu presupuesto de {money(totalB)}.</div>
+              {habil < tot - 1 && <div style={{ fontSize: 12.5, color: T.sub, marginTop: 4 }}>Con el mismo % que le pagaste a V+V, hoy corresponde cobrar {money(habil)}{cobr < habil ? ` (te faltan ${money(habil - cobr)})` : ""}.</div>}
+            </>}
+          </div>; })()}
         {totalB === 0 && cs.length > 0 && <div style={{ ...card, color: T.warn }}>Primero cargá tu presupuesto (pestaña Presupuesto) para ver los importes.</div>}
         {cs.slice().reverse().map(c => { const n = cs.findIndex(x => x.id === c.id) + 1; const x = certB(c); const cob = (bd.cobros || {})[c.id]; return <div key={c.id} style={card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
