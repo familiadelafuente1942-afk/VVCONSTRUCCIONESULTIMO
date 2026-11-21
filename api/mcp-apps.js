@@ -154,7 +154,7 @@ function pdfAud({ num, obraN, ctNombre, rubro, fecha, personal, inf, its, concl 
     const d = new PDFDocument({ size: "A4", margin: 42 }); const ch = []; d.on("data", (c) => ch.push(c)); d.on("end", () => ok(Buffer.concat(ch))); d.on("error", ko);
     const W = d.page.width - 84;
     d.rect(0, 0, d.page.width, 70).fill("#111111"); d.rect(0, 70, d.page.width, 4).fill("#B0894F");
-    d.fillColor("#FFFFFF").font("Helvetica-Bold").fontSize(13).text(`NEXO · CUMPLIMIENTO SEMANAL N° ${num}`, 42, 22, { width: W });
+    d.fillColor("#FFFFFF").font("Helvetica-Bold").fontSize(13).text(`CUMPLIMIENTO SEMANAL N° ${num}`, 42, 22, { width: W });
     d.fillColor("#D9B26E").fontSize(11).text(String(obraN || "").toUpperCase(), 42, 44);
     d.fillColor("#17181C").moveDown(0); d.y = 92;
     const cs = (k) => its.filter((x) => (k === "otro" ? x.est === "otro" || x.est === "terminado" : x.est === k)).length;
@@ -177,7 +177,7 @@ function pdfAud({ num, obraN, ctNombre, rubro, fecha, personal, inf, its, concl 
     });
     if (d.y > 680) d.addPage();
     d.moveDown(0.4); const yc = d.y; d.font("Helvetica-Bold").fontSize(10).fillColor("#17181C").text("CONCLUSIÓN", 50, yc + 8); d.font("Helvetica").fontSize(9.5).fillColor("#333").text(concl, 50, d.y + 2, { width: W - 16 }); const yf = d.y + 8; d.rect(42, yc, W, yf - yc).lineWidth(0.8).stroke("#B0894F");
-    d.y = yf + 16; d.fontSize(8).fillColor("#888").text(`Generado desde la app Nexo · Contratistas (cargado por voz con Claude) · ${new Date(Date.now() - 108e5).toISOString().slice(0, 16).replace("T", " ")}`, 42, d.y, { width: W });
+    d.y = yf + 16; d.fontSize(8).fillColor("#888").text(`Generado el ${new Date(Date.now() - 108e5).toISOString().slice(0, 16).replace("T", " ")}`, 42, d.y, { width: W });
     d.end();
   });
 }
