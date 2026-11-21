@@ -1602,15 +1602,7 @@ function BelfastPanel({ data, obras, certsDe, btnPaneles }) {
   const card = { background: T.card, borderRadius: 18, padding: "14px 16px", marginBottom: 12, boxShadow: SHD, WebkitBackdropFilter: "blur(18px) saturate(1.6)", backdropFilter: "blur(18px) saturate(1.6)" };
   const pct0 = (v) => Math.round(v) + "%";
 
-  // Lo que Belfast le lleva pagado a V+V, en tiempo real: los cobros que V+V carga en Caja para esta obra
-  // se aplican primero al anticipo y después a cada certificado de V+V en orden de fecha.
-  const pv = (() => {
-    const m = {}, r = { cobrado: 0, anticipo: 0, antPag: 0, totNeto: 0, totPag: 0 }; if (!obra) return { m, r };
-    r.cobrado = (data.movimientos || []).filter(x => x.tipo === "cobro" && x.obraId === obra.id).reduce((t, x) => t + num(x.monto), 0);
-    let disp = r.cobrado; r.anticipo = anticipoDe(obra); r.antPag = Math.min(disp, r.anticipo); disp -= r.antPag;
-    cs.forEach(c => { let neto = 0; try { neto = calcCert(c, obra, cs, data.cacMensual || {}).neto; } catch (e) { } const ap = Math.max(0, Math.min(disp, neto)); disp -= ap; r.totNeto += neto; r.totPag += ap; m[c.id] = { neto, pag: ap, pct: neto > 0 ? Math.min(100, ap / neto * 100) : 0 }; });
-    r.aFavor = disp; return { m, r };
-  })();
+  const pv = pagosObra(obra, cs, data);
   const pagos = Object.fromEntries(Object.entries(pv.m).map(([k, v]) => [k, v.pct]));
   function certB(c) {
     const det = detalleRubros(c, obra, cs);
@@ -2322,6 +2314,39 @@ function ObraPicker({ obras, value, onChange, ayuda }) {
     {(ayuda || (o && o.ubicacion)) && <div style={{ fontSize: 12.5, color: T.sub, marginTop: 8 }}>{ayuda || o.ubicacion}</div>}
   </div>;
 }
+// Cobros de V+V por certificado (en tiempo real): los cobros cargados para la obra se aplican
+// primero al anticipo y después a cada certificado en orden de fecha. Lo usan V+V y el panel de Belfast.
+function pagosObra(obra, cs, data) {
+  const m = {}, r = { cobrado: 0, anticipo: 0, antPag: 0, totNeto: 0, totPag: 0, aFavor: 0 }; if (!obra) return { m, r };
+  r.cobrado = (data.movimientos || []).filter(x => x.tipo === "cobro" && x.obraId === obra.id).reduce((t, x) => t + num(x.monto), 0);
+  let disp = r.cobrado; r.anticipo = anticipoDe(obra); r.antPag = Math.min(disp, r.anticipo); disp -= r.antPag;
+  (cs || []).forEach(c => { let neto = 0; try { neto = calcCert(c, obra, cs, data.cacMensual || {}).neto; } catch (e) { } const ap = Math.max(0, Math.min(disp, neto)); disp -= ap; r.totNeto += neto; r.totPag += ap; m[c.id] = { neto, pag: ap, pct: neto > 0 ? Math.min(100, ap / neto * 100) : 0 }; });
+  r.aFavor = disp; return { m, r };
+}
+// Estado de cobro de un certificado de V+V y botón para registrar lo cobrado (queda en Caja y Belfast lo ve pagado)
+function CobroCert({ c, n, obra, cs, data, save }) {
+  const [abierto, setAbierto] = useState(false);
+  const [monto, setMonto] = useState(""); const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const p = pagosObra(obra, cs, data).m[c.id] || { neto: 0, pag: 0, pct: 0 };
+  const falta = Math.max(0, Math.round(p.neto - p.pag)), listo = p.pct >= 99.5;
+  function registrar() {
+    const v = numMoney(monto); if (!v) { alert("Escribí el monto cobrado."); return; }
+    const mov = { id: uid(), tipo: "cobro", obraId: obra.id, monto: v, fecha, ts: Date.now(), nota: `Cobro cert. N° ${n}`, certId: c.id };
+    save(logH({ ...data, movimientos: [...(data.movimientos || []), mov] }, `Cobro · ${obra.nombre} · Cert. N° ${n} · ${money(v)}`)); setAbierto(false); setMonto("");
+  }
+  return <div style={{ marginTop: 10, borderRadius: 12, padding: "9px 11px", background: listo ? "rgba(31,138,76,.10)" : p.pct > 0 ? "rgba(205,125,60,.10)" : "rgba(200,70,62,.08)", border: `1px solid ${listo ? "rgba(31,138,76,.4)" : p.pct > 0 ? "rgba(205,125,60,.4)" : "rgba(200,70,62,.3)"}` }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+      <div style={{ fontSize: 12.5 }}><b style={{ color: listo ? T.ok : p.pct > 0 ? T.warn : "#C8463E" }}>{listo ? "✓ Cobrado" : p.pct > 0 ? `Cobrado ${Math.round(p.pct)}%` : "Sin cobrar"}</b>{!listo && <span style={{ color: T.sub }}> · falta {money(falta)}</span>}</div>
+      {!listo && !abierto && <button onClick={() => { setMonto("$ " + fmtMiles(falta)); setAbierto(true); }} className="vv-gema" style={{ borderRadius: 999, padding: "7px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Registrar cobro</button>}
+    </div>
+    {abierto && <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+      <input value={monto} onChange={e => setMonto("$ " + fmtMiles(e.target.value))} inputMode="numeric" placeholder="$ Monto" style={{ ...inpSm, flex: "1 1 130px", minWidth: 0 }} />
+      <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={{ ...inpSm, flex: "1 1 130px", minWidth: 0 }} />
+      <button onClick={registrar} className="vv-gema" style={{ borderRadius: 999, padding: "8px 14px", fontWeight: 700, cursor: "pointer" }}>Guardar</button>
+      <button onClick={() => setAbierto(false)} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer" }}>Cancelar</button>
+    </div>}
+  </div>;
+}
 function CertTab({ modo, obras, data, save, certsDe, indices }) {
   const esCosto = modo === "costo";
   const [obraId, setObraId] = useState(obras[0]?.id || "");
@@ -2454,6 +2479,7 @@ function CertTab({ modo, obras, data, save, certsDe, indices }) {
               <button onClick={() => borrarCert(c.id)} style={{ background: "none", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "6px 9px", fontSize: 11, cursor: "pointer" }}>✕</button>
             </div>
           </div>
+          {!esCosto && <CobroCert c={c} n={cs.findIndex(x => x.id === c.id) + 1} obra={obra} cs={cs} data={data} save={save} />}
           <AdjuntosCert cert={c} data={data} save={save} />
         </div>); })}
     </div>}
