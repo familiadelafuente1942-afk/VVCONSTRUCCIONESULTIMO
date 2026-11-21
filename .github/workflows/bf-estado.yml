@@ -1,0 +1,14 @@
+name: bf-estado
+on:
+  workflow_dispatch:
+jobs:
+  e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ver si Belfast ya creó su acceso (solo largo, sin contenido)
+        run: |
+          K=sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5
+          for k in belfast_panel_auth belfast_panel_data; do
+            n=$(curl -s "https://bxhjgxzvayszfqwlwinq.supabase.co/rest/v1/bco_storage?key=eq.$k&select=value&limit=1" -H "apikey: $K" -H "Authorization: Bearer $K" | python3 -c "import sys,json;d=json.load(sys.stdin);print(len(d[0]['value'] or '') if d else 'NO_EXISTE')")
+            echo "$k largo=$n"
+          done
