@@ -1,0 +1,25 @@
+name: fin-diag
+on:
+  workflow_dispatch:
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Diagnóstico (solo cantidades, sin montos)
+        run: |
+          K=sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5
+          curl -s "https://bxhjgxzvayszfqwlwinq.supabase.co/rest/v1/bco_storage?key=eq.vv_finanzas&select=value&limit=1" -H "apikey: $K" -H "Authorization: Bearer $K" > f.json
+          python3 - <<'PY'
+          import json,collections
+          d=json.loads(json.load(open('f.json'))[0]['value'])
+          ob={o['id']:o.get('nombre') for o in d.get('obras',[])}
+          print('claves',sorted(d.keys()))
+          mv=d.get('movimientos',[]); print('movimientos',len(mv),'tipos',collections.Counter(m.get('tipo') for m in mv))
+          print('campos mov',sorted(set(k for m in mv for k in m.keys())))
+          for oid,n in ob.items():
+            cs=[c for c in d.get('certs',[]) if c.get('obraId')==oid]
+            co=[m for m in mv if m.get('tipo')=='cobro' and m.get('obraId')==oid]
+            print('OBRA',n,'| certs',len(cs),'| cobros con obra',len(co),'| campos cert',sorted(set(k for c in cs for k in c.keys()))[:20])
+          sin=[m for m in mv if m.get('tipo')=='cobro' and not m.get('obraId')]
+          print('cobros sin obra',len(sin),'textos',[str(m.get('texto') or m.get('detalle') or m.get('obra') or '')[:30] for m in sin][:30])
+          PY
