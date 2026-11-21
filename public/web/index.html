@@ -64,7 +64,7 @@ main section.on{display:block}
 .photo::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 45%,rgba(0,0,0,.72))}
 .photo b{position:absolute;left:14px;bottom:12px;z-index:1;color:#fff;font-size:18px;letter-spacing:.02em}
 .photo span{position:absolute;left:14px;top:12px;z-index:1;font:700 11px 'Playfair Display';letter-spacing:.16em;text-transform:uppercase;color:#21160a;background:linear-gradient(180deg,#e7c27c,#b98a41);padding:5px 10px;border-radius:999px}
-button.photo{border:0;padding:0;cursor:zoom-in;width:100%;display:block}
+button.photo{border:0;padding:0;cursor:zoom-in;width:100%;display:block;font-family:'Playfair Display',Georgia,serif;text-align:left}
 .list{margin:10px 0 0;padding:0;list-style:none}
 .list li{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line);font-size:15px}
 .list li:first-child{border-top:0}
@@ -83,8 +83,12 @@ nav.bottom button svg{width:22px;height:22px}
 nav.bottom button[aria-current=page]{opacity:1;color:var(--gold);background:var(--gl);box-shadow:inset 0 1.5px 1px var(--rim),inset 0 0 0 1px var(--edge)}
 /* visor de fotos */
 #visor{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;padding:20px}
-#visor.on{display:flex}#visor img{max-width:100%;max-height:86vh;border-radius:14px}
-#visor button{position:absolute;top:calc(14px + env(safe-area-inset-top));right:14px}
+#visor.on{display:flex}.vin{display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;max-width:1100px}
+.vmedia{width:100%;display:flex;justify-content:center}.vmedia img{max-width:100%;max-height:76vh;border-radius:14px;display:block}.vmedia iframe{width:100%;aspect-ratio:16/9;border:0;border-radius:14px;max-height:76vh}
+.vbar{display:flex;align-items:center;gap:12px;color:#fff;font-size:15px}.vbar .btn{min-width:48px;font-size:22px;color:#fff}.vcap{min-width:160px;text-align:center}
+.vx{position:absolute;top:calc(14px + env(safe-area-inset-top));right:14px;color:#fff!important}
+.photo .n{position:absolute;right:12px;top:12px;z-index:1;font:700 12px 'Playfair Display';color:#fff;background:rgba(0,0,0,.45);padding:4px 9px;border-radius:999px}
+.photo .play{position:absolute;inset:0;margin:auto;z-index:1;width:64px;height:64px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.5);box-shadow:inset 0 0 0 2px rgba(255,255,255,.8)}
 footer{margin:34px 0 0;text-align:center;font-size:13px;color:var(--muted)}
 @media (min-width:760px){.hero{min-height:520px}.two{display:grid;grid-template-columns:1.1fr .9fr;gap:18px;align-items:start}}
 </style>
@@ -134,12 +138,10 @@ footer{margin:34px 0 0;text-align:center;font-size:13px;color:var(--muted)}
 <!-- OBRAS -->
 <section id="obras">
  <div class="sec-h"><span class="eyebrow">Obras</span><h2>Obras realizadas y en construcción</h2></div>
- <div class="grid">
-  <button class="photo" data-ver="/web/img/mayling.jpg" style="background-image:url(/web/img/mayling.jpg)"><b>Mayling · Pilar</b></button>
-  <button class="photo" data-ver="/web/img/albanueva.jpg" style="background-image:url(/web/img/albanueva.jpg)"><b>Albanueva · Tigre</b></button>
-  <button class="photo" data-ver="/web/img/pacheco.jpg" style="background-image:url(/web/img/pacheco.jpg)"><b>Pacheco Golf</b></button>
-  <button class="photo" data-ver="/web/img/corea.jpg" style="background-image:url(/web/img/corea.jpg)"><b>Residencia Embajada de Corea</b></button>
- </div>
+ <div class="grid" id="obras-grid"></div>
+ <div class="sec-h"><span class="eyebrow">Proyectos en 3D</span><h2>Así presentamos cada proyecto</h2><p class="muted" style="margin:8px 0 0">Renders y recorridos 3D de proyectos llave en mano, antes de empezar la obra.</p></div>
+ <div class="grid" id="proy-grid"></div>
+ <div class="grid" id="videos-grid" style="margin-top:14px"></div>
  <div class="sec-h"><span class="eyebrow">Porfolio</span><h2>Tipos de obra</h2></div>
  <div class="grid">
   <div class="glass" style="overflow:hidden"><div class="photo" style="border-radius:0;background-image:url(/web/img/particulares.jpg)"><b>Obras particulares</b></div><div class="card"><p>Todo tipo de obras.</p></div></div>
@@ -191,16 +193,39 @@ footer{margin:34px 0 0;text-align:center;font-size:13px;color:var(--muted)}
  <button data-go="contacto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-13.5 7.8L3 21l1.2-4.4A9 9 0 1 1 21 12z"/></svg>Contacto</button>
 </nav>
 
-<div id="visor" role="dialog" aria-modal="true" aria-label="Foto"><img alt=""><button class="btn glass" aria-label="Cerrar">Cerrar</button></div>
+<div id="visor" role="dialog" aria-modal="true" aria-label="Fotos de la obra"><div class="vin"><div class="vmedia"></div><div class="vbar"><button class="btn glass" data-v="-1" aria-label="Anterior">‹</button><span class="vcap"></span><button class="btn glass" data-v="1" aria-label="Siguiente">›</button></div></div><button class="btn glass vx" aria-label="Cerrar">Cerrar</button></div>
 
 <script>
 /* número de WhatsApp de V+V (con código de país, sin espacios ni signos; ej. 5491112345678) */
 const WA='';
 const S=[...document.querySelectorAll('main section')],B=[...document.querySelectorAll('nav.bottom button')];
 function ir(id,push){if(!document.getElementById(id))id='inicio';S.forEach(s=>s.classList.toggle('on',s.id===id));B.forEach(b=>b.dataset.go===id?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));window.scrollTo({top:0,behavior:'instant'in window?'instant':'auto'});if(push)history.pushState(null,'','#'+id);document.title=id==='inicio'?'V+V Construcciones':(document.querySelector('#'+id+' h2,#'+id+' h1')||{}).textContent+' · V+V Construcciones'}
-document.addEventListener('click',e=>{const g=e.target.closest('[data-go]');if(g){e.preventDefault();ir(g.dataset.go,true)}const v=e.target.closest('[data-ver]');if(v){const vi=document.getElementById('visor');vi.querySelector('img').src=v.dataset.ver;vi.classList.add('on')}});
-document.querySelector('#visor').onclick=e=>{if(e.target.tagName!=='IMG')e.currentTarget.classList.remove('on')};
-document.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('visor').classList.remove('on')});
+/* obras reales de V+V (fotos de la web anterior) */
+const OBRAS=[
+ {n:'Mayling · Pilar',f:['mayling']},
+ {n:'Albanueva · Tigre',f:['albanueva']},
+ {n:'Pacheco Golf',f:['pacheco']},
+ {n:'Residencia Embajada de Corea',f:['corea']},
+];
+/* proyectos en 3D (renders, no son fotos de obra) */
+const PROY=[{n:'Fincas de Hudson · Lote E22',f:['e22-1','e22-2','e22-3']},{n:'Terralagos · Lote 815',f:['terralagos-1','terralagos-2','terralagos-3']}];
+const VIDEOS=[{n:'Fincas de Hudson · Lote E22',y:'lDGgzu1nnvM',f:'video-e22'},{n:'Fincas de Hudson · Lote G5',y:'m85tuLKKw_A',f:'video-g5'}];
+const im=f=>'/web/img/'+f+'.jpg';
+document.getElementById('obras-grid').innerHTML=OBRAS.map((o,i)=>`<button class="photo" data-obra="${i}" style="background-image:url(${im(o.f[0])})"><b>${o.n}</b>${o.f.length>1?`<span class="n">${o.f.length} fotos</span>`:''}</button>`).join('');
+document.getElementById('proy-grid').innerHTML=PROY.map((o,i)=>`<button class="photo" data-proy="${i}" style="background-image:url(${im(o.f[0])})"><span>Render 3D</span><b>${o.n}</b><span class="n" style="left:auto">${o.f.length} imágenes</span></button>`).join('');
+document.getElementById('videos-grid').innerHTML=VIDEOS.map((v,i)=>`<button class="photo" data-video="${i}" style="background-image:url(${im(v.f)})"><span class="play" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26" fill="#fff"><path d="M8 5v14l11-7z"/></svg></span><span>Recorrido 3D</span><b>${v.n}</b></button>`).join('');
+let VI={L:[],k:0};const vi=document.getElementById('visor');
+function vShow(){const it=VI.L[VI.k];vi.querySelector('.vmedia').innerHTML=it.y?`<iframe src="https://www.youtube-nocookie.com/embed/${it.y}?autoplay=1&rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen title="${it.cap}"></iframe>`:`<img src="${it.src}" alt="${it.cap}">`;vi.querySelector('.vcap').textContent=it.cap+(VI.L.length>1?` · ${VI.k+1} de ${VI.L.length}`:'');vi.querySelectorAll('[data-v]').forEach(b=>b.style.visibility=VI.L.length>1?'visible':'hidden')}
+function vOpen(L,k){VI={L,k:k||0};vShow();vi.classList.add('on')}
+function vClose(){vi.classList.remove('on');vi.querySelector('.vmedia').innerHTML=''}
+document.addEventListener('click',e=>{const g=e.target.closest('[data-go]');if(g){e.preventDefault();ir(g.dataset.go,true);return}
+ const o=e.target.closest('[data-obra]');if(o){const ob=OBRAS[+o.dataset.obra];vOpen(ob.f.map(f=>({src:im(f),cap:ob.n})));return}
+ const pr=e.target.closest('[data-proy]');if(pr){const ob=PROY[+pr.dataset.proy];vOpen(ob.f.map(f=>({src:im(f),cap:ob.n+' · render 3D'})));return}
+ const v=e.target.closest('[data-video]');if(v){const x=VIDEOS[+v.dataset.video];vOpen([{y:x.y,cap:x.n}]);return}
+ const n=e.target.closest('[data-v]');if(n&&vi.contains(n)){VI.k=(VI.k+(+n.dataset.v)+VI.L.length)%VI.L.length;vShow();return}
+ if(vi.classList.contains('on')&&(e.target===vi||e.target.closest('.vx')))vClose()});
+document.addEventListener('keydown',e=>{if(!vi.classList.contains('on'))return;if(e.key==='Escape')vClose();if(e.key==='ArrowRight'||e.key==='ArrowLeft'){VI.k=(VI.k+(e.key==='ArrowRight'?1:-1)+VI.L.length)%VI.L.length;vShow()}});
+let tx=0;vi.addEventListener('touchstart',e=>{tx=e.touches[0].clientX},{passive:true});vi.addEventListener('touchend',e=>{const d=e.changedTouches[0].clientX-tx;if(Math.abs(d)>50&&VI.L.length>1){VI.k=(VI.k+(d<0?1:-1)+VI.L.length)%VI.L.length;vShow()}},{passive:true});
 addEventListener('popstate',()=>ir(location.hash.slice(1)||'inicio'));
 ir(location.hash.slice(1)||'inicio');
 /* contacto por WhatsApp */
