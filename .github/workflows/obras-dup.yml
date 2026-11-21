@@ -1,0 +1,43 @@
+name: obras-dup
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: "ver o limpiar"
+        default: "ver"
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Duplicados de vv_obras
+        env:
+          MODO: ${{ github.event.inputs.modo }}
+        run: |
+          K=sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5; U=https://bxhjgxzvayszfqwlwinq.supabase.co/rest/v1/bco_storage
+          curl -s "$U?key=eq.vv_obras&select=value&limit=1" -H "apikey: $K" -H "Authorization: Bearer $K" > o.json
+          python3 - <<'PY'
+          import json,os,hashlib,collections,urllib.request,time
+          raw=json.load(open('o.json'))[0]['value']; arr=json.loads(raw)
+          print('TAMANO_MB',round(len(raw)/1e6,2),'items',len(arr))
+          g=collections.OrderedDict()
+          for i,o in enumerate(arr): g.setdefault(o.get('id'),[]).append((i,o))
+          keep=[]
+          for k,L in g.items():
+            vs={hashlib.md5(json.dumps(o,sort_keys=True).encode()).hexdigest():(i,o) for i,o in L}
+            lens=sorted(len(json.dumps(o)) for i,o in L)
+            best=max(L,key=lambda t:(len(json.dumps(t[1])),t[0]))  # la versión con más datos (si empatan, la última)
+            last=L[-1]
+            print('ID',k,(L[0][1].get('nombre')),'copias',len(L),'versiones',len(vs),'kb min/max',lens[0]//1000,lens[-1]//1000,'ultima_es_mayor',len(json.dumps(last[1]))==lens[-1])
+            keep.append(best[1])
+          # mantener el orden de primera aparición
+          out=json.dumps(keep,ensure_ascii=False)
+          print('LIMPIO_MB',round(len(out)/1e6,2),'items',len(keep))
+          if os.environ.get('MODO')=='limpiar':
+            K=os.environ.get('K') or 'sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5'
+            H={'apikey':K,'Authorization':'Bearer '+K,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'}
+            U='https://bxhjgxzvayszfqwlwinq.supabase.co/rest/v1/bco_storage'
+            bk='bk_manual_vv_obras_'+time.strftime('%Y%m%d_%H%M')
+            for key,val in ((bk,raw),('vv_obras',out),('vv_obras__ts',str(int(time.time()*1000)))):
+              r=urllib.request.urlopen(urllib.request.Request(U,data=json.dumps({'key':key,'value':val}).encode(),headers=H,method='POST'))
+              print('ESCRITO',key,r.status)
+          PY
