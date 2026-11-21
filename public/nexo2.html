@@ -5050,7 +5050,7 @@ const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearIn
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261121-194650';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261121-195125';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 const barra=()=>{if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -6365,7 +6365,12 @@ function cronoEscala(o){const E=[['dia','Día'],['sem','Semana'],['mes','Mes']],
 (function(){const tc=tabCrono;tabCrono=function(o){const h=tc(o);if(!S.gfull)return h;
   let cuerpo=h;try{const tp=document.createElement('template');tp.innerHTML=h;const g=tp.content.querySelector('#gwrap'),e=tp.content.querySelector('.gesc-row'),v=tp.content.querySelector('.vsel');if(g)cuerpo=`<div class="cf-ctrl">${v?v.outerHTML:''}${e?e.outerHTML:''}</div>${g.outerHTML}`}catch(_){}
   return `<div class="crono-full" id="crono-full"><div class="cf-bar"><b>${esc(o.nombre)} · Cronograma</b><button type="button" class="btn sm" data-act="gfull" aria-label="Salir de pantalla completa">✕ Cerrar</button></div>${cuerpo}</div>`};
-  A.gfull=()=>{S.gfull=!S.gfull;draw();if(S.gfull)setTimeout(()=>{cfTop();const f=document.getElementById('crono-full'),w=f&&f.querySelector('#gwrap'),r=f&&f.querySelector('.gesc-row');if(r&&f)f.scrollTop=r.offsetTop-56;if(w&&w.dataset.scroll)w.scrollLeft=+w.dataset.scroll},30)};
+  A.gfull=()=>{const w0=document.getElementById('gwrap'),gx=w0?w0.scrollLeft:0,gy=w0?w0.scrollTop:0,saliendo=!!S.gfull;S.gfull=!S.gfull;draw();
+  if(saliendo){const vuelve=()=>{const r=document.querySelector('.gesc-row')||document.getElementById('gwrap');if(!r)return;const hd=document.querySelector('header.top'),mb=document.getElementById('mp-banda'),off=(hd?hd.getBoundingClientRect().height:0)+(mb?mb.getBoundingClientRect().height:0)+8;
+    const sc=(document.body.scrollHeight>document.body.clientHeight+2&&getComputedStyle(document.body).overflowY!=='visible')?document.body:document.scrollingElement;sc.scrollTop=Math.max(0,r.getBoundingClientRect().top+sc.scrollTop-off);const w=document.getElementById('gwrap');if(w)w.scrollLeft=gx;
+    if(w)w.scrollTop=gy};
+    vuelve();requestAnimationFrame(vuelve);setTimeout(vuelve,120);return}
+  if(S.gfull)setTimeout(()=>{cfTop();const f=document.getElementById('crono-full'),w=f&&f.querySelector('#gwrap'),r=f&&f.querySelector('.gesc-row');if(r&&f)f.scrollTop=r.offsetTop-56;if(w&&w.dataset.scroll)w.scrollLeft=+w.dataset.scroll},30)};
   const dr=draw;draw=function(){const f=document.getElementById('crono-full'),w=f&&f.querySelector('#gwrap');const st=f?[f.scrollTop,w?w.scrollLeft:0,w?w.scrollTop:0]:null;
     if(S.gfull&&(S.tab!=='obra'||S.otab!=='crono'))S.gfull=false;const r=dr.apply(this,arguments);
     if(st&&S.gfull){const rs=()=>{const f2=document.getElementById('crono-full'),w2=f2&&f2.querySelector('#gwrap');if(f2)f2.scrollTop=st[0];if(w2){w2.scrollLeft=st[1];w2.scrollTop=st[2]}};rs();requestAnimationFrame(rs);setTimeout(rs,60)}cfTop();return r};
@@ -6480,11 +6485,11 @@ A.gpCard=ds=>{try{window.sheetCard(ds.id)}catch(e){}};
 
 /* si la app se recarga (versión nueva o cambios de otro aparato) vuelve a la misma pantalla, no al inicio */
 (function(){const K='nexo2_ui_estado';
-  const guardar=()=>{try{if(!S.u)return;sessionStorage.setItem(K,JSON.stringify({t:Date.now(),tab:S.tab,obra:S.obra,otab:S.otab,gesc:S.gesc,gfull:!!S.gfull,vsel:S.vsel||{},y:scrollY,gx:(document.getElementById('gwrap')||{}).scrollLeft||0}))}catch(e){}};
+  const guardar=()=>{try{if(!S.u)return;sessionStorage.setItem(K,JSON.stringify({t:Date.now(),tab:S.tab,obra:S.obra,otab:S.otab,gesc:S.gesc,gfull:!!S.gfull,vsel:S.vsel||{},y:Math.max(scrollY,document.body.scrollTop||0),gx:(document.getElementById('gwrap')||{}).scrollLeft||0}))}catch(e){}};
   window.addEventListener('pagehide',guardar);window.addEventListener('beforeunload',guardar);
   try{const e=JSON.parse(sessionStorage.getItem(K)||'null');sessionStorage.removeItem(K);
     if(e&&Date.now()-e.t<30*60000&&S.u){if(e.tab)S.tab=e.tab;if(e.obra)S.obra=e.obra;if(e.otab)S.otab=e.otab;if(e.gesc)S.gesc=e.gesc;S.vsel=Object.assign(S.vsel||{},e.vsel||{});S.gfull=!!e.gfull&&S.tab==='obra'&&S.otab==='crono';
-      setTimeout(()=>{try{draw();setTimeout(()=>{scrollTo(0,e.y||0);const w=document.getElementById('gwrap');if(w&&e.gx)w.scrollLeft=e.gx},60)}catch(_){}} ,50)}}catch(e){}
+      setTimeout(()=>{try{draw();setTimeout(()=>{scrollTo(0,e.y||0);document.body.scrollTop=e.y||0;const w=document.getElementById('gwrap');if(w&&e.gx)w.scrollLeft=e.gx},60)}catch(_){}} ,50)}}catch(e){}
 })();
 </script>
 <style id="crono-escala-css">
@@ -6494,6 +6499,11 @@ A.gpCard=ds=>{try{window.sheetCard(ds.id)}catch(e){}};
 .gnod{position:absolute;top:68px;bottom:0;background:repeating-linear-gradient(135deg,rgba(192,57,43,.16) 0 4px,rgba(192,57,43,.08) 4px 8px);pointer-events:none;z-index:0}
 .ghab{font-weight:700;color:#1f8a4c}
 .cv-foco{box-shadow:inset 3px 0 0 var(--gold)}
+/* también fuera de pantalla completa: el cronograma se desplaza adentro de su recuadro y las fechas quedan fijas arriba */
+.gwrap:has(.g6){max-height:calc(100dvh - 170px);overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.g6 .gmonths,.g6 .gquin,.g6 .gdays{position:sticky;z-index:7;background:var(--surface)}
+.g6 .gmonths{top:0}.g6 .gquin{top:24px}.g6 .gdays{top:44px}
+.g6 .gmonths .glabel,.g6 .gquin .glabel,.g6 .gdays .glabel{z-index:8}
 .g6 .grow.gprow{height:auto!important;min-height:56px;align-items:stretch}
 .g6 .grow.gprow .glabel{height:auto;min-height:56px;padding-top:7px;padding-bottom:7px;justify-content:center}
 .g6 .grow.gprow .glabel .gl-n{-webkit-line-clamp:3;line-height:1.25}
