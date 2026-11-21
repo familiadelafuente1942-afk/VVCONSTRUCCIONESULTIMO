@@ -4941,7 +4941,10 @@ function merge3(base,loc,rem){
     M.avisos=Object.values(M.avisos||{}).sort((x,y)=>x.t-y.t).slice(-30);if(!M.avisos.length)delete M.avisos;
     if(!M.mod)M.mod={};if(!M.nuevas)M.nuevas=[];
     return JSON.stringify(M)}catch(e){return null}}
-function recargarCuando(){const ocupado=()=>document.querySelector('#layer .sheet,input:focus,textarea:focus');
+/* la app no se recarga sola mientras se está trabajando: solo si hace rato que no se toca nada y no hay ventanas abiertas */
+window.__nxAct=Date.now();['pointerdown','keydown','wheel','touchstart','input'].forEach(ev=>document.addEventListener(ev,()=>{window.__nxAct=Date.now()},{passive:true,capture:true}));
+window.nxOcupado=()=>{try{return !!(document.querySelector('#layer .sheet,.sheet,input:focus,textarea:focus,select:focus')||(typeof S!=='undefined'&&S&&(S.gfull||S.gdrag))||Date.now()-(window.__nxAct||0)<120000)}catch(e){return true}};
+function recargarCuando(){const ocupado=()=>window.nxOcupado();
   if(!ocupado()){location.reload();return}
   /* si hay una ventana abierta, se avisa arriba para que no quede la lista vieja en pantalla */
   try{if(!document.getElementById('nx-cambios')){const b=document.createElement('button');b.id='nx-cambios';b.type='button';b.textContent='Llegaron cambios de otro aparato (obras u otros datos) · Tocá para verlos';b.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#c9a24a;color:#111;border:0;border-radius:999px;padding:10px 18px;font:700 13px var(--f-cond,sans-serif);box-shadow:0 6px 20px rgba(0,0,0,.35);max-width:92vw';b.onclick=()=>location.reload();document.body.appendChild(b)}}catch(e){}
@@ -5041,14 +5044,14 @@ async function bajar(){
   sucio.forEach(k=>subir(k));
 }
 /* otra pestaña o ventana de este mismo aparato guardó cambios (por ej. Dirección generó el cronograma): este panel se recarga para mostrarlos */
-{let pend=null;const ocupado=()=>document.querySelector('#layer .sheet,input:focus,textarea:focus');
+{let pend=null;const ocupado=()=>window.nxOcupado();
 const puede=()=>{try{const a=JSON.parse(sessionStorage.getItem('nexo2_autorec')||'[]').filter(t=>Date.now()-t<120000);if(a.length>=3)return false;a.push(Date.now());sessionStorage.setItem('nexo2_autorec',JSON.stringify(a))}catch(e){}return true};
 const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearInterval(pend);pend=null;if(puede())location.reload()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261121-184433';window.NEXO_BUILD_V=NEXO_BUILD;
-{let aviso=null;const ocupado=()=>document.querySelector('#layer .sheet,input:focus,textarea:focus');
+const NEXO_BUILD='20261121-192652';window.NEXO_BUILD_V=NEXO_BUILD;
+{let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 const barra=()=>{if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
 async function ver(){if(document.visibilityState!=='visible')return;try{const r=await fetch('/nexo2-version.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();if(!j||!j.v||j.v===NEXO_BUILD){const b=document.getElementById('nx-ver');if(b)b.remove();return}
@@ -6473,6 +6476,15 @@ A.gpCard=ds=>{try{window.sheetCard(ds.id)}catch(e){}};
 
 /* pedidos de gestión previa: entran en la ventana toma de la obra → inicio en el lote (nunca vencidos antes de tomar la obra) */
 (function(){const tm=timing;timing=function(c){const k=tm(c);if(!c||!c.prev||!c.obra)return k;try{const toma=tomaDe(c.obra),win=k.limit-toma,raw=k.nar,nar=raw>=addWork(toma,2)?raw:Math.min(k.limit-DAY,Math.max(addWork(toma,1),(()=>{let y=toma+Math.round(win*(0.2+0.6*(1-Math.min(2,c.plazo||1)/2))/DAY)*DAY;while(!isWork(y))y-=DAY;return y})())),open=Math.min(Math.max(k.open,toma),nar);return{limit:k.limit,open,amar:Math.max(open,Math.min(k.amar,nar-2*DAY)),nar}}catch(e){return k}}})();
+
+/* si la app se recarga (versión nueva o cambios de otro aparato) vuelve a la misma pantalla, no al inicio */
+(function(){const K='nexo2_ui_estado';
+  const guardar=()=>{try{if(!S.u)return;sessionStorage.setItem(K,JSON.stringify({t:Date.now(),tab:S.tab,obra:S.obra,otab:S.otab,gesc:S.gesc,gfull:!!S.gfull,vsel:S.vsel||{},y:scrollY,gx:(document.getElementById('gwrap')||{}).scrollLeft||0}))}catch(e){}};
+  window.addEventListener('pagehide',guardar);window.addEventListener('beforeunload',guardar);
+  try{const e=JSON.parse(sessionStorage.getItem(K)||'null');sessionStorage.removeItem(K);
+    if(e&&Date.now()-e.t<30*60000&&S.u){if(e.tab)S.tab=e.tab;if(e.obra)S.obra=e.obra;if(e.otab)S.otab=e.otab;if(e.gesc)S.gesc=e.gesc;S.vsel=Object.assign(S.vsel||{},e.vsel||{});S.gfull=!!e.gfull&&S.tab==='obra'&&S.otab==='crono';
+      setTimeout(()=>{try{draw();setTimeout(()=>{scrollTo(0,e.y||0);const w=document.getElementById('gwrap');if(w&&e.gx)w.scrollLeft=e.gx},60)}catch(_){}} ,50)}}catch(e){}
+})();
 </script>
 <style id="crono-escala-css">
 .gesc-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0 10px}
