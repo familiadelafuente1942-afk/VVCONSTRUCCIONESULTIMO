@@ -1484,6 +1484,11 @@ export default function App() {
 // Todo lo que carga Belfast se guarda CIFRADO con su contraseña (AES-GCM, clave derivada con PBKDF2).
 // V+V no tiene la contraseña: en la base solo queda texto ilegible. Ni la IA ni el resumen de V+V lo leen.
 const BF_AUTH = "belfast_panel_auth", BF_DATA = "belfast_panel_data";
+// TEMPORAL (pedido de Sebastián, 21/11): el panel de Belfast queda ABIERTO sin contraseña para analizarlo.
+// Mientras esté en true entra solo con un acceso interno. Para cerrarlo: poner false y borrar ese acceso
+// (así Belfast crea su propio usuario y contraseña, que V+V no conoce).
+const BF_ABIERTO = true;
+const BF_TMP = { u: "analisis-vv", p: "panel-abierto-temporal-2026" };
 const b64de = (u8) => { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
 const deB64 = (s) => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 async function bfClave(usuario, pass, salt) {
@@ -1507,6 +1512,21 @@ function BelfastPanel({ data, obras, certsDe, btnPaneles }) {
   const [pdf, setPdf] = useState(null);
   const tGuardar = useRef(null);
   useEffect(() => { bfLeer(BF_AUTH).then(v => setAuth(v || "")).catch(() => setAuth("")); }, []);
+  // panel abierto temporalmente: entra solo con el acceso interno (si Belfast ya creó el suyo, pide su clave como siempre)
+  useEffect(() => { if (!BF_ABIERTO || key || auth === null) return; (async () => {
+    try {
+      if (auth === "") {
+        const salt = b64de(crypto.getRandomValues(new Uint8Array(16))); const k = await bfClave(BF_TMP.u, BF_TMP.p, salt);
+        const rec = JSON.stringify({ v: 1, salt, check: await bfCifrar(k, { ok: 1 }), tmp: 1 });
+        const inicial = { empresa: "Belfast Construction Management", obras: {}, cobros: {} };
+        await storage.set(BF_DATA, await bfCifrar(k, inicial)); await storage.set(BF_AUTH, rec); setAuth(rec); setKey(k); setBd(inicial); return;
+      }
+      const rec = JSON.parse(auth); if (!rec.tmp) return;
+      const k = await bfClave(BF_TMP.u, BF_TMP.p, rec.salt); await bfDescifrar(k, rec.check);
+      const txt = await bfLeer(BF_DATA); const d = txt ? await bfDescifrar(k, txt) : { obras: {}, cobros: {} };
+      setKey(k); setBd({ empresa: "Belfast Construction Management", obras: {}, cobros: {}, ...d });
+    } catch (e) { }
+  })(); }, [auth, key]);
   useEffect(() => { if (!obraId && obras.length) setObraId(obras[0].id); }, [obras.length]);
   async function crear() {
     setErr(""); if (f.u.trim().length < 3) return setErr("El usuario tiene que tener al menos 3 letras."); if (f.p.length < 6) return setErr("La contraseña tiene que tener al menos 6 caracteres."); if (f.p !== f.p2) return setErr("Las dos contraseñas no coinciden.");
@@ -1541,10 +1561,10 @@ function BelfastPanel({ data, obras, certsDe, btnPaneles }) {
     clearTimeout(tGuardar.current);
     tGuardar.current = setTimeout(async () => { try { await storage.set(BF_DATA, await bfCifrar(key, nuevo)); setEstado("Guardado ✓"); setTimeout(() => setEstado(""), 1800); } catch { setEstado("No se pudo guardar"); } }, 700);
   }
-  function salir() { setKey(null); setBd(null); }
+  function salir() { if (BF_ABIERTO) return; setKey(null); setBd(null); }
 
   const encab = <Encabezado titulo={bd?.empresa || "Belfast"} sub="Panel privado" marca="B" logo={bd?.logo}>
-    {key && <button className="vv-rbtn" title="Cerrar sesión" onClick={salir}>⏻</button>}
+    {key && !BF_ABIERTO && <button className="vv-rbtn" title="Cerrar sesión" onClick={salir}>⏻</button>}
     {btnPaneles}
   </Encabezado>;
 
@@ -1592,7 +1612,7 @@ function BelfastPanel({ data, obras, certsDe, btnPaneles }) {
     setPdf(html);
   }
 
-  return <>{encab}
+  return <>{encab}{BF_ABIERTO && <div style={{ maxWidth: 900, margin: "8px auto 0", padding: "8px 14px", borderRadius: 12, background: "rgba(200,70,62,.14)", border: "1px solid rgba(200,70,62,.5)", color: T.text, fontSize: 13 }}>Panel abierto temporalmente, sin contraseña, para analizarlo. Cuando lo cerremos, Belfast crea su propia clave.</div>}
     <div className="vv-body" style={{ padding: "14px 16px calc(112px + env(safe-area-inset-bottom,0px))", maxWidth: 820 }}>
       {estado && <div style={{ position: "fixed", top: "calc(84px + env(safe-area-inset-top))", left: "50%", transform: "translateX(-50%)", zIndex: 70, background: T.page, color: T.text, borderRadius: 999, padding: "6px 14px", fontSize: 12.5, fontWeight: 700, boxShadow: SHD }}>{estado}</div>}
       {!obras.length && <div style={card}>Todavía no hay obras cargadas por V+V.</div>}
