@@ -5050,7 +5050,7 @@ const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearIn
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261121-192652';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261121-194650';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 const barra=()=>{if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -6363,7 +6363,8 @@ function cronoEscala(o){const E=[['dia','Día'],['sem','Semana'],['mes','Mes']],
   return `<div class="gesc-row"><div class="seg" role="group" aria-label="Escala del cronograma">${E.map(([k,l])=>`<button type="button" data-act="gesc" data-k="${k}" aria-pressed="${(S.gesc||'sem')===k}">${l}</button>`).join('')}</div>${n?`<button type="button" class="btn sm" data-act="certVer" data-o="${o.id}">Ver certificados · ${n}</button>`:''}<button type="button" class="btn sm ${S.gdrag?'gold':''}" data-act="gdrag" aria-pressed="${!!S.gdrag}">${S.gdrag?'✓ Moviendo barras':'↔ Mover y estirar barras'}</button>${S.gdrag?`<label class="chk2" style="margin:0"><input type="checkbox" data-chg="gcasc" ${S.gcasc===false?'':'checked'}> Correr también las tareas que siguen</label>`:''}<button type="button" class="btn sm gold" data-act="gfull">${S.gfull?'✕ Salir de pantalla completa':'⛶ Pantalla completa'}</button></div>`}
 /* pantalla completa: el cronograma ocupa toda la pantalla, con los encabezados y los nombres fijos al desplazarse */
 (function(){const tc=tabCrono;tabCrono=function(o){const h=tc(o);if(!S.gfull)return h;
-  return `<div class="crono-full" id="crono-full"><div class="cf-bar"><b>${esc(o.nombre)} · Cronograma</b><button type="button" class="btn sm" data-act="gfull" aria-label="Salir de pantalla completa">✕ Cerrar</button></div>${h}</div>`};
+  let cuerpo=h;try{const tp=document.createElement('template');tp.innerHTML=h;const g=tp.content.querySelector('#gwrap'),e=tp.content.querySelector('.gesc-row'),v=tp.content.querySelector('.vsel');if(g)cuerpo=`<div class="cf-ctrl">${v?v.outerHTML:''}${e?e.outerHTML:''}</div>${g.outerHTML}`}catch(_){}
+  return `<div class="crono-full" id="crono-full"><div class="cf-bar"><b>${esc(o.nombre)} · Cronograma</b><button type="button" class="btn sm" data-act="gfull" aria-label="Salir de pantalla completa">✕ Cerrar</button></div>${cuerpo}</div>`};
   A.gfull=()=>{S.gfull=!S.gfull;draw();if(S.gfull)setTimeout(()=>{cfTop();const f=document.getElementById('crono-full'),w=f&&f.querySelector('#gwrap'),r=f&&f.querySelector('.gesc-row');if(r&&f)f.scrollTop=r.offsetTop-56;if(w&&w.dataset.scroll)w.scrollLeft=+w.dataset.scroll},30)};
   const dr=draw;draw=function(){const f=document.getElementById('crono-full'),w=f&&f.querySelector('#gwrap');const st=f?[f.scrollTop,w?w.scrollLeft:0,w?w.scrollTop:0]:null;
     if(S.gfull&&(S.tab!=='obra'||S.otab!=='crono'))S.gfull=false;const r=dr.apply(this,arguments);
@@ -6510,7 +6511,11 @@ body:has(.sheet) #nx-sync{bottom:auto!important;top:calc(56px + env(safe-area-in
 .erow2:not(.erow3){grid-template-columns:minmax(0,1fr) minmax(0,1fr) 62px 30px!important;gap:6px}.erow2:not(.erow3) .en{grid-column:1/-1}.erow2:not(.erow3) input{min-width:0;width:100%;padding-left:8px;padding-right:6px}
 .crono-full{position:fixed;inset:0;z-index:19;overflow:auto;background:var(--bg);padding:0 12px calc(16px + env(safe-area-inset-bottom,0px));-webkit-overflow-scrolling:touch}
 .cf-bar{position:sticky;top:0;z-index:8;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 2px 10px;background:var(--bg);font-family:'Playfair Display',serif}
-.crono-full .gwrap{max-height:calc(100dvh - 70px);overflow:auto}
+.crono-full{display:flex;flex-direction:column;overflow:hidden!important}
+.crono-full .cf-bar{flex:none;position:static}
+.crono-full .cf-ctrl{flex:none;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:0 2px 8px}
+.crono-full .cf-ctrl .vsel{margin:0;min-width:220px}.crono-full .cf-ctrl .gesc-row{margin:0}
+.crono-full .gwrap{flex:1 1 auto;min-height:0;max-height:none!important;overflow:auto;-webkit-overflow-scrolling:touch}
 .crono-full .gmonths,.crono-full .gquin,.crono-full .gdays{position:sticky;z-index:7;background:var(--surface)}
 .crono-full .gmonths{top:0}.crono-full .gquin{top:24px}.crono-full .gdays{top:44px}
 .crono-full .gmonths .glabel,.crono-full .gquin .glabel,.crono-full .gdays .glabel{z-index:8}
