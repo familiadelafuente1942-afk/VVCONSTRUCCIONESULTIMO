@@ -5019,7 +5019,7 @@ const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearIn
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261121-175203';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261121-180451';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>document.querySelector('#layer .sheet,input:focus,textarea:focus');
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 const barra=()=>{if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -6329,7 +6329,7 @@ try{draw()}catch(e){}
 /* cronograma por día / semana / mes, certificados a un toque y edición de la base que también corrige el conforme a obra */
 try{S.gesc=localStorage.getItem('nexo2_gesc')||'sem'}catch(e){S.gesc='sem'}
 function cronoEscala(o){const E=[['dia','Día'],['sem','Semana'],['mes','Mes']],n=(o.cert||[]).length;
-  return `<div class="gesc-row"><div class="seg" role="group" aria-label="Escala del cronograma">${E.map(([k,l])=>`<button type="button" data-act="gesc" data-k="${k}" aria-pressed="${(S.gesc||'sem')===k}">${l}</button>`).join('')}</div>${n?`<button type="button" class="btn sm" data-act="certVer" data-o="${o.id}">Ver certificados · ${n}</button>`:''}<button type="button" class="btn sm gold" data-act="gfull">${S.gfull?'✕ Salir de pantalla completa':'⛶ Pantalla completa'}</button></div>`}
+  return `<div class="gesc-row"><div class="seg" role="group" aria-label="Escala del cronograma">${E.map(([k,l])=>`<button type="button" data-act="gesc" data-k="${k}" aria-pressed="${(S.gesc||'sem')===k}">${l}</button>`).join('')}</div>${n?`<button type="button" class="btn sm" data-act="certVer" data-o="${o.id}">Ver certificados · ${n}</button>`:''}<button type="button" class="btn sm ${S.gdrag?'gold':''}" data-act="gdrag" aria-pressed="${!!S.gdrag}">${S.gdrag?'✓ Moviendo barras':'↔ Mover y estirar barras'}</button>${S.gdrag?`<label class="chk2" style="margin:0"><input type="checkbox" data-chg="gcasc" ${S.gcasc===false?'':'checked'}> Correr también las tareas que siguen</label>`:''}<button type="button" class="btn sm gold" data-act="gfull">${S.gfull?'✕ Salir de pantalla completa':'⛶ Pantalla completa'}</button></div>`}
 /* pantalla completa: el cronograma ocupa toda la pantalla, con los encabezados y los nombres fijos al desplazarse */
 (function(){const tc=tabCrono;tabCrono=function(o){const h=tc(o);if(!S.gfull)return h;
   return `<div class="crono-full" id="crono-full"><div class="cf-bar"><b>${esc(o.nombre)} · Cronograma</b><button type="button" class="btn sm" data-act="gfull" aria-label="Salir de pantalla completa">✕ Cerrar</button></div>${h}</div>`};
@@ -6406,11 +6406,48 @@ CHG.eFin=(v,el)=>{const o=findO(EOID);if(!o)return;const L=EMODO==='base'?o.base
   A.eoCrono=ds=>{closeSheet();S.obra=ds.o;S.tab='obra';S.otab='crono';draw();A.editar({})};
   A.eoCronoFull=ds=>{closeSheet();S.obra=ds.o;S.tab='obra';S.otab='crono';S.gfull=false;A.gfull()};
 })();
+
+/* línea de tiempo editable: con "Mover y estirar barras" se arrastra cada barra para adelantarla o atrasarla, y su borde derecho para acortarla o alargarla */
+(function(){
+  A.gdrag=()=>{S.gdrag=!S.gdrag;if(S.gdrag)toast('Arrastrá una barra para moverla, o su borde derecho para acortarla o alargarla');draw()};
+  CHG.gcasc=(v,el)=>{S.gcasc=!!(el&&el.checked)};
+  let D=null,bloqClick=0;
+  const listaDe=o=>esDir()?o.base:o.tasks;
+  const puede=o=>esDir()||puedeEditar(o);
+  function aplicar(o,id,dias,modo){const L=listaDe(o),t=L.find(x=>x.id===id);if(!t||!dias)return false;const casc=S.gcasc!==false;
+    const antes=new Map(L.map(x=>[x.id,x.start+'|'+x.end]));
+    const hab=x=>Math.max(1,workBetween(x.start-DAY,x.end)),corre=(x,dl)=>{const dd=hab(x);let ns=x.start+dl*DAY;ns=dl<0?(()=>{let y=ns;while(!isWork(y))y-=DAY;return y})():nextWork(ns);x.start=ns;x.end=addWork(ns,dd-1);x.weeks=dd/5};
+    if(modo==='mover'){const s0=t.start;if(casc)L.forEach(x=>{if(x!==t&&x.start>=s0)corre(x,dias)});corre(t,dias)}
+    else{const e0=t.end;let fe=t.end+dias*DAY;while(!isWork(fe))fe-=DAY;if(fe<t.start)fe=t.start;const dd=Math.max(1,workBetween(t.start-DAY,fe));t.end=addWork(t.start,dd-1);t.weeks=dd/5;const dl=Math.round((t.end-e0)/DAY);
+      if(casc&&dl)L.forEach(x=>{if(x!==t&&x.start>e0)corre(x,dl)})}
+    L.sort((p,q)=>p.start-q.start);
+    L.forEach(x=>{if(antes.get(x.id)!==x.start+'|'+x.end&&x.cod)x.manual=true;if(x.real){x.real.ini=Math.min(x.real.ini||x.start,x.start)}});
+    if(esDir()){L.forEach(b=>{if(antes.get(b.id)===b.start+'|'+b.end)return;const q=o.tasks.find(x=>x.id===b.id);if(q&&!(q.real&&(q.real.av||0)>0)){q.start=b.start;q.end=b.end;q.weeks=b.weeks;q.manual=true}});o.tasks.sort((a,b)=>a.start-b.start)}
+    return true}
+  const fdia=t=>{const q=new Date(t);return q.getUTCDate()+'/'+(q.getUTCMonth()+1)};
+  document.addEventListener('pointerdown',e=>{if(!S.gdrag)return;const b=e.target.closest&&e.target.closest('.g6 .gbar[data-act="tarea"]');if(!b)return;const o=findO(b.dataset.o);if(!o||!puede(o))return;
+    const L=listaDe(o),t=L.find(x=>x.id===b.dataset.id);if(!t)return;const g=b.closest('.g6'),W=parseFloat(getComputedStyle(g).getPropertyValue('--W'))||34,r=b.getBoundingClientRect();
+    D={b,o,t,x0:e.clientX,px:W/7,modo:(r.right-e.clientX)<=Math.max(10,Math.min(18,r.width/3))?'estirar':'mover',w0:b.offsetWidth,l0:b.offsetLeft,dias:0,id:e.pointerId};
+    try{b.setPointerCapture(e.pointerId)}catch(_){}b.classList.add('gdragging');e.preventDefault();
+    let tip=document.getElementById('gdtip');if(!tip){tip=document.createElement('div');tip.id='gdtip';document.body.appendChild(tip)}tip.style.display='block'},{passive:false});
+  document.addEventListener('pointermove',e=>{if(!D||e.pointerId!==D.id)return;e.preventDefault();const dx=e.clientX-D.x0;D.dias=Math.round(dx/D.px);const sn=D.dias*D.px;
+    if(D.modo==='mover')D.b.style.left=(D.l0+sn)+'px';else D.b.style.width=Math.max(6,D.w0+sn)+'px';
+    const t=D.t,ini=D.modo==='mover'?t.start+D.dias*DAY:t.start,fin=t.end+D.dias*DAY,tip=document.getElementById('gdtip');
+    if(tip){tip.textContent=(D.modo==='mover'?(D.dias>0?'Atrasar ':D.dias<0?'Adelantar ':'')+(D.dias?Math.abs(D.dias)+' días · ':''):(D.dias>0?'Alargar ':D.dias<0?'Acortar ':'')+(D.dias?Math.abs(D.dias)+' días · ':''))+fdia(ini)+' → '+fdia(fin);tip.style.left=e.clientX+'px';tip.style.top=(e.clientY-44)+'px'}},{passive:false});
+  function fin(e){if(!D||(e&&e.pointerId!==D.id))return;const d=D;D=null;const tip=document.getElementById('gdtip');if(tip)tip.style.display='none';d.b.classList.remove('gdragging');
+    if(Math.abs((e?e.clientX:d.x0)-d.x0)<4){return}bloqClick=Date.now();
+    if(d.dias&&aplicar(d.o,d.t.id,d.dias,d.modo)){toast(`${d.t.name}: ${fmt(d.t.start)} → ${fmt(d.t.end)}`)}draw()}
+  document.addEventListener('pointerup',fin);document.addEventListener('pointercancel',e=>{if(D){D.b.style.left=D.l0+'px';D.b.style.width=D.w0+'px';D.b.classList.remove('gdragging');D=null;const tip=document.getElementById('gdtip');if(tip)tip.style.display='none'}});
+  document.addEventListener('click',e=>{if(Date.now()-bloqClick<400&&e.target.closest&&e.target.closest('.gbar')){e.stopPropagation();e.preventDefault()}},true);
+})();
 </script>
 <style id="crono-escala-css">
 .gesc-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0 10px}
 .g6 .gd.gfds{opacity:.45}
 .cv-foco{box-shadow:inset 3px 0 0 var(--gold)}
+body:has([data-act="gdrag"][aria-pressed="true"]) .g6 .gbar[data-act="tarea"]{height:20px;top:11px;touch-action:none;cursor:grab;box-shadow:inset -7px 0 0 rgba(255,255,255,.55)}
+.g6 .gbar.gdragging{cursor:grabbing;outline:2px solid var(--gold);z-index:5;opacity:.9}
+#gdtip{position:fixed;z-index:2147483001;transform:translateX(-50%);background:#111;color:#fff;padding:5px 10px;border-radius:8px;font:600 12px/1.2 system-ui,sans-serif;pointer-events:none;display:none;white-space:nowrap}
 @media (min-width:700px){.hero2 .hs{width:100%;aspect-ratio:auto!important;max-height:none!important;height:clamp(220px,42vh,560px)}}
 /* con una hoja abierta (editar cronograma, tarea, obra) el aviso de guardado sube arriba para no tapar los botones */
 body:has(.sheet) #nx-sync{bottom:auto!important;top:calc(56px + env(safe-area-inset-top,0px))}
