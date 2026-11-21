@@ -1598,7 +1598,7 @@ function BelfastPanel({ data, obras, certsDe, btnPaneles }) {
   const montoR = (r) => num((bo.rubros || {})[r.id]);
   const totalB = rubros.reduce((s, r) => s + montoR(r), 0);
   const cs = obra ? certsDe(obra.id) : [];
-  const selObra = <Field label="Obra"><Sel value={obraId} onChange={e => setObraId(e.target.value)} style={inp}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>;
+  const selObra = <ObraPicker obras={obras} value={obraId} onChange={e => setObraId(e.target.value)} ayuda={tab === "certs" ? "Estos son los certificados de esta obra." : "Tu presupuesto de esta obra."} />;
   const card = { background: T.card, borderRadius: 18, padding: "14px 16px", marginBottom: 12, boxShadow: SHD, WebkitBackdropFilter: "blur(18px) saturate(1.6)", backdropFilter: "blur(18px) saturate(1.6)" };
   const pct0 = (v) => Math.round(v) + "%";
 
@@ -1630,7 +1630,7 @@ function BelfastPanel({ data, obras, certsDe, btnPaneles }) {
     <div className="vv-body" style={{ padding: "14px 16px calc(112px + env(safe-area-inset-bottom,0px))", maxWidth: 820 }}>
       {estado && <div style={{ position: "fixed", top: "calc(84px + env(safe-area-inset-top))", left: "50%", transform: "translateX(-50%)", zIndex: 70, background: T.page, color: T.text, borderRadius: 999, padding: "6px 14px", fontSize: 12.5, fontWeight: 700, boxShadow: SHD }}>{estado}</div>}
       {!obras.length && <div style={card}>Todavía no hay obras cargadas por V+V.</div>}
-      {obra && tab !== "ajustes" && <div style={card}>{selObra}</div>}
+      {obra && tab !== "ajustes" && selObra}
       {obra && tab === "presupuesto" && <>
         <div style={card}>
           <div style={{ fontSize: 11, letterSpacing: ".12em", textTransform: "uppercase", color: T.muted, fontWeight: 700, marginBottom: 6 }}>Tu presupuesto al propietario</div>
@@ -2284,6 +2284,19 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
   </div>);
 }
 
+// Selector de obra destacado: recuadro dorado arriba de cada pantalla que trabaja sobre una obra
+function ObraPicker({ obras, value, onChange, ayuda }) {
+  const o = (obras || []).find(x => x.id === value);
+  return <div style={{ position: "relative", borderRadius: 18, padding: "12px 14px 14px", marginBottom: 14, background: `linear-gradient(158deg, ${T.al || "rgba(176,137,79,.16)"} 0%, rgba(176,137,79,.06) 100%)`, border: `1.5px solid ${T.accent}`, boxShadow: "0 10px 24px -14px rgba(176,137,79,.7)" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke={T.accent} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6" /></svg>
+      <span style={{ fontSize: 11, letterSpacing: ".16em", textTransform: "uppercase", fontWeight: 800, color: T.accent }}>Obra</span>
+      <span style={{ marginLeft: "auto", fontSize: 11.5, color: T.muted }}>{(obras || []).length > 1 ? "Tocá para cambiar" : ""}</span>
+    </div>
+    <Sel value={value} onChange={onChange} style={{ ...inp, marginTop: 0, fontSize: 20, fontWeight: 700, minHeight: 54, padding: "12px 14px", borderRadius: 14, border: `1px solid ${T.accent}`, background: T.page }}>{(obras || []).map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}</Sel>
+    {(ayuda || (o && o.ubicacion)) && <div style={{ fontSize: 12.5, color: T.sub, marginTop: 8 }}>{ayuda || o.ubicacion}</div>}
+  </div>;
+}
 function CertTab({ modo, obras, data, save, certsDe, indices }) {
   const esCosto = modo === "costo";
   const [obraId, setObraId] = useState(obras[0]?.id || "");
@@ -2335,10 +2348,10 @@ function CertTab({ modo, obras, data, save, certsDe, indices }) {
 
   if (obras.length === 0) return <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 20px" }}>Primero cargá una obra en <b>Presupuesto</b>.</div>;
   return (<div style={{ padding: "14px 16px 40px" }}>
+    <ObraPicker obras={obras} value={obraId} onChange={e => setObraId(e.target.value)} ayuda="Todo lo que cargues abajo queda en esta obra." />
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, boxShadow: SHDsm, marginBottom: 16 }}>
       <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 3 }}>Certificar {esCosto ? "· costo interno" : "· al cliente"}</div>
       <div style={{ fontSize: 11, color: T.muted, marginBottom: 12 }}>Cargás una vez el % de avance por rubro; sirve para los dos certificados.</div>
-      <Field label="Obra"><Sel value={obraId} onChange={e => setObraId(e.target.value)} style={inp}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
       {(obra?.rubros || []).length > 0 && <div style={{ marginBottom: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Avance por rubro</div>
