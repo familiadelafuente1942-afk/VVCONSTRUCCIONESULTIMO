@@ -4014,7 +4014,7 @@ function gantt(o,C){
   const baseIds=new Set(o.base.map(t=>t.id));
   const rows=main.map(tp=>{
     if(tp.gp){const c=tp.c,col=cDone(c)?'ok':color(c),k=timing(c),a=x(tp.start),w=Math.max(8,x(tp.end+DAY)-a-2);
-      return `<div class="grow gprow"><button class="glabel" data-act="gpCard" data-id="${c.id}" title="${esc(tp.name)}"><span class="gl-n">${cDone(c)?'✅ ':''}${esc(tp.name)}</span><span class="gl-d">${esc(c.task.name)} · pedir antes del ${fmt(k.nar)}</span></button><div class="gtrack" style="width:${width}px"><button class="gbar gpbar gp-${col}" data-act="gpCard" data-id="${c.id}" style="left:${a}px;width:${w}px" title="${esc(tp.name)} · pedir antes del ${fmt(k.nar)}"></button><span class="gpct" style="left:${a+w+3}px">${cDone(c)?'listo':'pedir ' +fmt(k.nar)}</span></div></div>`}
+      return `<div class="grow gprow"><button class="glabel" data-act="gpCard" data-id="${c.id}" title="${esc(tp.name)} · para: ${esc(c.task.name)}"><span class="gl-n">${cDone(c)?'✅ ':''}${esc(tp.name)}</span><span class="gl-d">${cDone(c)?'listo':'pedir antes del '+fmt(k.nar)} · ${esc((c.items[0]&&c.items[0].resp)||'Jefatura')}</span></button><div class="gtrack" style="width:${width}px"><button class="gbar gpbar gp-${col}" data-act="gpCard" data-id="${c.id}" style="left:${a}px;width:${w}px" title="${esc(tp.name)} · pedir antes del ${fmt(k.nar)}"></button><span class="gpct" style="left:${a+w+3}px">${cDone(c)?'listo':'pedir ' +fmt(k.nar)}</span></div></div>`}
     if(tp.hdr){const av0=tp.av||0;return `<div class="grow ghdr"><button class="glabel ghd gh-et" data-act="etapaTg" data-k="${esc(tp.k)}" aria-expanded="${!tp.cerrada}"><span class="gl-n">${tp.cerrada?'▸':'▾'} ${esc(tp.name)}</span><span class="gl-d">${esc(tp.sub||'')}</span></button><div class="gtrack" style="width:${width}px">${tp.start!=null?`<span class="gbar gb-agg" style="left:${x(tp.start)}px;width:${Math.max(6,x(tp.end+DAY)-x(tp.start)-2)}px"><i style="width:${av0}%"></i></span><span class="gpct" style="left:${x(tp.end+DAY)+3}px">${av0} %</span>`:''}</div></div>`}
     const t=C.contractual?tp:(o.tasks.find(q=>q.id===tp.id)||tp);let segs='';
     if(C.pedidos&&C.obra){const cs=o.cards.filter(c=>c.task===t&&enCronograma(c)),pend=cs.filter(c=>!cDone(c));
@@ -5047,7 +5047,7 @@ const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearIn
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261121-184008';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261121-184433';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>document.querySelector('#layer .sheet,input:focus,textarea:focus');
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 const barra=()=>{if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -6481,6 +6481,11 @@ A.gpCard=ds=>{try{window.sheetCard(ds.id)}catch(e){}};
 .gnod{position:absolute;top:68px;bottom:0;background:repeating-linear-gradient(135deg,rgba(192,57,43,.16) 0 4px,rgba(192,57,43,.08) 4px 8px);pointer-events:none;z-index:0}
 .ghab{font-weight:700;color:#1f8a4c}
 .cv-foco{box-shadow:inset 3px 0 0 var(--gold)}
+.g6 .grow.gprow{height:auto!important;min-height:56px;align-items:stretch}
+.g6 .grow.gprow .glabel{height:auto;min-height:56px;padding-top:7px;padding-bottom:7px;justify-content:center}
+.g6 .grow.gprow .glabel .gl-n{-webkit-line-clamp:3;line-height:1.25}
+.g6 .grow.gprow .gtrack{align-self:stretch;min-height:56px}
+.g6 .grow.gprow .gpbar,.g6 .grow.gprow .gpct{top:50%;transform:translateY(-50%)}
 .gpbar{height:12px;border-radius:6px;opacity:.95}.gp-verde{background:var(--verde)}.gp-amarillo{background:var(--amarillo)}.gp-naranja{background:var(--naranja)}.gp-rojo{background:var(--rojo)}.gp-futuro{background:#8a8f99}.gp-ok{background:var(--verde);opacity:.45}
 .gvl.gmark{border-left:2px dashed #2f7d4f;z-index:3}
 .gmarkl{position:absolute;z-index:7;background:#2f7d4f;color:#fff;font-weight:800;font-size:10.5px;padding:3px 8px;border-radius:0 5px 5px 0;white-space:nowrap;pointer-events:none}
