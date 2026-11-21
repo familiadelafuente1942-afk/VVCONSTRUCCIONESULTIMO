@@ -116,7 +116,7 @@ const SEGUIMIENTO = {
 
 /* ---------------- CONTRATISTAS ---------------- */
 async function obrasNombres() { const S = await filas("clave=like.snap_*"); const m = {}; S.forEach((s) => (m[String(s.clave).slice(5)] = (s.valor && s.valor.nombre) || "")); return m; }
-const audTxt = (a) => a ? `Personal: ${a.personal || 0}${a.ociosos ? " (" + a.ociosos + " sin tarea)" : ""}. ` + (a.items || []).map((i) => `${i.n ? i.n + ". " : ""}${i.tarea}: ${EST[i.est] || i.est}${i.est === "avanza" && (i.gente || i.fin) ? " (" + (i.gente || "?") + " personas, termina " + fl(i.fin) + ")" : ""}${i.falta ? " — falta " + i.falta : ""}${i.nota ? " — " + i.nota : ""}`).join("; ") + (a.concl ? ". Conclusión: " + a.concl : "") + (a.inf ? " (respuesta al informe " + (a.inf.semana || "") + ")" : "") : "";
+const audTxt = (a) => a ? `Personal: ${a.personal || 0}${a.ociosos ? " (" + a.ociosos + " sin tarea)" : ""}. ` + (a.items || []).map((i) => `${i.n ? i.n + ". " : ""}${i.tarea}: ${i.cumplida ? "cumplida" : a.inf ? (TXE[i.est] || i.est).toLowerCase() : (EST[i.est] || i.est)}${i.est === "avanza" && (i.gente || i.fin) ? " (" + (i.gente || "?") + " personas, termina " + fl(i.fin) + ")" : ""}${i.falta ? " — falta " + i.falta : ""}${i.nota ? " — " + i.nota : ""}`).join("; ") + (a.concl ? ". Conclusión: " + a.concl : "") + (a.inf ? " (respuesta al informe " + (a.inf.semana || "") + ")" : "") : "";
 // llama a la API de NEXO 2 en el mismo proceso (misma lógica y permisos que la app de Contratistas)
 async function nx2(body) { let out = null, st = 200; const res = { setHeader() { return this; }, status(x) { st = x; return this; }, json(x) { out = x; return this; }, send(x) { out = x; return this; }, end() { return this; } }; await nexo2({ method: "POST", body, query: {}, headers: { host: "nexoentorno.vercel.app" } }, res); if (st >= 400 || !out || out.ok === false) throw new Error((out && out.error) || "No se pudo (" + st + ")"); return out; }
 const hoyAR = () => new Date(Date.now() - 108e5).toISOString().slice(0, 10);
@@ -136,14 +136,16 @@ async function informeJefatura(a) {
   if (!I.length) return `La obra ${ON[id]} no tiene informes de la jefatura cargados en NEXO 2. Pedile a Sebastián que te dicte los puntos.`;
   return JSON.stringify({ obra: ON[id], informes: I.slice(0, 2).map((x) => ({ fecha: fl(x.fecha), autor: x.autor, texto: corta(x.resumen || x.txt || "", 6000) })) });
 }
-const TXE = { avanza: "SE PUEDE AVANZAR", material: "NO SE PUEDE: FALTA MATERIAL", definicion: "NO SE PUEDE: FALTA DEFINICIÓN / PLANO", otro: "NO SE PUEDE: OTRO MOTIVO", terminado: "TERMINADO" };
-const COLE = { avanza: "#3F8C5A", material: "#C8463E", definicion: "#CD7D3C", otro: "#CD7D3C", terminado: "#78736A" };
+// cumplimiento semanal: cada pedido del informe queda cumplido o no cumplido (y por qué)
+const TXE = { avanza: "NO CUMPLIDA · SIGUE EN CURSO", material: "NO CUMPLIDA: FALTA MATERIAL", definicion: "NO CUMPLIDA: FALTA DEFINICIÓN / PLANO", otro: "NO CUMPLIDA: OTRO MOTIVO", terminado: "CUMPLIDA" };
+const COLE = { avanza: "#CD7D3C", material: "#C8463E", definicion: "#CD7D3C", otro: "#CD7D3C", terminado: "#1F8A4C" };
 function conclusionAud(personal, its) {
   const bl = its.filter((x) => x.est === "material"), def = its.filter((x) => x.est === "definicion" || x.est === "otro"), av = its.filter((x) => x.est === "avanza");
   let t = `Hoy hay ${personal || "—"} personas en obra.`;
   if (bl.length) t += ` ${bl.length} tarea${bl.length > 1 ? "s no se pueden" : " no se puede"} avanzar por FALTA DE MATERIAL: ` + bl.map((x) => x.tarea + (x.falta ? ` (falta ${x.falta}${x.pedido ? ", pedido hace " + diasDesdeAR(x.pedido) + " días" : ""})` : "")).join("; ") + ".";
   if (def.length) t += ` Frenadas por otro motivo: ` + def.map((x) => x.tarea + (x.nota ? ` (${x.nota})` : "")).join("; ") + ".";
-  if (av.length) t += ` Se puede avanzar en: ` + av.map((x) => `${x.tarea} (${x.gente || "?"} personas, termina el ${fAR(x.fin)})`).join(", ") + ".";
+  { const ter = its.filter((x) => x.est === "terminado"); if (ter.length) t += ` Cumplidas: ` + ter.map((x) => x.tarea).join(", ") + "."; }
+  if (av.length) t += ` No cumplidas, siguen en curso: ` + av.map((x) => `${x.tarea} (${x.gente || "?"} personas, termina el ${fAR(x.fin)})`).join(", ") + ".";
   if (bl.length && av.length) t += " La falta de avance en esas tareas no es por falta de mano de obra: hay personal disponible y lo que falta es el material.";
   return t;
 }
@@ -189,7 +191,7 @@ async function responderInforme(a) {
   const inf = { semana: String(a.semana || ""), resp: String(a.responsable || ""), obraTxt: ct.obraN };
   const concl = String(a.conclusion || "").trim() || conclusionAud(personal, its);
   const bl = its.filter((x) => x.est !== "avanza" && x.est !== "terminado");
-  const titulo = `Cumplimiento semanal${inf.semana ? " · " + inf.semana.replace(/\..*$/, "") : ""} · ${its.length - bl.length} se hacen${bl.length ? ", " + bl.length + " no" : ""}`;
+  const titulo = `Cumplimiento semanal${inf.semana ? " · " + inf.semana.replace(/\..*$/, "") : ""} · ${(() => { const cu = its.filter((x) => x.est === "terminado").length; return cu + (cu === 1 ? " cumplida" : " cumplidas") + (its.length - cu ? ", " + (its.length - cu) + " no" : ""); })()}`;
   const resumen = `${ct.nombre} · ${ct.obraN}${inf.semana ? " · " + inf.semana : ""} · ${personal || "?"} personas en obra.\n` + its.map((x) => `${x.n ? x.n + ". " : ""}${x.tarea}: ${TXE[x.est].toLowerCase()}${x.est === "avanza" ? `, ${x.gente} personas, termina el ${fAR(x.fin)}` : ""}${x.est === "material" && x.falta ? `, falta ${x.falta}${x.pedido ? " (pedido el " + fAR(x.pedido) + ")" : ""}` : ""}${x.nota ? " — " + x.nota : ""}`).join("\n") + `\nConclusión: ${concl}`;
   if (!a.confirmado) return "TODAVÍA NO SE CARGÓ. Leele esto a Sebastián y preguntale si lo cargás (si dice que sí, llamá de nuevo con confirmado=true y los mismos datos):\n" + resumen;
   const desc = `Cumplimiento semanal del informe de la jefatura${inf.semana ? " (" + inf.semana + ")" : ""}${inf.resp ? " · Responsable: " + inf.resp : ""}\nFecha: ${fAR(fecha)} · Personas en obra: ${personal || "—"}\n` + its.map((x) => `- ${x.tarea}: ${TXE[x.est].toLowerCase()}${x.est === "avanza" ? ` — ${x.gente} persona${x.gente === 1 ? "" : "s"} asignada${x.gente === 1 ? "" : "s"}, termina el ${fAR(x.fin)}` : ""}${x.est === "material" && x.falta ? " — falta " + x.falta + (x.pedido ? " (pedido el " + fAR(x.pedido) + ", hace " + diasDesdeAR(x.pedido) + " días)" : "") : ""}${x.nota ? " — " + x.nota : ""}`).join("\n") + `\n\nConclusión: ${concl}`;
