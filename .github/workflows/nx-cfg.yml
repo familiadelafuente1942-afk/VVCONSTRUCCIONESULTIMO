@@ -1,0 +1,23 @@
+name: nx-cfg
+on:
+  workflow_dispatch:
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Estado de la configuración de NEXO 2 (obras, sin montos)
+        run: |
+          curl -s https://nexoentorno.vercel.app/api/nexo2 > c.json
+          python3 - <<'PY'
+          import json,datetime
+          d=json.load(open('c.json')); c=d.get('cfg') or {}
+          v=c.get('v') or ''
+          print('CFG_T',c.get('t'),datetime.datetime.utcfromtimestamp((c.get('t') or 0)/1000).isoformat(),'TAMANO_KB',len(v)//1000)
+          o=json.loads(v) if v else {}
+          print('CLAVES',sorted(o.keys()))
+          for x in o.get('nuevas',[]) or []: print('NUEVA',x.get('id'),'|',x.get('nombre'),'| tpl' if x.get('tpl') else '','| kb',len(json.dumps(x))//1000)
+          for k,ch in (o.get('mod') or {}).items(): print('MOD',k,'|',ch.get('nombre',''),'| claves',len(ch),'| kb',len(json.dumps(ch))//1000)
+          print('DEL',o.get('del'),'DELN',o.get('delN'))
+          print('AVISOS',len(o.get('avisos') or []))
+          big=sorted(((k,len(json.dumps(val))) for k,val in o.items()),key=lambda t:-t[1])[:8]; print('MAS_PESADO',big)
+          PY
