@@ -5012,7 +5012,7 @@ const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearIn
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261121-171015';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261121-172654';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>document.querySelector('#layer .sheet,input:focus,textarea:focus');
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 const barra=()=>{if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -6322,7 +6322,17 @@ try{draw()}catch(e){}
 /* cronograma por día / semana / mes, certificados a un toque y edición de la base que también corrige el conforme a obra */
 try{S.gesc=localStorage.getItem('nexo2_gesc')||'sem'}catch(e){S.gesc='sem'}
 function cronoEscala(o){const E=[['dia','Día'],['sem','Semana'],['mes','Mes']],n=(o.cert||[]).length;
-  return `<div class="gesc-row"><div class="seg" role="group" aria-label="Escala del cronograma">${E.map(([k,l])=>`<button type="button" data-act="gesc" data-k="${k}" aria-pressed="${(S.gesc||'sem')===k}">${l}</button>`).join('')}</div>${n?`<button type="button" class="btn sm" data-act="certVer" data-o="${o.id}">Ver certificados · ${n}</button>`:''}</div>`}
+  return `<div class="gesc-row"><div class="seg" role="group" aria-label="Escala del cronograma">${E.map(([k,l])=>`<button type="button" data-act="gesc" data-k="${k}" aria-pressed="${(S.gesc||'sem')===k}">${l}</button>`).join('')}</div>${n?`<button type="button" class="btn sm" data-act="certVer" data-o="${o.id}">Ver certificados · ${n}</button>`:''}<button type="button" class="btn sm gold" data-act="gfull">${S.gfull?'✕ Salir de pantalla completa':'⛶ Pantalla completa'}</button></div>`}
+/* pantalla completa: el cronograma ocupa toda la pantalla, con los encabezados y los nombres fijos al desplazarse */
+(function(){const tc=tabCrono;tabCrono=function(o){const h=tc(o);if(!S.gfull)return h;
+  return `<div class="crono-full" id="crono-full"><div class="cf-bar"><b>${esc(o.nombre)} · Cronograma</b><button type="button" class="btn sm" data-act="gfull" aria-label="Salir de pantalla completa">✕ Cerrar</button></div>${h}</div>`};
+  A.gfull=()=>{S.gfull=!S.gfull;draw();if(S.gfull)setTimeout(()=>{cfTop();const f=document.getElementById('crono-full'),w=f&&f.querySelector('#gwrap'),r=f&&f.querySelector('.gesc-row');if(r&&f)f.scrollTop=r.offsetTop-56;if(w&&w.dataset.scroll)w.scrollLeft=+w.dataset.scroll},30)};
+  const dr=draw;draw=function(){const f=document.getElementById('crono-full'),w=f&&f.querySelector('#gwrap');const st=f?[f.scrollTop,w?w.scrollLeft:0,w?w.scrollTop:0]:null;
+    if(S.gfull&&(S.tab!=='obra'||S.otab!=='crono'))S.gfull=false;const r=dr.apply(this,arguments);
+    if(st&&S.gfull){const rs=()=>{const f2=document.getElementById('crono-full'),w2=f2&&f2.querySelector('#gwrap');if(f2)f2.scrollTop=st[0];if(w2){w2.scrollLeft=st[1];w2.scrollTop=st[2]}};rs();requestAnimationFrame(rs);setTimeout(rs,60)}cfTop();return r};
+  function cfTop(){const b=document.getElementById('mp-banda'),f=document.getElementById('crono-full');if(f)f.style.top=(b?Math.round(b.getBoundingClientRect().height):0)+'px'}
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&S.gfull&&!document.querySelector('.sheet')){S.gfull=false;draw()}});
+})();
 A.gesc=ds=>{S.gesc=ds.k;try{localStorage.setItem('nexo2_gesc',ds.k)}catch(e){}draw()};
 function sheetCertVer(oid,cid){const o=findO(oid);if(!o)return;const L=(o.cert||[]).slice().sort((a,b)=>certFecha(a)-certFecha(b));
   const est={certificada:'✅ Certificado',pendiente:'🟡 Pendiente de certificar',programada:'⏳ Programado'};
@@ -6340,11 +6350,57 @@ A.certVer=ds=>sheetCertVer(ds.o,ds.c);
     const l=document.createElement('label');l.className='chk2';l.innerHTML=`<input type="checkbox" id="ed-sync" data-chg="edSync" ${S.edSync===false?'':'checked'}> Corregir también el conforme a obra (solo en tareas sin avance cargado)`;d.after(l)}catch(e){}};
   CHG.edSync=(v,el)=>{S.edSync=!!(el&&el.checked)};
 })();
+
+/* Editar obra completa: datos, equipo, costos, invitaciones, renders, modelo y cronograma en un solo lugar */
+(function(){
+  const miles=n=>Math.round(+n||0).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+  const numIn=(id,v,pre)=>`<input id="${id}" inputmode="numeric" autocomplete="off" value="${pre||''}${miles(v)}" data-miles="${pre||''}">`;
+  document.addEventListener('input',e=>{const el=e.target;if(!el||!el.dataset||el.dataset.miles===undefined)return;const pre=el.dataset.miles,d=el.value.replace(/[^\d]/g,'');el.value=d?pre+miles(+d):''});
+  const leer=id=>{const el=document.getElementById(id);return el?+(el.value.replace(/[^\d]/g,'')||0):0};
+  const v=id=>{const el=document.getElementById(id);return el?el.value.trim():''};
+  const orig=A.editarObra;
+  A.editarObra=ds=>{const o=findO(ds.o);if(!o||!esDir())return;const js=[...new Set(['Matías','Lucía','Facundo','Ignacio',o.jefe].filter(Boolean))];const M=o.mod2||{};const inv=o.invitados||{};
+    const modTxt=o.tpl?[M.m2?miles(M.m2)+' m²':(o.m2?miles(o.m2)+' m²':''),M.niveles?M.niveles+(M.niveles===1?' nivel':' niveles'):'',M.subsuelo?'subsuelo':'',M.piscina?'pileta':'',M.term||'',M.inicio?'inicio '+fmt(d(M.inicio)):''].filter(Boolean).join(' · '):'Sin modelo cargado';
+    openSheet(`<span class="eyebrow">Dirección</span><h2>Editar ${esc(o.nombre)}</h2><p class="muted small">Todo lo de la obra se cambia desde acá. Los cambios se guardan en la nube y se ven en todos los aparatos.</p>
+    <form class="sec" data-submit="editarObraTodo" data-o="${o.id}">
+    <span class="eyebrow">Datos de la obra</span>
+    <label class="f">Nombre<input id="eo-nom" value="${esc(o.nombre)}"></label>
+    <label class="f">Ubicación<input id="eo-ubi" value="${esc(o.ubic||'')}"></label>
+    <span class="eyebrow">Equipo</span>
+    <div class="row2"><label class="f">Jefatura de obra<select id="eo-jefe">${js.map(j=>`<option ${o.jefe===j?'selected':''}>${esc(j)}</option>`).join('')}</select></label><label class="f">Pasante<input id="eo-pas" value="${esc(o.pasante||'')}"></label></div>
+    <div class="row2"><label class="f">Estudio<input id="eo-est" value="${esc(o.estudio||'')}"></label><label class="f">WhatsApp del Estudio<input id="eo-etel" inputmode="tel" value="${esc(o.estTel||'')}"></label></div>
+    <label class="f">Auditoría técnica<input id="eo-aud" value="${esc(o.audNombre||'')}"></label>
+    <span class="eyebrow">Costos de la obra</span>
+    <div class="row2"><label class="f">Jornal por persona por día${numIn('eo-jor',o.jornal,'$ ')}</label><label class="f">Dotación (personas)${numIn('eo-dot',o.dot)}</label></div>
+    <label class="f">Margen comercial (%)${numIn('eo-mar',o.margen)}</label>
+    <button class="btn gold" type="submit">Guardar cambios</button>
+    </form>
+    <div class="sec boxed"><span class="eyebrow">Modelo de obra</span><p class="small">${esc(modTxt)}</p><p class="muted small">Plantas, m², subsuelo, pileta, estructura, terminación y fecha de inicio. Al cambiarlo se vuelve a armar el cronograma.</p><button class="btn sm" type="button" data-act="eoModelo" data-o="${o.id}">Editar el modelo</button></div>
+    <div class="sec boxed"><span class="eyebrow">Cronograma</span><p class="muted small">Fecha de inicio, fin y duración de cada tarea, nombres de los rubros y tareas nuevas.</p><div class="row2"><button class="btn sm" type="button" data-act="eoCrono" data-o="${o.id}">Editar el cronograma</button><button class="btn sm" type="button" data-act="eoCronoFull" data-o="${o.id}">⛶ Abrir en pantalla completa</button></div></div>
+    <div class="sec boxed"><span class="eyebrow">Render de la obra</span><div class="infph">${rendersItems(o).map(x=>`<div class="ph1"><span><img src="${esc(x.u)}" alt="Render"><button type="button" data-act="quitarRender" data-o="${o.id}" data-k="${esc(x.k)}" aria-label="Quitar este render">✕</button></span></div>`).join('')||'<span class="muted small">Todavía no hay renders: se ve el logo.</span>'}</div><div><label class="btn sm" for="eo-img" style="cursor:pointer">Cargar otro render</label><input id="eo-img" type="file" accept="image/*" multiple data-chg="eoImg" data-o="${o.id}" hidden></div></div>
+    <div class="sec"><button class="btn" type="button" data-act="close">Cerrar</button><button class="btn ghost" type="button" data-act="eliminarObra" data-o="${o.id}" style="color:#c0392b">Eliminar esta obra</button>
+    <span class="eyebrow">Empezar de cero</span><p class="muted small">Borra el avance cargado (informes, avances, fotos, pedidos, planos subidos) y deja la obra lista para cargar desde hoy. Descarga un respaldo antes.</p>${MODO_PRUEBAS?'<p class="muted small">Modo pruebas: “Dejar en cero” está oculto para que no se borre nada.</p>':`<button class="btn ghost" type="button" data-act="ceroObra" data-o="${o.id}" style="color:#c0392b">Dejar esta obra en cero</button><button class="btn ghost" type="button" data-act="ceroObra" data-o="todas" style="color:#c0392b">Dejar todas las obras en cero</button>`}</div>`,'Editar obra')};
+  SUBMIT.editarObraTodo=f=>{const o=findO(f.dataset.o);if(!o||!esDir())return;const n=v('eo-nom');if(!n){toast('Poné el nombre de la obra');return}
+    o.nombre=n;o.ubic=v('eo-ubi');o.jefe=v('eo-jefe');o.pasante=v('eo-pas');o.estudio=v('eo-est')||o.estudio;o.estTel=v('eo-etel').replace(/[^\d]/g,'');o.audNombre=v('eo-aud');
+    const jor=leer('eo-jor'),dot=leer('eo-dot'),mar=leer('eo-mar');if(jor)o.jornal=jor;if(dot){o.dot=dot;if(o.dotacion)o.dotacion.hoy=dot}o.margen=Math.min(100,mar);
+    closeSheet();toast('Obra actualizada');draw()};
+  A.eoModelo=ds=>{closeSheet();S.obra=ds.o;A.modeloObra({o:ds.o})};
+  A.eoCrono=ds=>{closeSheet();S.obra=ds.o;S.tab='obra';S.otab='crono';draw();A.editar({})};
+  A.eoCronoFull=ds=>{closeSheet();S.obra=ds.o;S.tab='obra';S.otab='crono';S.gfull=false;A.gfull()};
+})();
 </script>
 <style id="crono-escala-css">
 .gesc-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0 10px}
 .g6 .gd.gfds{opacity:.45}
 .cv-foco{box-shadow:inset 3px 0 0 var(--gold)}
+.crono-full{position:fixed;inset:0;z-index:19;overflow:auto;background:var(--bg);padding:0 12px calc(16px + env(safe-area-inset-bottom,0px));-webkit-overflow-scrolling:touch}
+.cf-bar{position:sticky;top:0;z-index:8;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 2px 10px;background:var(--bg);font-family:'Playfair Display',serif}
+.crono-full .gwrap{max-height:calc(100dvh - 70px);overflow:auto}
+.crono-full .gmonths,.crono-full .gquin,.crono-full .gdays{position:sticky;z-index:7;background:var(--surface)}
+.crono-full .gmonths{top:0}.crono-full .gquin{top:24px}.crono-full .gdays{top:44px}
+.crono-full .gmonths .glabel,.crono-full .gquin .glabel,.crono-full .gdays .glabel{z-index:8}
+body:has(.crono-full){overflow:hidden}
+body:has(.crono-full) .iafab,body:has(.crono-full) #vozstop{display:none!important}
 </style>
 
 </body></html>
