@@ -1602,15 +1602,16 @@ function BelfastPanel({ data, obras, certsDe, btnPaneles }) {
   const card = { background: T.card, borderRadius: 18, padding: "14px 16px", marginBottom: 12, boxShadow: SHD, WebkitBackdropFilter: "blur(18px) saturate(1.6)", backdropFilter: "blur(18px) saturate(1.6)" };
   const pct0 = (v) => Math.round(v) + "%";
 
-  // % pagado a V+V de cada certificado: los cobros que V+V registró en esta obra se aplican primero al anticipo
-  // y después a cada certificado en orden (solo se muestran porcentajes, nunca los montos de V+V)
-  const pagos = (() => {
-    const m = {}; if (!obra) return m;
-    let disp = (data.movimientos || []).filter(x => x.tipo === "cobro" && x.obraId === obra.id).reduce((t, x) => t + num(x.monto), 0);
-    disp -= Math.min(disp, anticipoDe(obra));
-    cs.forEach(c => { let neto = 0; try { neto = calcCert(c, obra, cs, data.cacMensual || {}).neto; } catch (e) { } const ap = Math.max(0, Math.min(disp, neto)); disp -= ap; m[c.id] = neto > 0 ? Math.min(100, ap / neto * 100) : 0; });
-    return m;
+  // Lo que Belfast le lleva pagado a V+V, en tiempo real: los cobros que V+V carga en Caja para esta obra
+  // se aplican primero al anticipo y después a cada certificado de V+V en orden de fecha.
+  const pv = (() => {
+    const m = {}, r = { cobrado: 0, anticipo: 0, antPag: 0, totNeto: 0, totPag: 0 }; if (!obra) return { m, r };
+    r.cobrado = (data.movimientos || []).filter(x => x.tipo === "cobro" && x.obraId === obra.id).reduce((t, x) => t + num(x.monto), 0);
+    let disp = r.cobrado; r.anticipo = anticipoDe(obra); r.antPag = Math.min(disp, r.anticipo); disp -= r.antPag;
+    cs.forEach(c => { let neto = 0; try { neto = calcCert(c, obra, cs, data.cacMensual || {}).neto; } catch (e) { } const ap = Math.max(0, Math.min(disp, neto)); disp -= ap; r.totNeto += neto; r.totPag += ap; m[c.id] = { neto, pag: ap, pct: neto > 0 ? Math.min(100, ap / neto * 100) : 0 }; });
+    r.aFavor = disp; return { m, r };
   })();
+  const pagos = Object.fromEntries(Object.entries(pv.m).map(([k, v]) => [k, v.pct]));
   function certB(c) {
     const det = detalleRubros(c, obra, cs);
     const filas = det.map(d => { const m = montoR({ id: d.id }); return { ...d, monto: m, este: m * d.per / 100, acumM: m * d.pctAcum / 100, resta: m * (1 - d.pctAcum / 100) }; });
@@ -1662,6 +1663,15 @@ function BelfastPanel({ data, obras, certsDe, btnPaneles }) {
       </>}
       {obra && tab === "certs" && <>
         {!cs.length && <div style={card}>V+V todavía no emitió certificados de esta obra.</div>}
+        {cs.length > 0 && <div style={card}>
+          <div style={{ fontSize: 11, letterSpacing: ".12em", textTransform: "uppercase", color: T.accent, fontWeight: 800, marginBottom: 8 }}>Tu cuenta con V+V en esta obra</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 8 }}>
+            <Box t="Certificado por V+V" v={money(pv.r.totNeto + pv.r.anticipo)} /><Box t="Pagado a V+V" v={money(pv.r.cobrado)} /><Box t="Saldo a pagar" v={money(Math.max(0, pv.r.totNeto + pv.r.anticipo - pv.r.cobrado))} />
+          </div>
+          {pv.r.anticipo > 0 && <div style={{ fontSize: 12.5, color: T.sub, marginTop: 8 }}>Incluye el anticipo de {money(pv.r.anticipo)} ({pv.r.antPag >= pv.r.anticipo ? "pagado" : "pagado " + money(pv.r.antPag)}).</div>}
+          {pv.r.cobrado === 0 && <div style={{ fontSize: 12.5, color: T.warn, marginTop: 8 }}>V+V todavía no registró pagos de esta obra.</div>}
+          <div style={{ fontSize: 11.5, color: T.muted, marginTop: 6 }}>Se actualiza solo con los pagos que V+V registra.</div>
+        </div>}
         {totalB === 0 && cs.length > 0 && <div style={{ ...card, color: T.warn }}>Primero cargá tu presupuesto (pestaña Presupuesto) para ver los importes.</div>}
         {cs.slice().reverse().map(c => { const n = cs.findIndex(x => x.id === c.id) + 1; const x = certB(c); const cob = (bd.cobros || {})[c.id]; return <div key={c.id} style={card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
@@ -1673,6 +1683,7 @@ function BelfastPanel({ data, obras, certsDe, btnPaneles }) {
           </div>
           <div style={{ marginTop: 10, borderRadius: 14, padding: "10px 12px", background: x.pPag >= 99.5 ? "rgba(31,138,76,.12)" : x.pPag > 0 ? "rgba(205,125,60,.12)" : "rgba(200,70,62,.10)", border: `1px solid ${x.pPag >= 99.5 ? "rgba(31,138,76,.45)" : x.pPag > 0 ? "rgba(205,125,60,.45)" : "rgba(200,70,62,.35)"}` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}><span style={{ fontSize: 13, color: T.sub, fontWeight: 600 }}>Pagado a V+V de este certificado</span><b style={{ fontSize: 20 }}>{pct0(x.pPag)}</b></div>
+            {pv.m[c.id] && <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 6, fontSize: 12.5, margin: "6px 0 2px" }}><div><span style={{ color: T.muted }}>Certificado V+V</span><br /><b>{money(pv.m[c.id].neto)}</b></div><div><span style={{ color: T.muted }}>Pagado</span><br /><b>{money(pv.m[c.id].pag)}</b></div><div><span style={{ color: T.muted }}>Falta pagar</span><br /><b>{money(pv.m[c.id].neto - pv.m[c.id].pag)}</b></div></div>}
             <div style={{ height: 6, borderRadius: 99, background: T.border, overflow: "hidden", margin: "6px 0 8px" }}><i style={{ display: "block", height: "100%", width: Math.min(100, x.pPag) + "%", background: x.pPag >= 99.5 ? "#1F8A4C" : "#CD7D3C" }} /></div>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 14 }}><span>A cobrar al propietario (mismo %)</span><b style={{ color: T.accent }}>{money(x.aCobrar)}</b></div>
             {x.pPag < 99.5 && <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12.5, color: T.muted, marginTop: 3 }}><span>Queda para cuando termines de pagar</span><span>{money(x.este - x.aCobrar)}</span></div>}
