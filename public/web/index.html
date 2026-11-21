@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="es"><head><meta name="app-build" content="0">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>V+V Construcciones</title>
+<meta name="description" content="V+V Construcciones · Experiencia, Orden y Eficiencia. Obra gris y obras llave en mano en barrios privados y naves industriales.">
+<meta name="theme-color" content="#0d0e10">
+<meta property="og:title" content="V+V Construcciones"><meta property="og:description" content="Experiencia, Orden y Eficiencia"><meta property="og:image" content="/web/img/portada.jpg">
+<link rel="manifest" href="/web/manifest.webmanifest"><link rel="apple-touch-icon" href="/vv-icon-180.png"><link rel="icon" href="/vv-icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="V+V">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&display=swap">
+<script>/* claro / oscuro: se recuerda en este aparato */
+(function(){var K='vvweb_tema';function pref(){try{var v=localStorage.getItem(K);if(v)return v}catch(e){}return matchMedia('(prefers-color-scheme: light)').matches?'claro':'oscuro'}
+document.documentElement.setAttribute('data-tema',pref());window.__tema=function(){var t=document.documentElement.getAttribute('data-tema')==='claro'?'oscuro':'claro';document.documentElement.setAttribute('data-tema',t);try{localStorage.setItem(K,t)}catch(e){}}})();</script>
+<style>
+:root{--bg:#0d0e10;--fg:#ece8e1;--muted:#a29c90;--line:rgba(255,255,255,.09);--gold:#c9a25e;--gold2:#e6c483;
+ --gl:linear-gradient(158deg,rgba(255,255,255,.14) 0%,rgba(255,255,255,.035) 45%,rgba(255,255,255,.07) 100%);--rim:rgba(255,255,255,.5);--edge:rgba(255,255,255,.2);--low:rgba(0,0,0,.25);--sh:rgba(0,0,0,.55);--bar:rgba(18,19,23,.62);--amb1:rgba(201,162,94,.18);--amb2:rgba(91,128,200,.14);color-scheme:dark}
+:root[data-tema="claro"]{--bg:#eceef3;--fg:#17181c;--muted:#5f636c;--line:rgba(0,0,0,.08);--gold:#8f6424;--gold2:#b98a41;
+ --gl:linear-gradient(158deg,rgba(255,255,255,.88) 0%,rgba(255,255,255,.55) 45%,rgba(255,255,255,.72) 100%);--rim:#fff;--edge:rgba(255,255,255,.95);--low:rgba(60,70,120,.10);--sh:rgba(60,70,120,.22);--bar:rgba(246,247,251,.78);--amb1:rgba(201,162,94,.24);--amb2:rgba(110,150,225,.2);color-scheme:light}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{background:var(--bg)}
+body{margin:0;color:var(--fg);font:16px/1.55 'Playfair Display',Georgia,serif;min-height:100vh;
+ background:radial-gradient(60% 40% at 92% 0%,var(--amb1),transparent 70%),radial-gradient(55% 40% at 0% 45%,var(--amb2),transparent 70%),radial-gradient(50% 30% at 70% 100%,var(--amb1),transparent 70%),var(--bg);background-attachment:fixed;
+ padding:env(safe-area-inset-top) 0 calc(96px + env(safe-area-inset-bottom))}
+h1,h2,h3{font-family:'Playfair Display',Georgia,serif;margin:0;font-weight:700;letter-spacing:.005em}
+a{color:var(--gold)}
+.wrap{max-width:980px;margin:0 auto;padding:0 18px}
+.glass{background:var(--gl);-webkit-backdrop-filter:blur(18px) saturate(1.8);backdrop-filter:blur(18px) saturate(1.8);box-shadow:inset 0 1.5px 1px var(--rim),inset 0 0 0 1px var(--edge),inset 0 -10px 18px var(--low),0 14px 30px -14px var(--sh);border-radius:22px}
+.eyebrow{font-weight:700;letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--gold)}
+.muted{color:var(--muted)}
+/* encabezado */
+header{position:sticky;top:0;z-index:20;background:var(--bar);-webkit-backdrop-filter:blur(20px) saturate(1.8);backdrop-filter:blur(20px) saturate(1.8);border-bottom:1px solid var(--line);padding-top:env(safe-area-inset-top);margin-top:calc(-1 * env(safe-area-inset-top))}
+header .in{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 18px;max-width:980px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--fg)}
+.brand .ic{width:46px;height:46px;border-radius:12px;background:#000 url(/vv-icon-192.png) center/cover;box-shadow:inset 0 0 0 1px var(--edge),0 6px 14px -6px var(--sh)}
+.brand b{font-size:19px;letter-spacing:.06em}.brand small{display:block;font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--gold);font-weight:700}
+.tbtn{width:44px;height:44px;border-radius:50%;border:0;color:var(--fg);display:grid;place-items:center;cursor:pointer}
+/* íconos de vidrio */
+.gi{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:50%;flex:none;color:#2a1c05;
+ background:linear-gradient(158deg,rgba(255,232,180,.95) 0%,rgba(214,168,90,.9) 55%,rgba(170,124,52,.95) 100%);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.8),inset 0 -6px 10px rgba(120,80,20,.35),0 8px 16px -8px rgba(120,80,20,.7)}
+.gi svg{width:22px;height:22px}
+/* secciones tipo app */
+main section{display:none;animation:ap .35s ease}
+main section.on{display:block}
+@keyframes ap{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){main section{animation:none}}
+.hero{position:relative;margin:16px 0 0;border-radius:26px;overflow:hidden;min-height:440px;display:flex;align-items:flex-end;background:#111 center/cover}
+.hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.05) 20%,rgba(0,0,0,.78) 100%)}
+.hero .tx{position:relative;z-index:1;padding:26px;color:#fff}
+.hero h1{font-size:clamp(32px,6vw,54px);line-height:1.05;margin:8px 0 10px}
+.hero p{margin:0;max-width:560px;color:rgba(255,255,255,.86)}
+.hero .eyebrow{color:#e6c483}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:48px;padding:12px 20px;border-radius:999px;border:0;font:700 15px 'Playfair Display',Georgia,serif;cursor:pointer;text-decoration:none;color:var(--fg)}
+.btn.gold{background:linear-gradient(180deg,#e7c27c,#b98a41);color:#21160a;box-shadow:inset 0 1.5px 1px rgba(255,255,255,.7),0 10px 22px -10px rgba(185,138,65,.9)}
+.btn.wa{background:linear-gradient(180deg,#2fa765,#1f7a4a);color:#fff;box-shadow:inset 0 1.5px 1px rgba(255,255,255,.45),0 10px 22px -10px rgba(31,122,74,.9)}
+.btn.glass{color:var(--fg)}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.card{padding:18px}
+.card h3{font-size:19px;margin:12px 0 6px}
+.card p{margin:0;color:var(--muted);font-size:15px}
+.sec-h{margin:28px 0 14px}
+.sec-h h2{font-size:clamp(26px,4.5vw,36px);margin-top:4px}
+.photo{border-radius:18px;overflow:hidden;position:relative;aspect-ratio:4/3;background:#222 center/cover}
+.photo::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 45%,rgba(0,0,0,.72))}
+.photo b{position:absolute;left:14px;bottom:12px;z-index:1;color:#fff;font-size:18px;letter-spacing:.02em}
+.photo span{position:absolute;left:14px;top:12px;z-index:1;font:700 11px 'Playfair Display';letter-spacing:.16em;text-transform:uppercase;color:#21160a;background:linear-gradient(180deg,#e7c27c,#b98a41);padding:5px 10px;border-radius:999px}
+button.photo{border:0;padding:0;cursor:zoom-in;width:100%;display:block}
+.list{margin:10px 0 0;padding:0;list-style:none}
+.list li{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line);font-size:15px}
+.list li:first-child{border-top:0}
+.list li i{flex:none;width:8px;height:8px;border-radius:50%;background:var(--gold);margin-top:9px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.stats div{padding:14px 8px;text-align:center}.stats b{display:block;font-size:clamp(17px,4.6vw,26px);line-height:1.15;color:var(--gold)}.stats small{color:var(--muted);font-size:12.5px}
+form label{display:block;font-size:13px;color:var(--muted);margin:12px 0 5px}
+input,textarea{width:100%;font:16px 'Playfair Display',Georgia,serif;color:var(--fg);padding:13px 14px;border-radius:14px;border:0;background:var(--gl);box-shadow:inset 0 0 0 1px var(--edge),inset 0 1px 3px var(--low)}
+textarea{min-height:110px;resize:vertical}
+input:focus,textarea:focus{outline:2px solid var(--gold);outline-offset:1px}
+.note{font-size:13px;color:var(--muted)}
+/* barra inferior de vidrio, como las apps */
+nav.bottom{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(10px + env(safe-area-inset-bottom));z-index:30;width:min(640px,calc(100% - 20px));display:grid;grid-template-columns:repeat(5,1fr);padding:6px;border-radius:26px;background:var(--bar);-webkit-backdrop-filter:blur(22px) saturate(1.9);backdrop-filter:blur(22px) saturate(1.9);box-shadow:inset 0 1.5px 1px var(--rim),inset 0 0 0 1px var(--edge),0 16px 34px -14px var(--sh)}
+nav.bottom button{border:0;background:none;color:var(--fg);opacity:.85;font:700 11.5px 'Playfair Display',Georgia,serif;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px;border-radius:20px;cursor:pointer;min-height:54px}
+nav.bottom button svg{width:22px;height:22px}
+nav.bottom button[aria-current=page]{opacity:1;color:var(--gold);background:var(--gl);box-shadow:inset 0 1.5px 1px var(--rim),inset 0 0 0 1px var(--edge)}
+/* visor de fotos */
+#visor{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;padding:20px}
+#visor.on{display:flex}#visor img{max-width:100%;max-height:86vh;border-radius:14px}
+#visor button{position:absolute;top:calc(14px + env(safe-area-inset-top));right:14px}
+footer{margin:34px 0 0;text-align:center;font-size:13px;color:var(--muted)}
+@media (min-width:760px){.hero{min-height:520px}.two{display:grid;grid-template-columns:1.1fr .9fr;gap:18px;align-items:start}}
+</style>
+</head>
+<body>
+<header><div class="in"><a class="brand" href="#inicio" data-go="inicio"><span class="ic" aria-hidden="true"></span><span><b>V+V</b><small>Construcciones</small></span></a>
+<button class="tbtn glass" onclick="__tema()" aria-label="Cambiar entre claro y oscuro" title="Claro / oscuro"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg></button></div></header>
+
+<main class="wrap">
+<!-- INICIO -->
+<section id="inicio" class="on">
+ <div class="hero" style="background-image:url(/web/img/portada.jpg)"><div class="tx"><span class="eyebrow">V+V Construcciones</span><h1>Experiencia, Orden y Eficiencia</h1><p>Construcción en barrios privados y naves industriales, con más de 12 años de experiencia en el sector. Cumplimos con la calidad, los tiempos y el acompañamiento en obra, para que no pierdas tiempo ni dinero.</p>
+ <div class="row" style="margin-top:18px"><button class="btn gold" data-go="contacto">Pedir presupuesto</button><button class="btn glass" data-go="obras">Ver obras</button></div></div></div>
+ <div class="stats"><div class="glass"><b>+12</b><small>años de experiencia</small></div><div class="glass"><b>Obra gris</b><small>nuestra especialidad</small></div><div class="glass"><b>Llave en mano</b><small>de los planos a la entrega</small></div></div>
+ <div class="sec-h"><span class="eyebrow">Qué hacemos</span><h2>Expertos en servicios de construcción</h2></div>
+ <div class="grid">
+  <div class="glass card"><span class="gi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V10l7-5 7 5v11"/><path d="M9 21v-6h6v6"/></svg></span><h3>Obra gris</h3><p>Estructura, mampostería, revoques, contrapisos y carpetas, y colocación de pisos.</p></div>
+  <div class="glass card"><span class="gi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></span><h3>Llave en mano</h3><p>Desde el diseño y los planos hasta la construcción final.</p></div>
+  <div class="glass card"><span class="gi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h20M4 20V9l8-4 8 4v11"/><path d="M8 20v-5h8v5M8 11h8"/></svg></span><h3>Naves industriales</h3><p>Sistema alma llena, reticulados y parabólicos.</p></div>
+ </div>
+ <div class="row" style="margin-top:16px"><button class="btn glass" data-go="servicios">Ver todos los servicios</button></div>
+</section>
+
+<!-- SERVICIOS -->
+<section id="servicios">
+ <div class="sec-h"><span class="eyebrow">Servicios</span><h2>Obra gris</h2><p class="muted" style="margin:8px 0 0">Nuestro servicio principal: la obra gris de viviendas en barrios privados, con orden y plazos cumplidos.</p></div>
+ <div class="two">
+  <div class="glass card"><ul class="list">
+   <li><i></i>Estructura de hormigón armado: fundaciones, columnas, vigas y losas</li>
+   <li><i></i>Mampostería</li>
+   <li><i></i>Revoques</li>
+   <li><i></i>Contrapisos y carpetas</li>
+   <li><i></i>Colocación de pisos</li>
+  </ul></div>
+  <div class="photo" style="background-image:url(/web/img/albanueva.jpg)"><b>Albanueva · Tigre</b></div>
+ </div>
+ <div class="sec-h"><span class="eyebrow">Servicio aparte</span><h2>Llave en mano</h2><p class="muted" style="margin:8px 0 0">Para quien quiere resolver la casa completa con un solo responsable, desde el diseño hasta la construcción final.</p></div>
+ <div class="grid">
+  <div class="glass card"><span class="gi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h6"/></svg></span><h3>Diseños y planos</h3><p>Nuestros arquitectos presentan planos municipales y diseños según la normativa vigente.</p></div>
+  <div class="glass card"><span class="gi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg></span><h3>Renderización 3D</h3><p>Presentamos los diseños en videos 3D, para ver la casa antes de construirla.</p></div>
+  <div class="glass card"><span class="gi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg></span><h3>Sondeos arquitectónicos</h3><p>Relevamos opciones de diseño hasta llegar al proyecto deseado.</p></div>
+  <div class="glass card"><span class="gi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l1 2h3v15H5V6h3z"/><path d="M9 12l2 2 4-4"/></svg></span><h3>Documentación detallada</h3><p>Documentación detallada de proyecto y terminaciones.</p></div>
+ </div>
+ <div class="row" style="margin-top:18px"><button class="btn gold" data-go="contacto">Consultar por mi obra</button></div>
+</section>
+
+<!-- OBRAS -->
+<section id="obras">
+ <div class="sec-h"><span class="eyebrow">Obras</span><h2>Obras realizadas y en construcción</h2></div>
+ <div class="grid">
+  <button class="photo" data-ver="/web/img/mayling.jpg" style="background-image:url(/web/img/mayling.jpg)"><b>Mayling · Pilar</b></button>
+  <button class="photo" data-ver="/web/img/albanueva.jpg" style="background-image:url(/web/img/albanueva.jpg)"><b>Albanueva · Tigre</b></button>
+  <button class="photo" data-ver="/web/img/pacheco.jpg" style="background-image:url(/web/img/pacheco.jpg)"><b>Pacheco Golf</b></button>
+  <button class="photo" data-ver="/web/img/corea.jpg" style="background-image:url(/web/img/corea.jpg)"><b>Residencia Embajada de Corea</b></button>
+ </div>
+ <div class="sec-h"><span class="eyebrow">Porfolio</span><h2>Tipos de obra</h2></div>
+ <div class="grid">
+  <div class="glass" style="overflow:hidden"><div class="photo" style="border-radius:0;background-image:url(/web/img/particulares.jpg)"><b>Obras particulares</b></div><div class="card"><p>Todo tipo de obras.</p></div></div>
+  <div class="glass" style="overflow:hidden"><div class="photo" style="border-radius:0;background-image:url(/web/img/nosotros.jpg)"><b>Barrios privados</b></div><div class="card"><p>Amplia experiencia en barrios privados en zona sur.</p></div></div>
+  <div class="glass" style="overflow:hidden"><div class="photo" style="border-radius:0;background-image:url(/web/img/departamentos.jpg)"><b>Edificios de departamentos</b></div><div class="card"><p>Departamentos en pozo y obras de terceros.</p></div></div>
+  <div class="glass" style="overflow:hidden"><div class="photo" style="border-radius:0;background-image:url(/web/img/remodelaciones.jpg)"><b>Remodelaciones</b></div><div class="card"><p>Remodelación de departamentos y casas.</p></div></div>
+  <div class="glass" style="overflow:hidden"><div class="photo" style="border-radius:0;background-image:url(/web/img/naves.jpg)"><b>Naves industriales</b></div><div class="card"><p>Sistema alma llena, reticulados y parabólicos.</p></div></div>
+ </div>
+</section>
+
+<!-- NOSOTROS -->
+<section id="nosotros">
+ <div class="hero" style="min-height:300px;background-image:url(/web/img/nosotros.jpg)"><div class="tx"><span class="eyebrow">Sobre nosotros</span><h1 style="font-size:clamp(28px,5vw,44px)">Construyendo sueños</h1><p>Somos una empresa constructora enfocada principalmente en barrios privados y naves industriales, con más de 12 años de experiencia en el sector.</p></div></div>
+ <div class="grid" style="margin-top:16px">
+  <div class="glass card"><span class="gi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></span><h3>Arquitectos experimentados</h3><p>Toda nuestra experiencia a su disposición.</p></div>
+  <div class="glass card"><span class="gi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg></span><h3>Trabajamos sobre tus ideas</h3><p>Lo más importante es su conformidad.</p></div>
+  <div class="glass card"><span class="gi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h6"/></svg></span><h3>Documentación detallada</h3><p>Documentación detallada de proyecto y terminaciones.</p></div>
+  <div class="glass card"><span class="gi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg></span><h3>Rápido y fiable</h3><p>Los tiempos de obra garantizan nuestra responsabilidad.</p></div>
+ </div>
+</section>
+
+<!-- CONTACTO -->
+<section id="contacto">
+ <div class="sec-h"><span class="eyebrow">Contacto</span><h2>Contanos de tu obra</h2><p class="muted" style="margin:8px 0 0">Escribinos y te respondemos por WhatsApp.</p></div>
+ <div class="two">
+  <form class="glass card" id="form" autocomplete="on">
+   <label for="f-nom">Nombre</label><input id="f-nom" name="nombre" required autocomplete="name">
+   <label for="f-tel">Teléfono (opcional)</label><input id="f-tel" name="tel" type="tel" inputmode="tel" autocomplete="tel">
+   <label for="f-lug">Barrio o zona de la obra (opcional)</label><input id="f-lug" name="lugar">
+   <label for="f-msj">Mensaje</label><textarea id="f-msj" name="mensaje" required placeholder="Ej: casa de 250 m² en barrio privado, necesito la obra gris"></textarea>
+   <button class="btn wa" type="submit" style="width:100%;margin-top:14px"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1-.2.2-.6.8-.8 1-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.6.3-.2.2-.8.8-.8 2s.8 2.3.9 2.5c.1.2 1.6 2.5 4 3.5 1.5.6 2.1.7 2.8.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3z"/></svg>Enviar por WhatsApp</button>
+   <p class="note" id="f-nota" style="margin:10px 0 0"></p>
+  </form>
+  <div style="display:flex;flex-direction:column;gap:12px">
+   <a class="glass card" id="c-wa" style="display:flex;align-items:center;gap:14px;text-decoration:none;color:var(--fg)" target="_blank" rel="noopener"><span class="gi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-13.5 7.8L3 21l1.2-4.4A9 9 0 1 1 21 12z"/></svg></span><span><b>WhatsApp</b><br><span class="muted" id="c-wa-t" style="font-size:14px"></span></span></a>
+   <a class="glass card" href="https://www.instagram.com/vvconstrucciones1911/" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:14px;text-decoration:none;color:var(--fg)"><span class="gi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".8" fill="currentColor"/></svg></span><span><b>Instagram</b><br><span class="muted" style="font-size:14px">@vvconstrucciones1911</span></span></a>
+  </div>
+ </div>
+</section>
+
+<footer>V+V Construcciones · Construyendo sueños</footer>
+</main>
+
+<nav class="bottom" aria-label="Secciones">
+ <button data-go="inicio" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Inicio</button>
+ <button data-go="servicios"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg>Servicios</button>
+ <button data-go="obras"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 8"/></svg>Obras</button>
+ <button data-go="nosotros"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1-3.5 3.5-5.5 6.5-5.5s5.5 2 6.5 5.5"/><path d="M16 5a3.5 3.5 0 0 1 0 7M18 14.5c2 .6 3 2.5 3.5 5.5"/></svg>Nosotros</button>
+ <button data-go="contacto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-13.5 7.8L3 21l1.2-4.4A9 9 0 1 1 21 12z"/></svg>Contacto</button>
+</nav>
+
+<div id="visor" role="dialog" aria-modal="true" aria-label="Foto"><img alt=""><button class="btn glass" aria-label="Cerrar">Cerrar</button></div>
+
+<script>
+/* número de WhatsApp de V+V (con código de país, sin espacios ni signos; ej. 5491112345678) */
+const WA='';
+const S=[...document.querySelectorAll('main section')],B=[...document.querySelectorAll('nav.bottom button')];
+function ir(id,push){if(!document.getElementById(id))id='inicio';S.forEach(s=>s.classList.toggle('on',s.id===id));B.forEach(b=>b.dataset.go===id?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));window.scrollTo({top:0,behavior:'instant'in window?'instant':'auto'});if(push)history.pushState(null,'','#'+id);document.title=id==='inicio'?'V+V Construcciones':(document.querySelector('#'+id+' h2,#'+id+' h1')||{}).textContent+' · V+V Construcciones'}
+document.addEventListener('click',e=>{const g=e.target.closest('[data-go]');if(g){e.preventDefault();ir(g.dataset.go,true)}const v=e.target.closest('[data-ver]');if(v){const vi=document.getElementById('visor');vi.querySelector('img').src=v.dataset.ver;vi.classList.add('on')}});
+document.querySelector('#visor').onclick=e=>{if(e.target.tagName!=='IMG')e.currentTarget.classList.remove('on')};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('visor').classList.remove('on')});
+addEventListener('popstate',()=>ir(location.hash.slice(1)||'inicio'));
+ir(location.hash.slice(1)||'inicio');
+/* contacto por WhatsApp */
+const waL=t=>'https://wa.me/'+WA+'?text='+encodeURIComponent(t);
+const cw=document.getElementById('c-wa');
+if(WA){cw.href=waL('Hola V+V, quiero consultar por una obra.');document.getElementById('c-wa-t').textContent='Escribinos directo'}else{cw.style.display='none'}
+document.getElementById('form').onsubmit=e=>{e.preventDefault();const f=e.target,t=`Hola V+V, soy ${f.nombre.value.trim()}.`+(f.lugar.value.trim()?`\nObra en: ${f.lugar.value.trim()}`:'')+(f.tel.value.trim()?`\nMi teléfono: ${f.tel.value.trim()}`:'')+`\n\n${f.mensaje.value.trim()}`;
+ if(WA){window.open(waL(t),'_blank','noopener');document.getElementById('f-nota').textContent='Se abrió WhatsApp con tu mensaje: solo tocá Enviar.'}
+ else{location.href='https://www.instagram.com/vvconstrucciones1911/';}};
+</script>
+</body></html>

@@ -98,6 +98,17 @@
   "redirects": [
     {
       "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "(?:www\\.)?vvconstruccionesweb\\.com"
+        }
+      ],
+      "destination": "/web/",
+      "permanent": false
+    },
+    {
+      "source": "/",
       "destination": "/nexo2.html",
       "permanent": false
     }
