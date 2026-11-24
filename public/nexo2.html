@@ -2024,6 +2024,9 @@ function situacion(){
     p=r==='direccion'?`En las ${obras.length} obras activas de ${ORG}. ${conRo.length?`Las vencidas están en ${conRo.join(', ')}: tareas que arrancan o ya arrancaron sin todo lo que necesitan.`:'Ninguna tarea está frenada.'}`
       :`En ${obras.map(o=>o.nombre).join(' y ')}. ${ro.length?'Empezá por las vencidas: la tarea que las necesita ya arrancó o está por arrancar.':'Revisá lo que vence esta semana.'}`;
   }else if(r==='estudio'){
+    /* pedidos y reclamos de planos de la obra: siempre arriba, con el nombre del plano */
+    try{obras.forEach(o=>(o.planos||[]).forEach(sl=>{if(slotEstado(sl)!=='falta')return;const rc=sl.reclamos||0;if(!rc&&!sl.manual)return;
+      L.push({u:rc?-2:-1,f:sl.ultReclamo||TODAY,tags:[tag(rc?'RECLAMO DE LA OBRA'+(rc>1?' · '+rc+' VECES':''):'PEDIDO NUEVO',rc?'tg-venc':'tg-pide')],t:`Te piden el plano: ${sl.nombre}`,d:`${o.nombre} · ${FN(o,sl.folder)}${rc?' · último reclamo '+dm(sl.ultReclamo||TODAY):''}`,a:{act:'rubroPlanos',o:o.id,f:sl.folder}})}))}catch(e){}
     const cs=cardsDe(obras).filter(c=>c.tipo==='doc'&&itemsEstudio(c).some(i=>!iDone(i)&&!nuevoResp(i)));
     const ro=cs.filter(x=>color(x)==='rojo'),sem=cs.filter(x=>!['rojo','futuro'].includes(color(x))&&workBetween(TODAY,timing(x).limit)<=5);
     lvl=ro.length?'crit':sem.length?'warn':'ok';
@@ -3397,6 +3400,9 @@ function avisoData(){
       :`En ${yJoin(obras.map(o=>o.nombre))}. ${ro.length?'Empezá por las vencidas: la tarea que las necesita ya arrancó o está por arrancar. Después seguí con las que vencen esta semana.':'Revisá lo que vence esta semana.'} Cada tarjeta se completa ítem por ítem; cuando todos están resueltos queda en verde.`;
     list=`${ro.length?`<span class="eyebrow">Vencidas</span><div class="list">${ro.sort((a,b)=>diasRojo(b)-diasRojo(a)).map(c=>cardHTML(c)).join('')}</div>`:''}${na.length?`<span class="eyebrow">Por vencer</span><div class="list">${na.sort((a,b)=>timing(a).limit-timing(b).limit).map(c=>cardHTML(c)).join('')}</div>`:''}`;
   }else if(r==='estudio'){
+    /* pedidos y reclamos de planos de la obra: siempre arriba, con el nombre del plano */
+    try{obras.forEach(o=>(o.planos||[]).forEach(sl=>{if(slotEstado(sl)!=='falta')return;const rc=sl.reclamos||0;if(!rc&&!sl.manual)return;
+      L.push({u:rc?-2:-1,f:sl.ultReclamo||TODAY,tags:[tag(rc?'RECLAMO DE LA OBRA'+(rc>1?' · '+rc+' VECES':''):'PEDIDO NUEVO',rc?'tg-venc':'tg-pide')],t:`Te piden el plano: ${sl.nombre}`,d:`${o.nombre} · ${FN(o,sl.folder)}${rc?' · último reclamo '+dm(sl.ultReclamo||TODAY):''}`,a:{act:'rubroPlanos',o:o.id,f:sl.folder}})}))}catch(e){}
     const cs=cardsDe(obras).filter(c=>c.tipo==='doc'&&itemsEstudio(c).some(i=>!iDone(i)&&!nuevoResp(i)));
     const ro=cs.filter(x=>color(x)==='rojo'),sem=cs.filter(x=>!['rojo','futuro'].includes(color(x))&&workBetween(TODAY,timing(x).limit)<=5);
     lvl=ro.length?'crit':sem.length?'warn':'ok';
@@ -3761,7 +3767,7 @@ function ovMapa(o){const m={r:{},c:{},p:{},dc:{},t:{},k:{}};(o.tasks||[]).forEac
   const _tr=o.pTrash||[],_cs=[...o.cards];_tr.forEach(t=>t.its.forEach(r=>{if(!_cs.includes(r.c))_cs.push(r.c)}));
   _cs.forEach(cd=>{const its={};[...cd.items,..._tr.flatMap(t=>t.its.filter(r=>r.c===cd&&!cd.items.includes(r.i)).map(r=>r.i))].forEach(i=>{its[ikey(i)]=[i.estado,i.fecha||0,i.obs||'',i.resp,i.respuesta?[i.respuesta.txt||'',i.respuesta.fecha||0,i.respuesta.por||'',i.respuesta.nuevo?1:0,(()=>{const dd=i.respuesta.doc&&DOCS.find(z=>z.id===i.respuesta.doc);return dd?dkey(o,dd):''})()]:0,i.txt,i.tipo,i.g||'',i.origen||'',i.x||0]});
     m.c[ckey(o,cd)]=JSON.stringify({e:cd.enviada||0,im:cd.impacto||'',it:cd.impactoTxt||'',tp:cd.tipo,d:cd.rdesc||'',a:cd.apert==null?null:cd.apert,p:cd.plazo==null?null:cd.plazo,rt:cd.rtipo||'',cu:cd.custom?1:0,ky:cd.ckey||'',tk:tkey(o,cd.task),i:its})});
-  [...(o.planos||[]),..._tr.map(t=>t.s)].forEach(s=>{m.p[skey(s)]=JSON.stringify({r:s.rubro,f:s.folder,n:s.nombre,m:s.manual?1:0})});
+  [...(o.planos||[]),..._tr.map(t=>t.s)].forEach(s=>{m.p[skey(s)]=JSON.stringify(s.reclamos?{r:s.rubro,f:s.folder,n:s.nombre,m:s.manual?1:0,rc:s.reclamos,ur:s.ultReclamo||0}:{r:s.rubro,f:s.folder,n:s.nombre,m:s.manual?1:0})});
   [...DOCS.filter(x=>x.obra===o),..._tr.flatMap(t=>t.docs)].forEach(x=>{const s=x.slot?[...(o.planos||[]),..._tr.map(t=>t.s)].find(p=>p.id===x.slot):null;m.dc[dkey(o,x)]=JSON.stringify({sk:s?skey(s):'',cat:x.cat,n:x.nombre,v:x.ver,e:x.estado,p:x.por,f:x.fecha,o:x.obs||'',nw:x.nuevo?1:0,u:x.u||''})});
   return m}
 function ovDiff(o){const cur=ovMapa(o),b=OV_B[o.id]||{r:{},c:{},p:{},dc:{},t:{},k:{}},out={};
@@ -3770,7 +3776,7 @@ function ovDiff(o){const cur=ovMapa(o),b=OV_B[o.id]||{r:{},c:{},p:{},dc:{},t:{},
 function ovQuitarSlot(o,sl){slotItems(sl).forEach(i=>{const c=i.card;if(i.origen==='manual'){c.items=c.items.filter(z=>z!==i);if(!c.items.length)o.cards=o.cards.filter(z=>z!==c)}else delete i.slot});
   for(let k=DOCS.length-1;k>=0;k--)if(DOCS[k].slot===sl.id)DOCS.splice(k,1);o.planos=o.planos.filter(p=>p!==sl)}
 function ovAplicar(o,ov){if(!ov)return;try{
-  Object.entries(ov.p||{}).forEach(([k,v])=>{let s=(o.planos||[]).find(x=>skey(x)===k);if(s)s.nombre=v.n;else{s=nuevoSlot(o,v.r,v.f,v.n);if(v.m)s.manual=true;s.sk=k}});
+  Object.entries(ov.p||{}).forEach(([k,v])=>{let s=(o.planos||[]).find(x=>skey(x)===k);if(s)s.nombre=v.n;else{s=nuevoSlot(o,v.r,v.f,v.n);if(v.m)s.manual=true;s.sk=k}if(v.rc){s.reclamos=v.rc;s.ultReclamo=v.ur||s.ultReclamo}});
   (ov.xp||[]).forEach(k=>{const s=(o.planos||[]).find(x=>skey(x)===k);if(s)ovQuitarSlot(o,s)});
   (ov.xc||[]).forEach(k=>{o.cards=o.cards.filter(c=>ckey(o,c)!==k)});
   Object.entries(ov.c||{}).forEach(([k,v])=>{let c=o.cards.find(x=>ckey(o,x)===k);
@@ -4113,7 +4119,7 @@ Object.assign(A,{
 });
 Object.assign(SUBMIT,{
   regEdit:f=>{const r=REGISTRO.find(x=>x.id===f.dataset.id);const t=val('re-txt');if(!t){toast('Escribí qué pasó');return}r.txt=t;r.tipo=val('re-tipo');const h=new Date();r.editado=fmt(TODAY)+' '+String(h.getHours()).padStart(2,'0')+':'+String(h.getMinutes()).padStart(2,'0');closeSheet();toast('Hecho actualizado');draw()},
-  nuevoSlot:f=>{const o=findO(f.dataset.o),n=val('ns-n');if(!n){toast('Poné el nombre del plano');return}const t=o.tasks.find(x=>x.id===val('ns-t'));const s=nuevoSlotM(o,t.rubro,f.dataset.f,n);let c=o.cards.find(x=>x.task===t&&x.tipo==='doc');if(!c)c=addCard(o,t,'doc',[],{origen:'manual',created:TODAY,enviada:TODAY});const it=addItem(c,{txt:n,tipo:PL,resp:E,origen:'manual'});it.slot=s.id;notify(ROLE()==='estudio'?'jefe':'estudio',o,`Nuevo plano en la lista de ${FN(o,s.folder)}: ${n}`,{t:'card',id:c.id});toast('Plano sumado a la lista y a la tarjeta');draw();sheetRubro(o.id,f.dataset.f)}
+  nuevoSlot:f=>{const o=findO(f.dataset.o),n=val('ns-n');if(!n){toast('Poné el nombre del plano');return}const t=o.tasks.find(x=>x.id===val('ns-t'));const s=nuevoSlotM(o,t.rubro,f.dataset.f,n);let c=o.cards.find(x=>x.task===t&&x.tipo==='doc');if(!c)c=addCard(o,t,'doc',[],{origen:'manual',created:TODAY,enviada:TODAY});const it=addItem(c,{txt:n,tipo:PL,resp:E,origen:'manual'});it.slot=s.id;notify(ROLE()==='estudio'?'jefe':'estudio',o,`Nuevo plano en la lista de ${FN(o,s.folder)}: ${n}`,{t:'card',id:c.id});try{avisoNube(ROLE()==='estudio'?'jefe':'estudio',o,`${o.nombre}: ${ROLE()==='estudio'?'el estudio sumó':'la obra pide'} el plano ${n} (${FN(o,s.folder)})`);ovFlush()}catch(e){}toast('Plano sumado a la lista y a la tarjeta');draw();sheetRubro(o.id,f.dataset.f)}
 });
 const _respItem=SUBMIT.respItem;SUBMIT.respItem=f=>keepScroll(()=>_respItem(f));
 const _editItem=SUBMIT.editItem;SUBMIT.editItem=f=>_editItem(f);
@@ -4332,7 +4338,7 @@ const _foldersDe=foldersDe;
 foldersDe=function(o){return [..._foldersDe(o),...(o.carpetas||[]).filter(([k])=>!_foldersDe(o).some(x=>x[0]===k))]};
 const _tabDocs=tabDocs;
 tabDocs=function(o){return _tabDocs(o)+((puedePedir(o)||esDir())?`<button class="btn ghost full" data-act="nuevaCarpeta" data-o="${o.id}">+ Agregar una carpeta de rubro</button>`:'')};
-function reclamarSlot(s){s.reclamos=(s.reclamos||0)+1;s.ultReclamo=TODAY;const it=slotItems(s).find(i=>!iDone(i));notify('estudio',s.obra,`La obra reclama el plano ${s.nombre} (${FN(s.obra,s.folder)})`,it?{t:'card',id:it.card.id}:null,{reclamo:true,slotKey:plKey(s)})}
+function reclamarSlot(s){s.reclamos=(s.reclamos||0)+1;s.ultReclamo=TODAY;const it=slotItems(s).find(i=>!iDone(i));try{avisoNube('estudio',s.obra,`${s.obra.nombre}: la obra te pide el plano ${s.nombre} (${FN(s.obra,s.folder)})`)}catch(e){}try{ovFlush()}catch(e){}notify('estudio',s.obra,`La obra reclama el plano ${s.nombre} (${FN(s.obra,s.folder)})`,it?{t:'card',id:it.card.id}:null,{reclamo:true,slotKey:plKey(s)})}
 Object.assign(A,{
   reclamar:ds=>{const o=findO(ds.o),s=o.planos.find(p=>p.id===ds.s);reclamarSlot(s);toast(`Reclamo enviado al estudio: ${s.nombre}`);draw();if(document.querySelector('.sheet')&&CURS&&CURS.fn==='sheetRubro')keepScroll(()=>sheetRubro(o.id,s.folder))},
   reclamarTodos:ds=>{const o=findO(ds.o);const ss=o.planos.filter(s=>s.folder===ds.f&&slotEstado(s)==='falta');ss.forEach(reclamarSlot);toast(`${plural(ss.length,'plano reclamado','planos reclamados')} al estudio`);draw();keepScroll(()=>sheetRubro(o.id,ds.f))},
@@ -5073,7 +5079,7 @@ const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearIn
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261124-191754';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261124-194158';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso&&!window.__nxVerIv)window.__nxVerIv=setInterval(()=>{if(!ocupado()){clearInterval(window.__nxVerIv);act()}},3000);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -6315,6 +6321,9 @@ function b3Items(){
     /* auditoría: próxima supervisión */
     try{agendaAud(obras,21).filter(a=>a.tipo==='sup').filter((a,k,A)=>A.findIndex(z=>z.o===a.o)===k).forEach(a=>L.push({u:habiles(TODAY,a.f)<=5?1:3,f:a.f,tags:[tag('AUDITORÍA · '+dmd(a.f),'tg-aud')],t:'Próxima supervisión de obra',d:`${a.o.nombre} · dejá la obra lista para la visita`,a:{act:'obra',id:a.o.id}}))}catch(e){}
   }else if(r==='estudio'){
+    /* pedidos y reclamos de planos de la obra: siempre arriba, con el nombre del plano */
+    try{obras.forEach(o=>(o.planos||[]).forEach(sl=>{if(slotEstado(sl)!=='falta')return;const rc=sl.reclamos||0;if(!rc&&!sl.manual)return;
+      L.push({u:rc?-2:-1,f:sl.ultReclamo||TODAY,tags:[tag(rc?'RECLAMO DE LA OBRA'+(rc>1?' · '+rc+' VECES':''):'PEDIDO NUEVO',rc?'tg-venc':'tg-pide')],t:`Te piden el plano: ${sl.nombre}`,d:`${o.nombre} · ${FN(o,sl.folder)}${rc?' · último reclamo '+dm(sl.ultReclamo||TODAY):''}`,a:{act:'rubroPlanos',o:o.id,f:sl.folder}})}))}catch(e){}
     const cs=cardsDe(obras).filter(c=>c.tipo==='doc'&&itemsEstudio(c).some(i=>!iDone(i)&&!nuevoResp(i)));
     cs.forEach(c=>{const col=color(c),k=timing(c),n=itemsEstudio(c).filter(i=>!iDone(i)&&!nuevoResp(i)).length;
       const u=col==='rojo'?0:['naranja','amarillo'].includes(col)?1:col==='futuro'?3:(habiles(TODAY,k.limit)<=10?3:9);if(u===9)return;
