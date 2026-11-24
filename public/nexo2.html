@@ -3038,7 +3038,7 @@ const A={
     try{['nexo2_dirauth','nexo2_cred','nexo2_sesion','nexo2_obras_prop','nexo2_obras_jefe','nexo2_obras_aud'].forEach(k=>localStorage.removeItem(k))}catch(e){}
     try{document.cookie='nexo2_adm=;max-age=0;path=/';document.cookie='nexo2_ses=;max-age=0;path=/'}catch(e){}
     S.dirAuth='';S.u=null;const u=new URL(location.href);u.searchParams.set('v',Date.now().toString(36));location.replace(u.toString())},
-  actualizar:async()=>{toast('Actualizando…');try{const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.update().catch(()=>{})))}catch(e){}try{const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)))}catch(e){}
+  actualizar:async()=>{try{const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.update().catch(()=>{})))}catch(e){}try{const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)))}catch(e){}
     const u=new URL(location.href);u.searchParams.set('v',Date.now().toString(36));location.replace(u.toString())},
   salir:()=>{if(['jefe','auditor','cliente','estudio'].includes(ROLE())){pedirCodSalida('salirYa');return}A.salirYa()},
   salirYa:()=>{S.bloq=false;sesBorrar();accesosCero();S.mias=[];S.audObras=[];S.u=null;if(LOCK==='constructora'){S.codRol='cons';S.step='clave'}else S.step='panels';closeSheet();draw();scrollTo(0,0)},
@@ -4959,7 +4959,7 @@ window.nxOcupado=()=>{try{return !!(document.querySelector('#layer .sheet,.sheet
 function recargarCuando(){const ocupado=()=>window.nxOcupado();
   if(!ocupado()){location.reload();return}
   /* si hay una ventana abierta, se avisa arriba para que no quede la lista vieja en pantalla */
-  try{if(!document.getElementById('nx-cambios')){const b=document.createElement('button');b.id='nx-cambios';b.type='button';b.textContent='Llegaron cambios de otro aparato (obras u otros datos) · Tocá para verlos';b.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#c9a24a;color:#111;border:0;border-radius:999px;padding:10px 18px;font:700 13px var(--f-cond,sans-serif);box-shadow:0 6px 20px rgba(0,0,0,.35);max-width:92vw';b.onclick=()=>location.reload();document.body.appendChild(b)}}catch(e){}
+  /* sin cartel: arriba ya está el aviso chico de actualización; se recarga sola apenas se deja de tocar */
   const iv=setInterval(()=>{if(!ocupado()){clearInterval(iv);location.reload()}},2000);
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!ocupado())location.reload()})}
 /* el cronograma generado más nuevo gana: un aparato con datos viejos no puede pisarlo */
@@ -4979,7 +4979,7 @@ function fusion(viejo,nuevo){
     return ch?JSON.stringify(B):nuevo}catch(e){return nuevo}}
 /* estado de guardado visible: Guardando… · Guardado ✓ · Pendiente de sincronizar (con Reintentar) */
 let _syT=null;
-function estado(tipo){try{let e=document.getElementById('nx-sync');
+function estado(tipo){return;/* un solo aviso: el chico de arriba (Actualizando… / Actualizado / pendiente) */try{let e=document.getElementById('nx-sync');
   if(!e){e=document.createElement('div');e.id='nx-sync';e.setAttribute('role','status');e.style.cssText='position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:99998;pointer-events:none;opacity:.92;border-radius:999px;padding:6px 14px;font:600 13px/1.2 var(--f-cond,sans-serif);letter-spacing:.04em;box-shadow:0 6px 22px rgba(0,0,0,.3);display:none;align-items:center;gap:10px;max-width:92vw';document.body.appendChild(e)}
   clearTimeout(_syT);
   if(tipo==='ok'){e.style.pointerEvents='none';e.style.background='#2f7d4f';e.style.color='#fff';e.innerHTML='Guardado ✓';e.style.display='flex';_syT=setTimeout(()=>{e.style.display='none'},2200)}
@@ -4990,7 +4990,8 @@ function indSync(){try{const S=window.__sync,off=!navigator.onLine||S.est==='err
   if(off||(pend&&S.est!=='cargando'&&!S.ocupado)){tx='Sin conexión · pendiente de sincronizar';c='#e0894f'}
   else if(S.ocupado>0||S.est==='cargando'){tx='Actualizando…';c='#c9a24a'}
   else{const s=Math.max(0,Math.round((Date.now()-(S.ok||Date.now()))/1000));tx='Actualizado hace '+(s<60?s+' s':Math.floor(s/60)+' min');c='#4fa86f'}
-  document.querySelectorAll('.brand .mono').forEach(e=>{let i=e.querySelector('.nxi');if(!i){i=document.createElement('span');i.className='nxi';i.style.cssText='display:block;font-size:11px;font-weight:600';e.appendChild(i)}if(i.textContent!==tx)i.textContent=tx;i.style.color=c})}catch(x){}}
+  if(window.__nxVerNueva&&!off&&!pend){tx='Versión nueva · se actualiza sola';c='#c9a24a'}
+  document.querySelectorAll('.brand .mono').forEach(e=>{let i=e.querySelector('.nxi');if(!i){i=document.createElement('span');i.className='nxi';i.style.cssText='display:block;font-size:11px;font-weight:600;cursor:pointer';i.onclick=ev=>{ev.stopPropagation();if(sucio.size)window.nexoSubirYa&&window.nexoSubirYa();else if(window.__nxVerNueva&&window.__nxVerAct)window.__nxVerAct()};e.appendChild(i)}if(i.textContent!==tx)i.textContent=tx;i.style.color=c})}catch(x){}}
 setInterval(indSync,1000);window.addEventListener('online',indSync);window.addEventListener('offline',indSync);
 async function subir(k){
   let v=lget(k);if(v==null||v===VACIO)return true;
@@ -5066,10 +5067,10 @@ const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearIn
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261124-114325';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261124-141542';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
-const barra=()=>{if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
+window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso&&!window.__nxVerIv)window.__nxVerIv=setInterval(()=>{if(!ocupado()){clearInterval(window.__nxVerIv);act()}},3000);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
 async function ver(){if(document.visibilityState!=='visible')return;try{const r=await fetch('/nexo2-version.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();if(!j||!j.v||j.v===NEXO_BUILD){const b=document.getElementById('nx-ver');if(b)b.remove();return}
   aviso=j.v;let ya='';try{ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}
   if(ya!==j.v&&!ocupado()){act();return}barra()}catch(e){}}
