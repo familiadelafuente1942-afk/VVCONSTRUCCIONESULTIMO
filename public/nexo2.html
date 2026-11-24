@@ -1467,7 +1467,7 @@ const cProg=c=>{const n=c.items.length,k=c.items.filter(iDone).length;return{n,k
 function timing(c){if(c.plazo!=null){const s=c.prev&&c.obra?Math.min(c.task.start,inicioObraDe(c.obra)):c.task.start,pedir=s-c.plazo*7*DAY,open=Math.min(s-(c.apert||0)*7*DAY,pedir);return{limit:s,open,amar:Math.max(open,pedir-14*DAY),nar:pedir}}const limit=subWork(c.task.start,3);let open,span;if(c.origen==='manual'){open=Math.min(c.created,limit);span=Math.max(DAY,limit-open)}else{span=c.antic*7*DAY;open=limit-span}return{limit,open,amar:open+span/3,nar:open+2*span/3}}
 function color(c){if(cDone(c))return'ok';try{const o=c.obra,ini=o&&(o.mod2&&o.mod2.inicio?d(o.mod2.inicio):o.inicio?d(o.inicio):0);if(ini&&TODAY<ini)return TODAY<timing(c).open?'futuro':'verde'}catch(e){}/* obra que todavía no arrancó: nada está vencido */const k=timing(c);if(TODAY<k.open)return'futuro';if(TODAY<k.open)return'futuro';if(TODAY<k.amar)return'verde';if(TODAY<k.nar)return'amarillo';if(TODAY<=k.limit)return'naranja';return'rojo'}
 const ORDEN={rojo:0,naranja:1,amarillo:2,verde:3,futuro:4,ok:5};
-const NOMBRE={rojo:'Vencida',naranja:'Urgente',amarillo:'Pedir ya',verde:'Ventana abierta',futuro:'Todavía no abre',ok:'Completa'};
+const NOMBRE={rojo:'Vencida',naranja:'Urgente',amarillo:'Urgente',verde:'Ventana abierta',futuro:'Todavía no abre',ok:'Completa'};
 const doneFecha=c=>cDone(c)?Math.max(...c.items.filter(i=>i.estado==='ok').map(i=>i.fecha||0),0)||null:null;
 const cLate=c=>{const f=doneFecha(c);return f?f>timing(c).limit:color(c)==='rojo'};
 const nuevoResp=i=>i.respuesta&&i.respuesta.nuevo&&!iDone(i);
@@ -1992,7 +1992,7 @@ const LOCKSVG='<svg viewBox="0 0 24 24" width="13" height="13" fill="none" strok
 const CICON={doc:'<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>',mat:'<path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',ope:'<path d="M4 20h16M6 20V10l6-5 6 5v10"/><path d="M10 20v-5h4v5"/>',ser:'<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>'};
 const cico=(t,s=18)=>`<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${CICON[t]}</svg>`;
 const jefeTxt=o=>esDir()?`Jefatura: ${esc(o.jefe)}`:'Jefatura de Obra';
-function chipsColor(o,f){const cs=o.cards.filter(f||(()=>true)).map(color);const n=c=>cs.filter(x=>x===c).length;const out=['rojo','naranja','amarillo'].filter(c=>n(c)).map(c=>`<span class="chip"><span class="dot c-${c}"></span>${n(c)}</span>`).join('');return out||'<span class="chip"><span class="dot c-verde"></span>Al día</span>'}
+function chipsColor(o,f){const cs=o.cards.filter(f||(()=>true)).map(color);const n=c=>cs.filter(x=>x===c).length;const out=['rojo','amarillo','verde'].filter(c=>n(c)).map(c=>`<span class="chip"><span class="dot c-${c}"></span>${n(c)}</span>`).join('');return out||'<span class="chip"><span class="dot c-verde"></span>Al día</span>'}
 /* una tarjeta: tipo, tarea, avance de sus ítems y semáforo */
 function cardHTML(c,showObra=true,mini=false){
   const col=color(c),k=timing(c),p=cProg(c),nv=cNuevos(c)&&['jefe','direccion'].includes(ROLE());const est=ROLE()==='estudio';
@@ -2244,7 +2244,7 @@ function tabEquipo(o){
 
 /* ================= pedidos: tarjetas por tarea ================= */
 function selectObras(obras,val,act){return `<label class="f">Obra<select data-chg="${act}" id="sel-${act}"><option value="todas">${obras.length>1?'Todas mis obras':'Mi obra'}</option>${obras.map(o=>`<option value="${o.id}" ${val===o.id?'selected':''}>${esc(o.nombre)}</option>`).join('')}</select></label>`}
-const FILTROS=[['activos','Abiertas'],['nuevos','Con respuestas'],['rojo','Vencidas'],['naranja','Urgentes'],['amarillo','Pedir ya'],['verde','Ventana abierta'],['futuro','Próximas'],['ok','Completas']];
+const FILTROS=[['activos','Abiertas'],['nuevos','Con respuestas'],['rojo','Vencidas'],['amarillo','Urgentes'],['verde','Ventana abierta'],['futuro','Próximas'],['ok','Completas']];
 const fOk=(c,k)=>k==='activos'?!['futuro','ok'].includes(color(c)):k==='nuevos'?cNuevos(c)>0:k==='todos'?true:color(c)===k;
 const cuentaF=(cs,k)=>cs.filter(c=>fOk(c,k)).length;
 function filtrosColor(cs){return `<div class="filters wrap">${FILTROS.filter(([k])=>k!=='nuevos'||cuentaF(cs,'nuevos')).map(([k,l])=>`<button data-act="filtro" data-f="${k}" aria-pressed="${S.filtro===k}">${!['activos','nuevos'].includes(k)?`<span class="dot c-${k}"></span>`:k==='nuevos'?'<span class="dot c-gold"></span>':''}${l} <span class="muted">${cuentaF(cs,k)}</span></button>`).join('')}</div>`}
@@ -5090,7 +5090,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261124-214424';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261124-214707';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -6611,4 +6611,18 @@ body:has(.crono-full){overflow:hidden}
 body:has(.crono-full) .iafab,body:has(.crono-full) #vozstop{display:none!important}
 </style>
 
+
+<script id="semaforo3">
+/* semáforo de tarjetas con 3 estados:
+   verde = ventana abierta · amarillo = urgente (los 5 días hábiles previos al vencimiento) · rojo = vencida.
+   Vence siempre 5 días hábiles antes de que empiece la tarea. */
+(function(){
+  const atras=(t,n)=>{let x=t,k=0;while(k<n){x-=DAY;if(isWork(x))k++}return x};
+  const _tm=timing;
+  timing=function(c){const k=_tm(c);try{if(!c||c.prev||!c.task||!c.task.start)return k;const lim=atras(c.task.start,5),urg=atras(c.task.start,10);return {...k,limit:lim,nar:urg,amar:urg,open:Math.min(k.open,urg)}}catch(e){return k}};
+  const _co=color;
+  color=function(c){const r=_co(c);return r==='naranja'?'amarillo':r};
+  try{draw()}catch(e){}
+})();
+</script>
 </body></html>
