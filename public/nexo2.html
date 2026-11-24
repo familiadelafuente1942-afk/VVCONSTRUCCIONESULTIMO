@@ -2252,12 +2252,12 @@ function vPedidos(){
   const r=ROLE(),obras=misObras(),sel=obras.find(o=>o.id===S.obraF)||null;
   if(r==='estudio'){
     const cs=cardsDe(sel?[sel]:obras).filter(c=>c.tipo==='doc'&&itemsEstudio(c).length);
-    return `<section class="sec"><h1>Tarjetas de las obras</h1><p class="muted">Una tarjeta por tarea con los planos y definiciones que necesita. Respondé cada ítem adjuntando el archivo: le llega a la jefatura y, si es un plano, también a la auditoría.</p>${selectObras(obras,S.obraF,'obraF')}${filtrosColor(cs)}<div class="list">${cs.filter(c=>fOk(c,S.filtro)).sort((a,b)=>ORDEN[color(a)]-ORDEN[color(b)]||timing(a).limit-timing(b).limit).map(c=>cardHTML(c,!sel)).join('')||'<p class="muted">No hay tarjetas en este estado.</p>'}</div></section>`;
+    return `<section class="sec"><h1>Tarjetas</h1><p class="muted">Una tarjeta por tarea con los planos y definiciones que necesita. Respondé cada ítem adjuntando el archivo: le llega a la jefatura y, si es un plano, también a la auditoría.</p>${selectObras(obras,S.obraF,'obraF')}${filtrosColor(cs)}<div class="list">${cs.filter(c=>fOk(c,S.filtro)).sort((a,b)=>ORDEN[color(a)]-ORDEN[color(b)]||timing(a).limit-timing(b).limit).map(c=>cardHTML(c,!sel)).join('')||'<p class="muted">No hay tarjetas en este estado.</p>'}</div></section>`;
   }
   let cs=cardsDe(sel?[sel]:obras);if(S.tipoF!=='Todas')cs=cs.filter(c=>S.tipoF==='ope'?['ope','ser'].includes(c.tipo):c.tipo===S.tipoF);
   const tile=(k,cls,l)=>`<button class="kpi ${cls}" data-act="filtro" data-f="${k}" aria-pressed="${S.filtro===k}"><b>${cuentaF(cs,k)}</b><span class="kl">${l}</span></button>`;
   const vis=cs.filter(c=>fOk(c,S.filtro));
-  return `<section class="sec"><div class="sec-head"><h1>Pedidos</h1>${r==='jefe'?'<button class="btn gold sm" data-act="nuevoItem">+ Agregar ítem</button>':''}</div>
+  return `<section class="sec"><div class="sec-head"><h1>Tarjetas</h1>${r==='jefe'?'<button class="btn gold sm" data-act="nuevoItem">+ Agregar ítem</button>':''}</div>
   <p class="muted small">${r==='direccion'?'Vista de control. Las tarjetas salen del modelo de cada obra y las completa la jefatura.':'Cada tarea trae sus tarjetas: planos y definiciones (le llega al estudio), materiales y condiciones. Abrí una tarjeta para tildar cada ítem.'}</p>
   ${selectObras(obras,S.obraF,'obraF')}
   <div class="kpis k3 tiles">${tile('activos','k-rojo','abiertas')}${tile('ok','k-verde','completas')}${tile('todos','','en total')}</div>
@@ -3266,7 +3266,7 @@ document.addEventListener('submit',e=>{const f=e.target.closest('[data-submit]')
 
 /* ================= navegación ================= */
 const ICON={inicio:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',obras:'<path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6"/>',pedidos:'<rect x="3" y="4" width="8" height="7" rx="1.5"/><rect x="13" y="4" width="8" height="7" rx="1.5"/><rect x="3" y="13" width="8" height="7" rx="1.5"/><rect x="13" y="13" width="8" height="7" rx="1.5"/>',registro:'<path d="M5 4h11l3 3v13H5zM9 10h6M9 14h6"/>',mas:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',compras:'<circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M3 4h2.5l2.2 11h10.6L21 8H6.3"/>',folder:'<path d="M3 7h6l2 2h10v10H3z"/>'};
-function navItems(){const r=ROLE();return{direccion:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Pedidos','pedidos'],['desempeno','Desempeño','chart'],['compras','Compras','compras'],['mas','Más','mas']],jefe:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Pedidos','pedidos'],['registro','Registro','registro'],['mas','Más','mas']],auditor:[['inicio','Inicio','inicio'],['obras','Obras','obras']],estudio:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Tarjetas','pedidos'],['docs','Documentos','folder']],cliente:[['cliente','Mi obra','inicio']]}[r]||[]}
+function navItems(){const r=ROLE();return{direccion:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Tarjetas','pedidos'],['desempeno','Desempeño','chart'],['compras','Compras','compras'],['mas','Más','mas']],jefe:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Tarjetas','pedidos'],['registro','Registro','registro'],['mas','Más','mas']],auditor:[['inicio','Inicio','inicio'],['obras','Obras','obras']],estudio:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Tarjetas','pedidos'],['docs','Documentos','folder']],cliente:[['cliente','Mi obra','inicio']]}[r]||[]}
 let _snapH='',_snapT=0;
 function credAud(o){if(ROLE()==='direccion')return{rol:'dir',codigo:dirAuthGet()};if(MODO_PRUEBAS)return{rol:'dir',codigo:dirAuthGet()};if(ROLE()==='auditor'){try{return{rol:'aud',codigo:((JSON.parse(localStorage.getItem('nexo2_cred')||'{}').aud)||{})[o.id]||''}}catch(e){}}return null}
 function audReid(a){const old=a.id,nid='ar'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),o=a.obra;o.sup.forEach(s=>{if(s.acta===old)s.acta=nid});o.cert.forEach(c=>{if(c.doc===old)c.doc=nid});DOCS.forEach(x=>{if(x.rev===old)x.rev=nid});a.id=nid;a.real=true;a.auto=false}
@@ -3457,12 +3457,12 @@ function vPedidos(){
   const r=ROLE(),obras=misObras(),sel=obras.find(o=>o.id===S.obraF)||null;
   if(r==='estudio'){
     const cs=cardsDe(sel?[sel]:obras).filter(c=>c.tipo==='doc'&&itemsEstudio(c).length);
-    return `<section class="sec"><h1>Tarjetas de las obras</h1><p class="muted">Una tarjeta por tarea con los planos y definiciones que necesita. Respondé cada ítem con el archivo, o subí el plano en su carpeta de Documentos: es lo mismo y queda vinculado.</p>${selectObras(obras,S.obraF,'obraF')}${filtrosColor(cs)}<div class="list">${porTarea(cs.filter(c=>fOk(c,S.filtro)),!sel)||'<p class="muted">No hay tarjetas en este estado.</p>'}</div></section>`;
+    return `<section class="sec"><h1>Tarjetas</h1><p class="muted">Una tarjeta por tarea con los planos y definiciones que necesita. Respondé cada ítem con el archivo, o subí el plano en su carpeta de Documentos: es lo mismo y queda vinculado.</p>${selectObras(obras,S.obraF,'obraF')}${filtrosColor(cs)}<div class="list">${porTarea(cs.filter(c=>fOk(c,S.filtro)),!sel)||'<p class="muted">No hay tarjetas en este estado.</p>'}</div></section>`;
   }
   let cs=cardsDe(sel?[sel]:obras);if(S.tipoF!=='Todas')cs=cs.filter(c=>S.tipoF==='ope'?['ope','ser'].includes(c.tipo):c.tipo===S.tipoF);
   const tile=(k,cls,l)=>`<button class="kpi ${cls}" data-act="filtro" data-f="${k}" aria-pressed="${S.filtro===k}"><b>${cuentaF(cs,k)}</b><span class="kl">${l}</span></button>`;
   const vis=cs.filter(c=>fOk(c,S.filtro));
-  return `<section class="sec"><div class="sec-head"><h1>Pedidos</h1>${r==='jefe'?'<button class="btn gold sm" data-act="nuevoItem">+ Agregar ítem</button>':''}</div>
+  return `<section class="sec"><div class="sec-head"><h1>Tarjetas</h1>${r==='jefe'?'<button class="btn gold sm" data-act="nuevoItem">+ Agregar ítem</button>':''}</div>
   <p class="muted small">${r==='direccion'?'Vista de control. Las tarjetas salen del modelo de cada obra y las completa la jefatura.':'Agrupadas por tarea, con el mismo nombre que en el cronograma. Cada ícono dice de qué es la tarjeta: hoja = planos y definiciones, caja = materiales, casa = condiciones.'}</p>
   ${selectObras(obras,S.obraF,'obraF')}
   <div class="kpis k3 tiles">${tile('activos','k-rojo','abiertas')}${tile('ok','k-verde','completas')}${tile('todos','','en total')}</div>
@@ -5088,7 +5088,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261124-204458';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261124-210344';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
