@@ -44,7 +44,7 @@ ap();})();</script></head><body>
 :root{
   --bg:#0d0e10; --surface:#16171a; --raise:#1d1f23; --line:#2a2c31; --fg:#ece8e1; --muted:#8f8b84;
   --gold:#b8915a; --gold-soft:rgba(184,145,90,.14);
-  --verde:#3fa66b; --amarillo:#e0b43a; --naranja:#e5813a; --rojo:#e2493e; --ok:#5f6b66; --futuro:#3a3d43; --azul:#5b8fd6; --rosa:#9b7cf6;
+  --verde:#3fa66b; --amarillo:#e0b43a; --naranja:#e5813a; --rojo:#e2493e; --ok:#5f6b66; --futuro:#2f7d52; --azul:#5b8fd6; --rosa:#9b7cf6;
   /* SYN-01 · una sola familia (Barlow) con estilos compartidos: títulos, números, etiquetas y botones en Barlow Condensed; texto en Barlow */
   --f-cond:"Playfair Display",Georgia,serif; --f-text:"Playfair Display",Georgia,serif;
   --display:var(--f-cond); --tech:var(--f-cond); --mono:var(--f-cond); --body:var(--f-text);
@@ -91,7 +91,7 @@ p{margin:0}
 .dots{display:flex;gap:6px;flex-wrap:wrap}
 .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
 .c-rojo{background:var(--rojo)} .c-naranja{background:var(--naranja)} .c-amarillo{background:var(--amarillo)} .c-verde{background:var(--verde)} .c-ok{background:var(--ok)} .c-futuro{background:var(--futuro)}
-.t-rojo{color:var(--rojo)} .t-naranja{color:var(--naranja)} .t-amarillo{color:var(--amarillo)} .t-verde{color:var(--verde)} .t-ok,.t-futuro{color:var(--muted)} .t-azul{color:var(--azul)}
+.t-rojo{color:var(--rojo)} .t-naranja{color:var(--naranja)} .t-amarillo{color:var(--amarillo)} .t-verde{color:var(--verde)} .t-ok,.t-futuro{color:var(--muted)}.t-futuro{color:var(--verde)} .t-azul{color:var(--azul)}
 .status{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:999px;border:1px solid currentColor;white-space:nowrap;background:none}
 .tag{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
 .bar{height:6px;background:var(--line);border-radius:999px;overflow:hidden;position:relative}
@@ -765,7 +765,7 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.9;
 .g6 .glabel.hitoT .gl-n{color:var(--rojo);font-weight:800}
 .gbar.hitob{box-shadow:0 0 0 2px var(--rojo)}
 .gdia{position:absolute;top:50%;width:11px;height:11px;background:var(--rojo);transform:translate(-5px,-50%) rotate(45deg);z-index:2;border:1.5px solid var(--surface)}
-.g6 .ghl{white-space:nowrap;color:var(--fg);opacity:.9;font-weight:600}.g6 .ghito{top:19px}
+.g6 .ghl{white-space:nowrap;color:var(--fg);opacity:.9;font-weight:600}.g6 .ghito{top:19px}.ghito.hv{background:var(--verde)}.ghito.ha{background:var(--amarillo)}.ghito.hn{background:var(--naranja)}.ghito.hr{background:var(--rojo)}
 .gfin{position:absolute;top:1px;transform:translateX(-100%);z-index:7;background:var(--gold);color:#1a1612;font-weight:800;font-size:10.5px;padding:3px 8px;border-radius:5px 0 0 5px;white-space:nowrap}
 .gvl.fin{top:0;bottom:0;width:0;border-left:2px solid var(--gold);position:absolute;z-index:3;pointer-events:none}
 .gb-fr{background-image:repeating-linear-gradient(45deg,rgba(0,0,0,.35) 0 5px,transparent 5px 10px)!important;outline:2px dashed var(--naranja,#e0883a);outline-offset:1px}.gb-ad{box-shadow:0 0 0 2px var(--azul,#4a78c2)}.gfr{color:var(--naranja,#e0883a);font-weight:800}.gad{color:var(--azul,#4a78c2);font-weight:800}.trow .tg{font-size:10px;text-transform:uppercase;letter-spacing:.05em;border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-left:4px}.trow.est-frenada{border-left:3px solid var(--naranja,#e0883a);padding-left:6px}.trow.est-adelantada{border-left:3px solid var(--azul,#4a78c2);padding-left:6px}.trow .prev{align-self:flex-end}table.tb{width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:8px}table.tb th,table.tb td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left}
@@ -1033,7 +1033,7 @@ main:has(.login) .note{font-size:11.5px;padding:6px 10px}
   color-scheme:light;
   --bg:#eceef3; --surface:#ffffff; --raise:#f3f4f8; --line:#d8dbe3; --fg:#17181c; --muted:#6a6e77;
   --gold:#97692a; --gold-soft:rgba(151,105,42,.14);
-  --verde:#1f8a4c; --amarillo:#a87d00; --naranja:#c8620f; --rojo:#d03a2f; --ok:#7b8a83; --futuro:#c5c9d1; --azul:#2f6fd0; --rosa:#7a5bd6;
+  --verde:#1f8a4c; --amarillo:#a87d00; --naranja:#c8620f; --rojo:#d03a2f; --ok:#7b8a83; --futuro:#7cc49a; --azul:#2f6fd0; --rosa:#7a5bd6;
   --gl:rgba(255,255,255,.66); --gl-hi:rgba(255,255,255,.95); --gl-line:rgba(0,0,0,.08); --gl-sh:rgba(40,40,70,.18); --gl-bar:rgba(244,245,250,.72);
   --amb1:rgba(184,145,90,.22); --amb2:rgba(110,150,225,.2);
 }
@@ -1408,6 +1408,8 @@ function desvioTarea(o,t){const b=baseDe(o,t);if(!b)return null;if(!t.real&&t.st
 const semDesvio=dv=>dv===null?'':dv<=2?'verde':dv<=5?'amarillo':dv<=10?'naranja':'rojo';
 const durReal=t=>t.real&&t.real.fin?workBetween(t.real.ini,t.real.fin)+1:null;
 const durPlanB=(o,t)=>{const b=baseDe(o,t)||t;return workBetween(b.start,b.end)+1};
+/* hitos: verdes mientras están en fecha; si pasó la fecha y no está hecho, van de amarillo a rojo según el retraso */
+function hitoCls(o,h){try{const t=h.task,R=t&&t.real;if(R&&(R.fin||R.av>=100))return'hv';if(TODAY<=h.t)return'hv';const dl=workBetween(h.t,TODAY);return dl<=3?'ha':dl<=7?'hn':'hr'}catch(e){return'hv'}}
 function hitosObra(o){if(o.tpl){const hh=[];if(o.tasks[0])hh.push({t:Math.min(...o.tasks.map(x=>x.start)),name:'Inicio de obra',task:o.tasks.slice().sort((a,b)=>a.start-b.start)[0]});o.tasks.filter(x=>x.hito).forEach(x=>hh.push({t:x.end,name:x.name,task:x}));return hh.sort((a,b)=>a.t-b.t)}const h=[],T=r=>o.tasks.filter(t=>t.rubro===r),f=r=>T(r)[0],l=r=>T(r).at(-1),P=(t,name,task)=>t&&h.push({t,name,task});
   P(f('prelim')?.start,'Inicio de obra',f('prelim'));P(f('fund')?.end,'Hormigonado de platea',f('fund'));
   T('losa').forEach(t=>P(t.end,'Hormigonado de '+t.name.replace('Estructura · losa sobre','losa sobre'),t));if(l('losa'))P(l('losa').end+2*DAY,'Fin de estructura');
@@ -1463,7 +1465,7 @@ const iDone=i=>i.estado==='ok'||i.estado==='na';
 const cDone=c=>c.items.length>0&&c.items.every(iDone);
 const cProg=c=>{const n=c.items.length,k=c.items.filter(iDone).length;return{n,k,pct:n?Math.round(k/n*100):100}};
 function timing(c){if(c.plazo!=null){const s=c.prev&&c.obra?Math.min(c.task.start,inicioObraDe(c.obra)):c.task.start,pedir=s-c.plazo*7*DAY,open=Math.min(s-(c.apert||0)*7*DAY,pedir);return{limit:s,open,amar:Math.max(open,pedir-14*DAY),nar:pedir}}const limit=subWork(c.task.start,3);let open,span;if(c.origen==='manual'){open=Math.min(c.created,limit);span=Math.max(DAY,limit-open)}else{span=c.antic*7*DAY;open=limit-span}return{limit,open,amar:open+span/3,nar:open+2*span/3}}
-function color(c){if(cDone(c))return'ok';const k=timing(c);if(TODAY<k.open)return'futuro';if(TODAY<k.amar)return'verde';if(TODAY<k.nar)return'amarillo';if(TODAY<=k.limit)return'naranja';return'rojo'}
+function color(c){if(cDone(c))return'ok';try{const o=c.obra,ini=o&&(o.mod2&&o.mod2.inicio?d(o.mod2.inicio):o.inicio?d(o.inicio):0);if(ini&&TODAY<ini)return TODAY<timing(c).open?'futuro':'verde'}catch(e){}/* obra que todavía no arrancó: nada está vencido */const k=timing(c);if(TODAY<k.open)return'futuro';if(TODAY<k.open)return'futuro';if(TODAY<k.amar)return'verde';if(TODAY<k.nar)return'amarillo';if(TODAY<=k.limit)return'naranja';return'rojo'}
 const ORDEN={rojo:0,naranja:1,amarillo:2,verde:3,futuro:4,ok:5};
 const NOMBRE={rojo:'Vencida',naranja:'Urgente',amarillo:'Pedir ya',verde:'Ventana abierta',futuro:'Todavía no abre',ok:'Completa'};
 const doneFecha=c=>cDone(c)?Math.max(...c.items.filter(i=>i.estado==='ok').map(i=>i.fecha||0),0)||null:null;
@@ -2446,7 +2448,7 @@ function gantt(o,tasks,C){
   let months='',m=new Date(start);m=Date.UTC(m.getUTCFullYear(),m.getUTCMonth()+1,1);
   while(m<end){months+=`<span class="gm" style="left:${x(m)}px">${MES[new Date(m).getUTCMonth()]}${new Date(m).getUTCMonth()===0?' '+new Date(m).getUTCFullYear():''}</span>`;const q=new Date(m);m=Date.UTC(q.getUTCFullYear(),q.getUTCMonth()+1,1)}
   const baseIds=new Set(o.base.map(t=>t.id));
-  const hit=C.hitos?`<div class="grow ghit"><div class="glabel rubro">Hitos</div><div class="gtrack" style="width:${width}px">${hitosObra(o).map(h=>`<button class="ghito" data-act="hito" data-o="${o.id}" data-n="${esc(h.name)}" data-t="${h.t}" title="${esc(h.name)} · ${fmt(h.t)}" style="left:${x(h.t)-7}px" aria-label="${esc(h.name)} ${fmt(h.t)}"></button>`).join('')}</div></div>`:'';
+  const hit=C.hitos?`<div class="grow ghit"><div class="glabel rubro">Hitos</div><div class="gtrack" style="width:${width}px">${hitosObra(o).map(h=>`<button class="ghito ${hitoCls(o,h)}" data-act="hito" data-o="${o.id}" data-n="${esc(h.name)}" data-t="${h.t}" title="${esc(h.name)} · ${fmt(h.t)}" style="left:${x(h.t)-7}px" aria-label="${esc(h.name)} ${fmt(h.t)}"></button>`).join('')}</div></div>`:'';
   const rows=tasks.map(tp=>{
     const t=o.tasks.find(q=>q.id===tp.id)||tp;let segs='';
     if(C.pedidos){const cs=o.cards.filter(c=>c.task===t&&enCronograma(c)),pend=cs.filter(c=>!cDone(c));
@@ -4030,7 +4032,7 @@ function gantt(o,C){
     [[m,ESC==='mes'?'':'1ª quincena'],[q16,ESC==='mes'?'':'2ª quincena']].forEach(([s,l],i)=>{const e=i?nm:q16;if(e<=start||s>=end)return;const a2=Math.max(s,start);quin+=`<span class="gq" style="left:${x(a2)}px;width:${x(Math.min(e,end))-x(a2)}px">${l}</span>`;if(s>start)grid+=`<span class="gvq" style="left:${LBL+x(s)}px"></span>`});m=nm}
   if(ESC==='dia'){for(let w=start;w<end;w+=DAY){const q=new Date(w),hab=isWork(w);days+=`<span class="gd ${hab?'gsi':'gno'}" title="${hab?'Día de trabajo':'No laborable'}" style="left:${x(w)}px;width:18px;text-align:center">${q.getUTCDate()}</span>`;if(!hab)grid+=`<span class="gnod" style="left:${LBL+x(w)}px;width:18px"></span>`}}else if(ESC==='sem'){for(let w=start;w<end;w+=DAY){if(!isWork(w))grid+=`<span class="gnod" style="left:${LBL+x(w)}px;width:${W/7}px"></span>`}}if(ESC==='sem'){for(let w=start;w<end;w+=7*DAY){const dd=new Date(w).getUTCDate();days+=`<span class="gd" style="left:${x(w)}px">${dd}</span>`}}
   const lanes=[-1e9,-1e9];const hl=h=>{const n=h.name.replace('Hormigonado de ','H° ').replace('Obra cerrada: techos terminados','Techos').replace('Pisos y revestimientos terminados','Pisos').replace('Instalaciones probadas','Inst. probadas').replace('Inicio de instalaciones','Inicio inst.');const px=x(h.t)+10,ln=lanes.findIndex(e=>px>=e+8);if(ln<0)return'';lanes[ln]=px+n.length*5.6;return `<span class="ghl" style="left:${px}px;top:${ln?27:5}px">${esc(n)}</span>`};
-  const hit=C.hitos?`<div class="grow ghit"><div class="glabel rubro">Hitos</div><div class="gtrack" style="width:${width}px">${hitosObra(o).filter(h=>!C.exact||(h.t>=start&&h.t<=end)).map(h=>`<button class="ghito" data-act="hito" data-o="${o.id}" data-n="${esc(h.name)}" data-t="${h.t}" title="${esc(h.name)} · ${fmt(h.t)}" style="left:${x(h.t)-7}px" aria-label="${esc(h.name)} ${fmt(h.t)}"></button>${hl(h)}`).join('')}</div></div>`:'';
+  const hit=C.hitos?`<div class="grow ghit"><div class="glabel rubro">Hitos</div><div class="gtrack" style="width:${width}px">${hitosObra(o).filter(h=>!C.exact||(h.t>=start&&h.t<=end)).map(h=>`<button class="ghito ${hitoCls(o,h)}" data-act="hito" data-o="${o.id}" data-n="${esc(h.name)}" data-t="${h.t}" title="${esc(h.name)} · ${fmt(h.t)}" style="left:${x(h.t)-7}px" aria-label="${esc(h.name)} ${fmt(h.t)}"></button>${hl(h)}`).join('')}</div></div>`:'';
   const baseIds=new Set(o.base.map(t=>t.id));
   const rows=main.map(tp=>{
     if(tp.gp){const c=tp.c,col=cDone(c)?'ok':color(c),k=timing(c),a=x(tp.start),w=Math.max(8,x(tp.end+DAY)-a-2);
@@ -5088,7 +5090,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261124-212518';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261124-214424';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
