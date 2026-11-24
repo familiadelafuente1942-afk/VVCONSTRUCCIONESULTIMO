@@ -804,7 +804,7 @@ export default async function handler(req, res) {
 
       if (b.op === "ct_up_url") {
         const nm = str(b.name, 120), sz = Number(b.size) || 0;
-        if (sz <= 0 || sz > 15e6) { res.status(400).json({ error: "La foto debe pesar hasta 15 MB" }); return; }
+        if (sz <= 0 || sz > 50e6) { res.status(400).json({ error: "El archivo debe pesar hasta 50 MB" }); return; }
         const ext = ((/\.([A-Za-z0-9]{1,5})$/.exec(nm) || [])[1] || "jpg").toLowerCase();
         const path = `${obra}/ct-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
         const firmar = () => fetch(`${URL_BASE}/storage/v1/object/upload/sign/nexo2-fotos/${path}`, { method: "POST", headers: H, body: "{}" });

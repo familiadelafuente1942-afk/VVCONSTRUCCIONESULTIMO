@@ -18,6 +18,10 @@ jobs:
           for x in o.get('nuevas',[]) or []: print('NUEVA',x.get('id'),'|',x.get('nombre'),'| tpl' if x.get('tpl') else '','| kb',len(json.dumps(x))//1000)
           for k,ch in (o.get('mod') or {}).items(): print('MOD',k,'|',ch.get('nombre',''),'| claves',len(ch),'| kb',len(json.dumps(ch))//1000)
           print('DEL',o.get('del'),'DELN',o.get('delN'))
+          for src in [('mod',k,ch) for k,ch in (o.get('mod') or {}).items()]+[('nueva',x.get('id'),x) for x in (o.get('nuevas') or [])]:
+            ov=(src[2] or {}).get('ov') or {}
+            for k2,dv in (ov.get('dc') or {}).items(): print('DOC',src[1],'|',dv.get('n'),'| rev',dv.get('v'),'|',dv.get('e'),'|',dv.get('p'),'|',dv.get('f'),'| nube' if dv.get('u') else '| sin archivo en nube')
+            if ov.get('xdc'): print('DOC_BORRADOS',src[1],len(ov.get('xdc')))
           print('AVISOS',len(o.get('avisos') or []))
           big=sorted(((k,len(json.dumps(val))) for k,val in o.items()),key=lambda t:-t[1])[:8]; print('MAS_PESADO',big)
           PY
