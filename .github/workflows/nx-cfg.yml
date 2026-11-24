@@ -22,6 +22,11 @@ jobs:
             ov=(src[2] or {}).get('ov') or {}
             for k2,dv in (ov.get('dc') or {}).items(): print('DOC',src[1],'|',dv.get('n'),'| rev',dv.get('v'),'|',dv.get('e'),'|',dv.get('p'),'|',dv.get('f'),'| nube' if dv.get('u') else '| sin archivo en nube')
             if ov.get('xdc'): print('DOC_BORRADOS',src[1],len(ov.get('xdc')))
+            for ck,cv in (ov.get('c') or {}).items():
+              for ik,iv in (cv.get('i') or {}).items():
+                if isinstance(iv,list) and len(iv)>8 and (iv[8]=='manual' or (iv[1] or 0)>1795000000000): print('PEDIDO',src[1],'| card',cv.get('tp'),'| enviada',cv.get('e'),'| tarea',cv.get('tk'),'| estado',iv[0],'| resp',iv[3],'| origen',iv[8],'|',str(iv[5])[:90])
+            for pk,pv in (ov.get('p') or {}).items():
+              if pv.get('m'): print('SLOT_MANUAL',src[1],'|',pv.get('n'),'|',pv.get('f'))
           print('AVISOS',len(o.get('avisos') or []))
           big=sorted(((k,len(json.dumps(val))) for k,val in o.items()),key=lambda t:-t[1])[:8]; print('MAS_PESADO',big)
           PY
