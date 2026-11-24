@@ -1525,6 +1525,8 @@ function buildObra(o){
   if(!o.nuevo&&!o.tpl&&!o.cero)seedReal(o);
   if(o.cero)o.sup=o.sup.filter(s=>s.estado==='programada');
   if(o.sinTarjetas&&!o.tpl)o.cards=[];/* con cronograma generado la obra sí tiene tarjetas (antes se borraban al recargar) */
+  /* Dirección borró el cronograma de esta obra: sin tareas no se generan tarjetas, planos ni certificados */
+  if(o.sinCrono){o.tasks=[];o.base=[];o.cards=[];o.planos=[];o.cert=[];o.sup=[]}
   return o;
 }
 const certFecha=c=>['losa','fund','pileta'].includes(c.task.rubro)?c.task.end-2*DAY:c.task.end;
@@ -1533,7 +1535,7 @@ const certEstado=c=>c.estado==='certificada'?'certificada':certFecha(c)-TODAY<30
 const CFG_LS='nexo2_obras_cfg';
 /* si este aparato no tenía lugar, la última copia buena está en la memoria de la pestaña */
 const cfgLeer=()=>{try{const m=sessionStorage.getItem('nxmem_'+CFG_LS);if(m!=null)return m}catch(e){}try{return localStorage.getItem(CFG_LS)}catch(e){return null}};
-const CFG_KEYS=['audNombre','nombre','ubic','plantas','subsuelo','pileta','m2','nivel','inicio','jefe','pasante','estudio','estTel','jornal','dot','late','margen','edits','invitados','imgUrl','sinImg','renders','rndOcultos','tpl','mod2','ov','resp','reanud','cero','cg','cgu'];
+const CFG_KEYS=['audNombre','nombre','ubic','plantas','subsuelo','pileta','m2','nivel','inicio','jefe','pasante','estudio','estTel','jornal','dot','late','margen','edits','invitados','imgUrl','sinImg','renders','rndOcultos','tpl','mod2','ov','resp','reanud','cero','cg','cgu','sinCrono'];
 const BASE_OV={};let BASE_DEF={};
 const cfgPick=o=>{const r={};CFG_KEYS.forEach(k=>{if(o[k]!==undefined)r[k]=o[k]});return r};
 const CFG_ORIG=new Set(OBRAS.map(o=>o.id));
@@ -1674,7 +1676,7 @@ function tplAvisos(o,t){const out=[];if(!t.cod)return out;const T=tplT(o).tareas
 
 OBRAS.forEach(buildObra);
 /* cronograma base editado por la Dirección: se guarda aparte y se vuelve a aplicar sobre el que arma el modelo */
-OBRAS.forEach(o=>{BASE_DEF[o.id]=JSON.stringify(o.base);const ov=BASE_OV[o.id];if(Array.isArray(ov)&&ov.length){o.tasks.forEach(t=>{const b=o.base.find(x=>x.id===t.id);if(b)t._b=[b.start,b.end,b.weeks]});o.base=ov;if(o.tpl)tplResync(o);else baseSync(o)}});
+OBRAS.forEach(o=>{BASE_DEF[o.id]=JSON.stringify(o.base);const ov=BASE_OV[o.id];if(Array.isArray(ov)&&ov.length&&!o.sinCrono){o.tasks.forEach(t=>{const b=o.base.find(x=>x.id===t.id);if(b)t._b=[b.start,b.end,b.weeks]});o.base=ov;if(o.tpl)tplResync(o);else baseSync(o)}});
 const baseOvDe=o=>{const k=BASE_DEF[o.id];if(k===undefined){BASE_DEF[o.id]=JSON.stringify(o.base);return null}return JSON.stringify(o.base)!==k?o.base:null};
 
 /* historial: lo resuelto antes de hoy, con una tasa de demora distinta por obra */
@@ -3086,6 +3088,9 @@ const A={
   edel:ds=>{const o=findO(EOID);if(EMODO==='base'){o.base=o.base.filter(x=>x.id!==ds.id);toast('Se quitó de la base')}else{const t=o.tasks.find(x=>x.id===ds.id);o.tasks=o.tasks.filter(x=>x!==t);o.cards=o.cards.filter(c=>c.task!==t);o.cert=o.cert.filter(c=>c.task!==t);toast(`Se quitó ${t.name} y sus tarjetas`)}draw();sheetEditor()},
   editarObra:ds=>{const o=findO(ds.o);if(!o||!esDir())return;const js=[...new Set(['Matías','Lucía','Facundo','Ignacio',o.jefe].filter(Boolean))];
     openSheet(`<span class="eyebrow">Dirección</span><h2>Editar ${esc(o.nombre)}</h2><form class="sec" data-submit="editarObra" data-o="${o.id}"><label class="f">Nombre<input id="eo-nom" value="${esc(o.nombre)}"></label><label class="f">Ubicación<input id="eo-ubi" value="${esc(o.ubic||'')}"></label><div class="row2"><label class="f">Jefatura de obra<select id="eo-jefe">${js.map(j=>`<option ${o.jefe===j?'selected':''}>${esc(j)}</option>`).join('')}</select></label><label class="f">Estudio<input id="eo-est" value="${esc(o.estudio||'')}"></label></div><span class="eyebrow">Render de la obra</span><div class="infph">${rendersItems(o).map(x=>`<div class="ph1"><span><img src="${esc(x.u)}" alt="Render"><button type="button" data-act="quitarRender" data-o="${o.id}" data-k="${esc(x.k)}" aria-label="Quitar este render">✕</button></span></div>`).join('')||'<span class="muted small">Todavía no hay renders: se ve el logo.</span>'}</div><div><label class="btn sm" for="eo-img" style="cursor:pointer">Cargar otro render</label><input id="eo-img" type="file" accept="image/*" multiple data-chg="eoImg" data-o="${o.id}" hidden></div><p class="muted small">Para cambiar plantas, superficie, terminación o fecha de inicio usá "Cambiar modelo".</p><button class="btn gold" type="submit">Guardar cambios</button><button class="btn" type="button" data-act="close">Cancelar</button><button class="btn ghost" type="button" data-act="eliminarObra" data-o="${o.id}" style="color:#c0392b">Eliminar esta obra</button><span class="eyebrow">Empezar de cero</span><p class="muted small">Borra el avance cargado (informes, avances, fotos, pedidos, planos subidos) y deja la obra lista para cargar desde hoy. Descarga un respaldo antes.</p>${MODO_PRUEBAS?'<p class="muted small">Modo pruebas: “Dejar en cero” está oculto para que no se borre nada.</p>':`<button class="btn ghost" type="button" data-act="ceroObra" data-o="${o.id}" style="color:#c0392b">Dejar esta obra en cero</button><button class="btn ghost" type="button" data-act="ceroObra" data-o="todas" style="color:#c0392b">Dejar todas las obras en cero</button>`}</form>`,'Editar obra')},
+  cronoBorrar:ds=>{const o=findO(ds.o);if(!o||!esDir())return;if(!confirm(`¿Borrar el cronograma de ${o.nombre}? Se quitan sus tareas, tarjetas, pedidos y planos de NEXO 2 en todos los aparatos. La obra sigue en la cartera y el Seguimiento no se toca. Lo podés volver a generar desde acá.`))return;
+    o.sinCrono=true;try{ovFlush()}catch(e){}cfgGuardar();closeSheet();toast('Cronograma borrado. Actualizando…');setTimeout(async()=>{try{await window.nexoSubirYa()}catch(e){}location.reload()},300)},
+  cronoVolver:ds=>{const o=findO(ds.o);if(!o||!esDir())return;if(!confirm(`¿Volver a generar el cronograma de ${o.nombre} con su modelo?`))return;delete o.sinCrono;cfgGuardar();closeSheet();toast('Generando el cronograma…');setTimeout(async()=>{try{await window.nexoSubirYa()}catch(e){}location.reload()},300)},
   codFaltan:()=>{OBRAS.forEach(codInit);codGuardarLS();toast('Códigos generados');draw()},
   agregarObraEst:()=>openSheet(`<span class="eyebrow">Estudio</span><h2>Agregar obra</h2><p class="muted">Poné el código que te dio la constructora para la nueva obra.</p><form class="frm" data-submit="agregarObraEst"><label class="f">Código de la obra<input id="ae-cod" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Ej.: E-LP132-0000" style="letter-spacing:.08em;text-transform:uppercase"></label><button class="btn gold" type="submit">Agregar</button><button class="btn" type="button" data-act="close">Cancelar</button></form>`,'Agregar obra'),
   brillo:()=>openSheet(`<span class="eyebrow">Aspecto</span><h2>Del blanco al negro</h2><p class="muted small">Deslizá el cursor.</p>${nivelSlider()}<button class="btn" type="button" data-act="close">Listo</button>`,'Brillo'),
@@ -3870,6 +3875,7 @@ function tplEquiv(lt,dest){const SP=TPL_SPEC[lt.rubro];if(SP)return dest.filter(
   const n=lt.name||'',niv=/\bPB\b/.test(n)?'PB':/\bPA\b|1° piso/.test(n)?'1° piso':/2° piso/.test(n)?'2° piso':null;
   let L=dest.filter(t=>t.rubro===lt.rubro&&!t.legacy);if(niv&&L.some(t=>t.nivel))L=L.filter(t=>!t.nivel||t.nivel===niv);return L}
 function tplAplicar(o,M,modo){
+  if(o.sinCrono)delete o.sinCrono;
   const wasTpl=!!o.tpl,oldBase=o.base.slice(),oldTasks=o.tasks.slice(),oldCards=o.cards.slice(),oldCert=(o.cert||[]).slice();
   const conAv=t=>!!(t.real&&t.real.av>0)||oldCards.some(c=>c.task===t&&c.items.some(i=>i.estado!=='falta'||i.respuesta));
   const keep=new Set();
@@ -5082,7 +5088,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261124-201854';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261124-204458';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -6471,7 +6477,7 @@ CHG.eFin=(v,el)=>{const o=findO(EOID);if(!o)return;const L=EMODO==='base'?o.base
     <button class="btn gold" type="submit">Guardar cambios</button>
     </form>
     <div class="sec boxed"><span class="eyebrow">Modelo de obra</span><p class="small">${esc(modTxt)}</p><p class="muted small">Plantas, m², subsuelo, pileta, estructura, terminación y fecha de inicio. Al cambiarlo se vuelve a armar el cronograma.</p><button class="btn sm" type="button" data-act="eoModelo" data-o="${o.id}">Editar el modelo</button></div>
-    <div class="sec boxed"><span class="eyebrow">Cronograma</span><p class="muted small">Fecha de inicio, fin y duración de cada tarea, nombres de los rubros y tareas nuevas.</p><div class="row2"><button class="btn sm" type="button" data-act="eoCrono" data-o="${o.id}">Editar el cronograma</button><button class="btn sm" type="button" data-act="eoCronoFull" data-o="${o.id}">⛶ Abrir en pantalla completa</button></div></div>
+    <div class="sec boxed"><span class="eyebrow">Cronograma</span><p class="muted small">Fecha de inicio, fin y duración de cada tarea, nombres de los rubros y tareas nuevas.</p>${o.sinCrono?`<p class="small" style="color:var(--bad)">El cronograma de esta obra está borrado: no se generan tarjetas, pedidos ni planos.</p><button class="btn sm" type="button" data-act="cronoVolver" data-o="${o.id}">Volver a generar el cronograma</button>`:`<div class="row2"><button class="btn sm" type="button" data-act="eoCrono" data-o="${o.id}">Editar el cronograma</button><button class="btn sm" type="button" data-act="eoCronoFull" data-o="${o.id}">⛶ Abrir en pantalla completa</button></div><button class="btn sm ghost" type="button" data-act="cronoBorrar" data-o="${o.id}" style="color:#c0392b;margin-top:8px">Borrar el cronograma (no se generan más tarjetas)</button>`}</div>
     <div class="sec boxed"><span class="eyebrow">Render de la obra</span><div class="infph">${rendersItems(o).map(x=>`<div class="ph1"><span><img src="${esc(x.u)}" alt="Render"><button type="button" data-act="quitarRender" data-o="${o.id}" data-k="${esc(x.k)}" aria-label="Quitar este render">✕</button></span></div>`).join('')||'<span class="muted small">Todavía no hay renders: se ve el logo.</span>'}</div><div><label class="btn sm" for="eo-img" style="cursor:pointer">Cargar otro render</label><input id="eo-img" type="file" accept="image/*" multiple data-chg="eoImg" data-o="${o.id}" hidden></div></div>
     <div class="sec"><button class="btn" type="button" data-act="close">Cerrar</button><button class="btn ghost" type="button" data-act="eliminarObra" data-o="${o.id}" style="color:#c0392b">Eliminar esta obra</button>
     <span class="eyebrow">Empezar de cero</span><p class="muted small">Borra el avance cargado (informes, avances, fotos, pedidos, planos subidos) y deja la obra lista para cargar desde hoy. Descarga un respaldo antes.</p>${MODO_PRUEBAS?'<p class="muted small">Modo pruebas: “Dejar en cero” está oculto para que no se borre nada.</p>':`<button class="btn ghost" type="button" data-act="ceroObra" data-o="${o.id}" style="color:#c0392b">Dejar esta obra en cero</button><button class="btn ghost" type="button" data-act="ceroObra" data-o="todas" style="color:#c0392b">Dejar todas las obras en cero</button>`}</div>`,'Editar obra')};
