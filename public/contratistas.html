@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es"><head><meta name="app-build" content="20261124-134949"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<html lang="es"><head><meta name="app-build" content="20261124-142720"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Nexo · Contratistas</title><meta name="theme-color" content="#0d0e10"><script>/* MODO PRUEBAS (temporal): true = se elige contratista y obra sin código. false = pide código como siempre. */var MODO_PRUEBAS=true;</script><script>/* tema claro/oscuro antes de dibujar (sin parpadeo); por defecto sigue al equipo */(function(){var p="";try{p=localStorage.getItem("ct_tema")||""}catch(e){}var t=p||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"claro":"oscuro");document.documentElement.setAttribute("data-tema",t);var m=document.querySelector("meta[name=theme-color]");if(m)m.setAttribute("content",t==="claro"?"#eceef3":"#0d0e10")})()</script><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Contratistas"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -33,6 +33,7 @@ input,select,textarea{background:linear-gradient(180deg,var(--g-b),var(--g-c))!i
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 'Playfair Display',Georgia,serif}
 body{padding:calc(14px + env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom));max-width:640px;margin:0 auto}
+/* iPad y PC: la app ocupa toda la pantalla */@media (min-width:700px){body{max-width:none;padding-left:max(28px,env(safe-area-inset-left));padding-right:max(28px,env(safe-area-inset-right))}}
 h1,h2,.t{font-family:'Playfair Display',Georgia,serif;font-weight:700;letter-spacing:.005em;margin:0}
 h1{font-size:30px;line-height:1.05}h2{font-size:22px}
 .eyebrow{font-family:'Playfair Display',Georgia,serif;font-weight:700;letter-spacing:.2em;text-transform:uppercase;font-size:13px;color:var(--gold)}
