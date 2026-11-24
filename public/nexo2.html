@@ -44,7 +44,7 @@ ap();})();</script></head><body>
 :root{
   --bg:#0d0e10; --surface:#16171a; --raise:#1d1f23; --line:#2a2c31; --fg:#ece8e1; --muted:#8f8b84;
   --gold:#b8915a; --gold-soft:rgba(184,145,90,.14);
-  --verde:#3fa66b; --amarillo:#e0b43a; --naranja:#e5813a; --rojo:#e2493e; --ok:#5f6b66; --futuro:#2f7d52; --azul:#5b8fd6; --rosa:#9b7cf6;
+  --verde:#3fa66b; --amarillo:#f5c518; --naranja:#e5813a; --rojo:#e2493e; --ok:#5f6b66; --futuro:#2f7d52; --azul:#5b8fd6; --rosa:#9b7cf6;
   /* SYN-01 · una sola familia (Barlow) con estilos compartidos: títulos, números, etiquetas y botones en Barlow Condensed; texto en Barlow */
   --f-cond:"Playfair Display",Georgia,serif; --f-text:"Playfair Display",Georgia,serif;
   --display:var(--f-cond); --tech:var(--f-cond); --mono:var(--f-cond); --body:var(--f-text);
@@ -1033,7 +1033,7 @@ main:has(.login) .note{font-size:11.5px;padding:6px 10px}
   color-scheme:light;
   --bg:#eceef3; --surface:#ffffff; --raise:#f3f4f8; --line:#d8dbe3; --fg:#17181c; --muted:#6a6e77;
   --gold:#97692a; --gold-soft:rgba(151,105,42,.14);
-  --verde:#1f8a4c; --amarillo:#a87d00; --naranja:#c8620f; --rojo:#d03a2f; --ok:#7b8a83; --futuro:#7cc49a; --azul:#2f6fd0; --rosa:#7a5bd6;
+  --verde:#1f8a4c; --amarillo:#e8b400; --naranja:#c8620f; --rojo:#d03a2f; --ok:#7b8a83; --futuro:#7cc49a; --azul:#2f6fd0; --rosa:#7a5bd6;
   --gl:rgba(255,255,255,.66); --gl-hi:rgba(255,255,255,.95); --gl-line:rgba(0,0,0,.08); --gl-sh:rgba(40,40,70,.18); --gl-bar:rgba(244,245,250,.72);
   --amb1:rgba(184,145,90,.22); --amb2:rgba(110,150,225,.2);
 }
@@ -2454,8 +2454,8 @@ function gantt(o,tasks,C){
     if(C.pedidos){const cs=o.cards.filter(c=>c.task===t&&enCronograma(c)),pend=cs.filter(c=>!cDone(c));
       if(cs.length&&!pend.length){segs+=`<span class="gok" style="left:${x(timing(cs[0]).limit)-5}px" title="Tarjetas completas"></span>`}
       else if(pend.length){const ref=pend.reduce((a,b)=>timing(b).open<timing(a).open?b:a);const k=timing(ref);
-        segs+=`<span class="gseg c-verde" style="left:${x(k.open)}px;width:${x(k.amar)-x(k.open)}px"></span><span class="gseg c-amarillo" style="left:${x(k.amar)}px;width:${x(k.nar)-x(k.amar)}px"></span><span class="gseg c-naranja" style="left:${x(k.nar)}px;width:${x(k.limit)-x(k.nar)}px"></span>`;
-        if(pend.some(c=>color(c)==='rojo'))segs+=`<span class="gseg c-rojo" style="left:${x(k.limit)}px;width:${Math.max(4,x(Math.min(t.start,TODAY))-x(k.limit))}px"></span>`;
+        segs+=`<span class="gseg c-verde" style="left:${x(k.open)}px;width:${x(k.amar)-x(k.open)}px"></span><span class="gseg c-amarillo" style="left:${x(k.amar)}px;width:${x(k.limit)-x(k.amar)}px"></span>`;
+        segs+=`<span class="gseg c-rojo" style="left:${x(k.limit)}px;width:${Math.max(4,x(t.start)-x(k.limit))}px"></span>`;
         segs+=`<span class="gwarn c-${pend.reduce((a,c)=>ORDEN[color(c)]<ORDEN[a]?color(c):a,'futuro')}" style="left:${Math.max(0,x(k.limit)-20)}px" title="${plural(pend.length,'tarjeta incompleta','tarjetas incompletas')}">${pend.length}</span>`}}
     const av=C.obra&&t.real?t.real.av:0,b=C.base?baseDe(o,t):null;const dvc=C.obra?semDesvio(desvioTarea(o,t)):'';
     const bar=`<button class="gbar ${C.obra?'':'gb-base'} ${av>=100?'done':''} ${C.obra&&dvc&&dvc!=='verde'&&t.real?'d-'+dvc:''}" data-act="tarea" data-o="${o.id}" data-id="${t.id}" style="left:${x(tp.start)}px;width:${Math.max(6,x(fEnd(tp.end))-x(tp.start)-2)}px" aria-label="${esc(t.name)}: ${fmt(tp.start)} a ${fmt(tp.end)}${C.obra?', avance '+av+'%':''}"><i style="width:${av}%"></i></button>`;
@@ -4042,8 +4042,8 @@ function gantt(o,C){
     if(C.pedidos&&C.obra){const cs=o.cards.filter(c=>c.task===t&&enCronograma(c)),pend=cs.filter(c=>!cDone(c));
       if(cs.length&&!pend.length){segs+=`<span class="gok" style="left:${x(timing(cs[0]).limit)-5}px" title="Tarjetas completas"></span>`}
       else if(pend.length){const ref=pend.reduce((a,b)=>timing(b).open<timing(a).open?b:a);const k=timing(ref);
-        segs+=`<span class="gseg c-verde" style="left:${x(k.open)}px;width:${x(k.amar)-x(k.open)}px"></span><span class="gseg c-amarillo" style="left:${x(k.amar)}px;width:${x(k.nar)-x(k.amar)}px"></span><span class="gseg c-naranja" style="left:${x(k.nar)}px;width:${x(k.limit)-x(k.nar)}px"></span>`;
-        if(pend.some(c=>color(c)==='rojo'))segs+=`<span class="gseg c-rojo" style="left:${x(k.limit)}px;width:${Math.max(4,x(Math.min(t.start,TODAY))-x(k.limit))}px"></span>`;
+        segs+=`<span class="gseg c-verde" style="left:${x(k.open)}px;width:${x(k.amar)-x(k.open)}px"></span><span class="gseg c-amarillo" style="left:${x(k.amar)}px;width:${x(k.limit)-x(k.amar)}px"></span>`;
+        segs+=`<span class="gseg c-rojo" style="left:${x(k.limit)}px;width:${Math.max(4,x(t.start)-x(k.limit))}px"></span>`;
         segs+=`<span class="gwarn c-${pend.reduce((a,c)=>ORDEN[color(c)]<ORDEN[a]?color(c):a,'futuro')}" style="left:${Math.max(0,x(k.limit)-20)}px" title="${plural(pend.length,'tarjeta incompleta','tarjetas incompletas')}">${pend.length}</span>`}}
     const isObra=C.obra&&!C.contractual,av=isObra&&t.real?t.real.av:0,dvc=isObra&&!tp.agg?semDesvio(desvioTarea(o,t)):'';
     const b=C.base&&C.obra?baseDe(o,t):null;
@@ -5090,7 +5090,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261124-214707';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261124-215231';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -6625,4 +6625,5 @@ body:has(.crono-full) .iafab,body:has(.crono-full) #vozstop{display:none!importa
   try{draw()}catch(e){}
 })();
 </script>
+<style>.gseg.c-verde,.gseg.c-amarillo,.gseg.c-rojo{box-shadow:inset -2px 0 0 rgba(255,255,255,.9)}</style>
 </body></html>
