@@ -37,7 +37,9 @@ async function leer(H, clave) {
   const rows = await r.json();
   const v = rows[0] ? rows[0].valor : null;
   // en los cumplimientos cada obra numera sus puntos 1, 2, 3… (no sigue la numeración del informe de todas las obras)
-  if (v && /^ctrec_/.test(clave) && Array.isArray(v.items)) v.items.forEach((x) => { if (x && x.aud && x.aud.inf && Array.isArray(x.aud.items)) x.aud.items.forEach((z, k) => { if (z) z.n = k + 1; }); });
+  let cambio = false;
+  if (v && /^ctrec_/.test(clave) && Array.isArray(v.items)) v.items.forEach((x) => { if (x && x.aud && x.aud.inf && Array.isArray(x.aud.items)) x.aud.items.forEach((z, k) => { if (z && z.n !== k + 1) { z.n = k + 1; cambio = true; } }); });
+  if (cambio) { try { await escribir(H, clave, v); } catch (e) {} }
   return v;
 }
 async function escribir(H, clave, valor) {
@@ -1040,6 +1042,7 @@ export default async function handler(req, res) {
         if (it.ctId !== ct.id) { res.status(403).json({ error: "No es tuyo" }); return; }
         const kd = "ctrec_" + dest.obra, vd = await leer(H, kd); const itemsD = (vd && vd.items) || [];
         const nuevo = { ...it, obra: dest.obra, obraNombre: dest.obraNombre, ctId: dest.id, pdf: undefined, editado: Date.now(), hist: [...(it.hist || []), { t: Date.now(), por: "ct", nom: ct.nombre, tx: "Pasado de " + (ct.obraNombre || obra) + " a " + (dest.obraNombre || dest.obra) }] };
+        if (nuevo.aud && Array.isArray(nuevo.aud.items)) nuevo.aud = { ...nuevo.aud, items: nuevo.aud.items.map((z) => (z && z.obra ? { ...z, obra: dest.obra } : z)) };
         await escribir(H, kd, { ...(vd || {}), items: [...itemsD.filter((x) => x.id !== id), nuevo] });
         await escribir(H, clave, { ...(v || {}), items: items.filter((x) => x.id !== id) });
         res.status(200).json({ ok: true, rec: nuevo }); return;
