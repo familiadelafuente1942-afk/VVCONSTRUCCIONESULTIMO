@@ -26,7 +26,7 @@ const SEED = {
 const FIELD = { prop: "clave", jefe: "j", aud: "a", est: "e" };
 // MODO PRUEBAS (temporal): con true, la app entra sin códigos. El código "PRUEBAS" vale como Dirección y los contratistas
 // entran con "PRUEBAS:<id>". Los códigos reales NO se tocan ni se mandan al navegador. Poner false para volver a pedir códigos.
-const MODO_PRUEBAS = true;
+const MODO_PRUEBAS = false;
 
 function headers(sk) {
   return { apikey: sk, Authorization: "Bearer " + sk, "Content-Type": "application/json" };

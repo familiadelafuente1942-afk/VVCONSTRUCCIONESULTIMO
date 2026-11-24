@@ -13,7 +13,7 @@ input,select,textarea{font-size:16px!important;max-width:100%}
 .msg{overflow-wrap:anywhere;word-break:break-word}
 img,svg,video,canvas{max-width:100%}
 .kp-in{text-align:center;font-size:24px!important;letter-spacing:.18em!important;text-transform:uppercase;padding:16px 12px!important;min-height:58px}.kp-in[aria-invalid="true"]{border-color:#e0554a!important}.cod-err{color:#e0554a;font-weight:600;font-size:15px;margin:6px 0 0;text-align:center}
-</style><script>/* MODO PRUEBAS (temporal): true = ningún panel pide código. false = funciona como siempre. */var MODO_PRUEBAS=true;</script><script>/* tema claro/oscuro: se aplica antes de dibujar para que no parpadee */
+</style><script>/* MODO PRUEBAS (temporal): true = ningún panel pide código. false = funciona como siempre. */var MODO_PRUEBAS=false;</script><script>/* tema claro/oscuro: se aplica antes de dibujar para que no parpadee */
 (function(){var K='nexo2_tema',mq=window.matchMedia?matchMedia('(prefers-color-scheme: light)'):null;
 function pref(){try{return localStorage.getItem(K)||'auto'}catch(e){return'auto'}}
 function res(p){return p==='claro'||p==='oscuro'?p:(mq&&mq.matches?'claro':'oscuro')}
@@ -5105,7 +5105,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261124-224140';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261124-224840';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
