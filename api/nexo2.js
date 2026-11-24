@@ -886,6 +886,7 @@ export default async function handler(req, res) {
             if (x.parcial) x.parcial = 0;
             if (!x.cumplida) { x.cumplida = t; si.push(nom); }
           } else {
+            if (m.e === "no" && x.est === "pendiente") { x.est = "avanza"; if (!x.cumplida) no.push(nom); }
             if (x.cumplida) { x.cumplida = 0; no.push(nom); }
             if (x.parcial) { x.parcial = 0; if (!no.includes(nom)) no.push(nom); }
             if (m.e === "no" && (x.est === "terminado" || x.est === "parcial")) { x.est = "avanza"; if (!no.includes(nom)) no.push(nom); }
