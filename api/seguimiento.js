@@ -306,11 +306,12 @@ export default async function handler(req, res) {
             adics = adics.filter((x) => x.id !== id); adics.push(it); adCambio = true;
           }
           const n0 = adics.length;
-          adics = adics.filter((x) => !(x.obra === ob.id && String(x.id).startsWith("n_adic_" + nid + "_") && !vistosA.has(x.id)));
+          if (vistosA.size) adics = adics.filter((x) => !(x.obra === ob.id && String(x.id).startsWith("n_adic_" + nid + "_") && !vistosA.has(x.id)));
           if (adics.length !== n0) adCambio = true;
         }
         const antes = regs.length;
-        regs = regs.filter((x) => !(x.origen === "nexo" && x.obra === ob.id && x.id.startsWith("n_" + nid + "_") && !vistos.has(x.id)));
+        // si en NEXO 2 la obra se borró o quedó vacía, acá NO se borra nada: el Seguimiento guarda toda la historia
+        if (items.length) regs = regs.filter((x) => !(x.origen === "nexo" && x.obra === ob.id && x.id.startsWith("n_" + nid + "_") && !vistos.has(x.id)));
         quitados += antes - regs.length;
       }
       if (adCambio) await escribir(H, "seg_adicionales", { items: adics.slice(-2000) });
