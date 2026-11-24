@@ -5088,7 +5088,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261124-210344';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261124-210848';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -6249,7 +6249,7 @@ window.cmDatos=o=>{const a=CM[o.id];return a&&a.ok?D(o):null};window.cmCargaTodo
 .b3-d{font:400 13px/1.35 var(--body);color:var(--muted)}
 .b3-mas{all:unset;cursor:pointer;text-align:center;font:600 13px var(--body);color:var(--gold);background:var(--gl);box-shadow:inset 0 0 0 .5px var(--gl-line);border-radius:14px;padding:12px}
 .tg-venc{color:#fff;background:#B3261E}.tg-vence{color:#fff;background:#B85C00}.tg-nueva{color:#7A5718;background:#F6E9CC}
-.tg-mat{color:#1F4E79;background:#E3EDF7}.tg-ct{color:#4A2C6E;background:#EEE6F6}.tg-aud{color:#2E6B3E;background:#E2F0E5}.tg-prox{color:var(--muted);background:var(--line)}.tg-pide{color:#B85C00;background:#FCEBD9}.tg-plano{color:#fff;background:#1F5FA8}.tg-def{color:#4A2C00;background:#F2C76E}.b3-it.k-plano{box-shadow:inset 4px 0 0 #1F5FA8,inset 0 1px 0 var(--gl-hi),inset 0 0 0 .5px var(--gl-line);background:linear-gradient(90deg,rgba(31,95,168,.16),rgba(31,95,168,.04)),var(--gl)}.b3-it.k-def{box-shadow:inset 4px 0 0 #D9A63A,inset 0 1px 0 var(--gl-hi),inset 0 0 0 .5px var(--gl-line);background:linear-gradient(90deg,rgba(217,166,58,.16),rgba(217,166,58,.04)),var(--gl)}
+.tg-mat{color:#1F4E79;background:#E3EDF7}.tg-ct{color:#4A2C6E;background:#EEE6F6}.tg-aud{color:#2E6B3E;background:#E2F0E5}.tg-prox{color:var(--muted);background:var(--line)}.tg-pide{color:#B85C00;background:#FCEBD9}.b3-it .b3-ob{font-family:var(--f-serif,'Playfair Display',serif);font-size:19px;font-weight:700;line-height:1.15;color:var(--fg);letter-spacing:.01em}.tg-plano{color:#fff;background:#1F5FA8}.tg-def{color:#4A2C00;background:#F2C76E}.b3-it.k-plano{box-shadow:inset 4px 0 0 #1F5FA8,inset 0 1px 0 var(--gl-hi),inset 0 0 0 .5px var(--gl-line);background:linear-gradient(90deg,rgba(31,95,168,.16),rgba(31,95,168,.04)),var(--gl)}.b3-it.k-def{box-shadow:inset 4px 0 0 #D9A63A,inset 0 1px 0 var(--gl-hi),inset 0 0 0 .5px var(--gl-line);background:linear-gradient(90deg,rgba(217,166,58,.16),rgba(217,166,58,.04)),var(--gl)}
 /* secciones del inicio */
 .b3-sec{margin:22px 0 0;display:flex;flex-direction:column;gap:10px}
 .b3-h{font-size:19px;margin:0}
@@ -6350,10 +6350,14 @@ function b3Items(){
   /* mismo orden en todos los aparatos: a igual urgencia y fecha, por obra y texto */
   return L.sort((a,b)=>a.u-b.u||a.f-b.f||String(a.d||'').localeCompare(String(b.d||''),'es')||String(a.t||'').localeCompare(String(b.t||''),'es'));
 }
+/* la obra va arriba de todo y grande: lo primero que se lee es de qué obra es */
+function b3ObN(x){const d=String(x.d||''),i=d.indexOf(' · '),h=(i<0?d:d.slice(0,i)).trim();return OBRAS.some(o=>o.nombre===h)?h:''}
+function b3ObH(x){const n=b3ObN(x);return n?`<span class="b3-ob">${esc(n)}</span>`:''}
+function b3DH(x){const n=b3ObN(x),d=String(x.d||'');return n?d.slice(n.length).replace(/^\s*·\s*/,''):d}
 function b3Bar(L,cuenta){if(!L.length)return'';const n=L.length,ver=L.slice(0,3);
   return `<section class="b3-bar" aria-label="Para hacer hoy"><div class="b3-bh"><div class="b3-ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${B3SVG.bell}</svg>${L.some(x=>x.u<=1)?'<span class="b3-dot" aria-hidden="true"></span>':''}</div><div class="b3-bt"><span class="r">PARA HACER HOY</span><span class="h">${cuenta||`${n} ${n===1?'ítem':'ítems'} en tus obras`}</span></div></div>
-  <div class="b3-list">${ver.map(x=>`<button class="b3-it ${x.cls||''}" ${at(x.a)}><span class="b3-tags">${x.tags.join('')}</span><span class="b3-t">${esc(x.t)}</span><span class="b3-d">${esc(x.d)}</span></button>`).join('')}${n>ver.length?`<button class="b3-mas" data-act="b3Todo">Ver las ${n}</button>`:''}</div></section>`}
-A.b3Todo=()=>{const L=b3Items();openSheet(`<span class="eyebrow">Para hacer hoy</span><h2>${L.length} ${L.length===1?'ítem':'ítems'} para resolver</h2><div class="b3-list">${L.map(x=>`<button class="b3-it ${x.cls||''}" ${at(x.a)}><span class="b3-tags">${x.tags.join('')}</span><span class="b3-t">${esc(x.t)}</span><span class="b3-d">${esc(x.d)}</span></button>`).join('')}</div>`,'Para hacer hoy')};
+  <div class="b3-list">${ver.map(x=>`<button class="b3-it ${x.cls||''}" ${at(x.a)}>${b3ObH(x)}<span class="b3-tags">${x.tags.join('')}</span><span class="b3-t">${esc(x.t)}</span>${b3DH(x)?`<span class="b3-d">${esc(b3DH(x))}</span>`:''}</button>`).join('')}${n>ver.length?`<button class="b3-mas" data-act="b3Todo">Ver las ${n}</button>`:''}</div></section>`}
+A.b3Todo=()=>{const L=b3Items();openSheet(`<span class="eyebrow">Para hacer hoy</span><h2>${L.length} ${L.length===1?'ítem':'ítems'} para resolver</h2><div class="b3-list">${L.map(x=>`<button class="b3-it ${x.cls||''}" ${at(x.a)}>${b3ObH(x)}<span class="b3-tags">${x.tags.join('')}</span><span class="b3-t">${esc(x.t)}</span>${b3DH(x)?`<span class="b3-d">${esc(b3DH(x))}</span>`:''}</button>`).join('')}</div>`,'Para hacer hoy')};
 /* --- tus obras: etapa real y semáforo --- */
 function b3Obras(obras){if(!obras.length)return'';const r=ROLE();
   return `<section class="b3-sec"><h2 class="b3-h">Tus obras</h2>${obras.map(o=>{let ro=0,na=0;
