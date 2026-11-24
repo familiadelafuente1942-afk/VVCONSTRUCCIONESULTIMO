@@ -16,9 +16,9 @@ jobs:
           const posts=[];let last=null;
           await p.route('**/api/nexo2',async r=>{const q=r.request();if(q.method()!=='POST')return r.continue();let j={};try{j=JSON.parse(q.postData()||'{}')}catch(e){}
             if(j.key==='cfg'&&typeof j.v==='string'){let dif=[];try{const A=last?JSON.parse(last):null,B=JSON.parse(j.v);const walk=(a,b,pa,d)=>{if(dif.length>12)return;if(JSON.stringify(a)===JSON.stringify(b))return;if(d>5||typeof a!=='object'||typeof b!=='object'||!a||!b){dif.push(pa);return}new Set([...Object.keys(a),...Object.keys(b)]).forEach(k=>walk(a[k],b[k],pa+'.'+k,d+1))};if(A)walk(A,B,'cfg',0)}catch(e){dif=['err '+e.message]}
-              posts.push({t:Date.now(),kb:Math.round(j.v.length/1000),dif});last=j.v;return r.fulfill({json:{ok:true,t:j.t}})}
+              let av='';try{const B=JSON.parse(j.v);const L=B.avisos||[];const z=L[L.length-1];av=z?(z.to+' | '+String(z.txt||'').replace(/\d/g,'#').slice(0,90)+' | '+String(z.id).slice(0,6)):''}catch(e){}posts.push({t:Date.now(),kb:Math.round(j.v.length/1000),dif:[...dif,'ULTIMO_AVISO: '+av]});last=j.v;return r.fulfill({json:{ok:true,t:j.t}})}
             return r.fulfill({json:{ok:false,error:'bloqueado en la prueba'}})});
-          await p.goto('https://nexoentorno.vercel.app/nexo2.html');await p.waitForTimeout(90000);
+          await p.goto('https://nexoentorno.vercel.app/nexo2.html');await p.waitForTimeout(25000);
           const st=await p.evaluate(()=>{const S=window.__sync||{};const i=document.querySelector('.nxi');return {est:S.est,ocupado:S.ocupado,ind:i&&i.textContent,online:navigator.onLine}});
           console.log('ESTADO',JSON.stringify(st));console.log('POSTS',posts.length);posts.forEach((x,k)=>console.log('POST',k,'kb',x.kb,'cambia',x.dif.join(' ')));console.log('ERRORES',JSON.stringify(errs.slice(0,15)));await b.close()})();
           JS
