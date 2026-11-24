@@ -2431,7 +2431,7 @@ function tabCrono(o){
   const base=S.ver==='base',dv=desvioSem(o),C=S.capas;const canEdit=base?esDir():(puedeEditar(o)||esDir());
   const leg=[`<span><i class="sw ${base?'sw-baseb':'sw-plan'}"></i>${base?'base':'conforme a obra'}</span>`];if(!base)leg.push('<span><i class="sw sw-av"></i>avance real</span>');
   if(C.hitos)leg.push('<span><i class="sw sw-hito"></i>hito</span>');
-  if(C.pedidos&&!base)leg.push('<span><i class="sw c-verde"></i>ventana abierta</span><span><i class="sw c-amarillo"></i>pedir ya</span><span><i class="sw c-naranja"></i>urgente</span><span><i class="sw c-rojo"></i>vencida</span><span><i class="sw sw-ok"></i>tarjetas completas</span>');
+  if(C.pedidos&&!base)leg.push('<span><i class="sw c-verde"></i>ventana abierta</span><span><i class="sw c-amarillo"></i>urgente</span><span><i class="sw c-rojo"></i>vencida</span><span><i class="sw sw-ok"></i>tarjetas completas</span>');
   if(C.base&&!base)leg.push('<span><i class="sw sw-base"></i>base</span>');
   if(C.audit)leg.push('<span><i class="sw sw-sup"></i>supervisión</span><span><i class="sw sw-cert"></i>certificado de etapa</span>');
   return `<div class="seg"><button data-act="ver" data-m="obra" aria-pressed="${!base}">Conforme a obra</button><button data-act="ver" data-m="base" aria-pressed="${base}">${esDir()?'':LOCKSVG+' '}Base</button>${canEdit?`<button data-act="editar" data-m="${base?'base':'obra'}" style="margin-left:auto">Editar ${base?'la base':''}</button>`:base?`<span class="lockmsg">${LOCKSVG} La base la define la Dirección</span>`:''}</div>
@@ -4006,7 +4006,7 @@ function tabCrono0(o){
   if(C.obra)leg.push('<span><i class="sw sw-plan"></i>conforme a obra</span><span><i class="sw sw-av"></i>avance real</span>');
   if(C.base)leg.push(C.obra?'<span><i class="sw sw-basep"></i>base (punteada)</span>':'<span><i class="sw sw-baseb"></i>base</span>');
   if(C.hitos)leg.push('<span><i class="sw sw-hito"></i>hito</span>');
-  if(C.pedidos&&C.obra)leg.push('<span><i class="sw c-verde"></i>ventana abierta</span><span><i class="sw c-amarillo"></i>pedir ya</span><span><i class="sw c-naranja"></i>urgente</span><span><i class="sw c-rojo"></i>vencida</span><span><i class="sw sw-ok"></i>tarjetas completas</span>');
+  if(C.pedidos&&C.obra)leg.push('<span><i class="sw c-verde"></i>ventana abierta</span><span><i class="sw c-amarillo"></i>urgente</span><span><i class="sw c-rojo"></i>vencida</span><span><i class="sw sw-ok"></i>tarjetas completas</span>');
   if(C.audit)leg.push('<span><i class="sw sw-sup"></i>supervisión</span><span><i class="sw sw-cert"></i>certificado de etapa</span>');
   const edit=jefe?`<button class="btn sm gold" data-act="editar" data-m="obra">Editar conforme a obra</button>`:dir?`<button class="btn sm gold" data-act="editar" data-m="base">Editar la base</button>`:'';
   const lock=jefe?`<span class="lockmsg">${LOCKSVG} La base la define la Dirección</span>`:dir?`<span class="lockmsg">${LOCKSVG} El conforme a obra lo actualiza la jefatura</span>`:'';
@@ -4182,7 +4182,7 @@ const _eadd=SUBMIT.eadd;SUBMIT.eadd=f=>{_eadd(f);enviarAbiertas(findO(EOID))};
 /* ================= v7 · inicio más limpio: carrusel de obras, sin miniaturas; obras con foto grande ================= */
 /* puntitos con la cantidad de tarjetas de definiciones de cada color */
 function dotsDef(o){const cs=o.cards.filter(c=>c.tipo==='doc'&&(ROLE()!=='estudio'||itemsEstudio(c).length));const n=k=>cs.filter(c=>color(c)===k).length;
-  return `<span class="ddots" aria-label="Tarjetas de planos y definiciones por color">${[['rojo','vencidas'],['naranja','urgentes'],['amarillo','pedir ya'],['verde','ventana abierta'],['ok','completas']].map(([k,l])=>n(k)?`<span class="chip" title="${l}">${k==='ok'?'<b class="t-verde">✓</b>':`<span class="dot c-${k}"></span>`}${n(k)}</span>`:'').join('')}</span>`}
+  return `<span class="ddots" aria-label="Tarjetas de planos y definiciones por color">${[['rojo','vencidas'],['amarillo','urgentes'],['verde','ventana abierta'],['ok','completas']].map(([k,l])=>n(k)?`<span class="chip" title="${l}">${k==='ok'?'<b class="t-verde">✓</b>':`<span class="dot c-${k}"></span>`}${n(k)}</span>`:'').join('')}</span>`}
 /* datos de cada diapositiva según el rol */
 function carFacts(o){const r=ROLE(),dv=desvioSem(o),ro=o.cards.filter(c=>color(c)==='rojo').length,na=o.cards.filter(c=>['naranja','amarillo'].includes(color(c))).length,n=proxima(o);
   if(r==='direccion'){const ec=econ([o])[0];return[['Etapa',esc(etapaDe(o))],['Entrega prevista',`<span class="${dv>0?'t-naranja':''}">${fmt(finObra(o))}${dv>0?' · +'+dv+' sem':''}</span>`],['Tarjetas',`<span class="${ro?'t-rojo':'t-verde'}">${ro?plural(ro,'vencida','vencidas'):'al día'}</span>${na?` · ${na} por vencer`:''}`],['Ahorro / pérdida',`<span class="t-verde">+${moneyK(ec.ahorro)}</span> <span class="t-rojo">−${moneyK(ec.perdida)}</span>`]]}
@@ -5090,7 +5090,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261124-215231';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261124-215620';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -6250,7 +6250,7 @@ window.cmDatos=o=>{const a=CM[o.id];return a&&a.ok?D(o):null};window.cmCargaTodo
 .b3-t{font:600 15px/1.3 var(--body)}
 .b3-d{font:400 13px/1.35 var(--body);color:var(--muted)}
 .b3-mas{all:unset;cursor:pointer;text-align:center;font:600 13px var(--body);color:var(--gold);background:var(--gl);box-shadow:inset 0 0 0 .5px var(--gl-line);border-radius:14px;padding:12px}
-.tg-venc{color:#fff;background:#B3261E}.tg-vence{color:#fff;background:#B85C00}.tg-nueva{color:#7A5718;background:#F6E9CC}
+.tg-venc{color:#fff;background:#B3261E}.tg-vence{color:#3a2a00;background:#F5C518}.tg-nueva{color:#7A5718;background:#F6E9CC}
 .tg-mat{color:#1F4E79;background:#E3EDF7}.tg-ct{color:#4A2C6E;background:#EEE6F6}.tg-aud{color:#2E6B3E;background:#E2F0E5}.tg-prox{color:var(--muted);background:var(--line)}.tg-pide{color:#B85C00;background:#FCEBD9}.b3-it .b3-ob{font-family:var(--f-serif,'Playfair Display',serif);font-size:19px;font-weight:700;line-height:1.15;color:var(--fg);letter-spacing:.01em}.tg-plano{color:#fff;background:#1F5FA8}.tg-def{color:#4A2C00;background:#F2C76E}.b3-it.k-plano{box-shadow:inset 4px 0 0 #1F5FA8,inset 0 1px 0 var(--gl-hi),inset 0 0 0 .5px var(--gl-line);background:linear-gradient(90deg,rgba(31,95,168,.16),rgba(31,95,168,.04)),var(--gl)}.b3-it.k-def{box-shadow:inset 4px 0 0 #D9A63A,inset 0 1px 0 var(--gl-hi),inset 0 0 0 .5px var(--gl-line);background:linear-gradient(90deg,rgba(217,166,58,.16),rgba(217,166,58,.04)),var(--gl)}
 /* secciones del inicio */
 .b3-sec{margin:22px 0 0;display:flex;flex-direction:column;gap:10px}
