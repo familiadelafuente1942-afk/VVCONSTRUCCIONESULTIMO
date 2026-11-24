@@ -1540,7 +1540,7 @@ const CFG_ORIG=new Set(OBRAS.map(o=>o.id));
 /* obras nuevas que Dirección eliminó a propósito: solo esas se pueden ir de la nube (un aparato desactualizado ya no puede borrar obras) */
 const DELN=[];
 const CFG_DEF=Object.fromEntries(OBRAS.map(o=>[o.id,JSON.parse(JSON.stringify(cfgPick(o)))]));
-try{const g=JSON.parse(cfgLeer()||'null');if(g){window.__PLANT=g.plant||null;window.__AVISOS=g.avisos||null;try{if(g.fu&&g.fu.t>(+localStorage.getItem('nexo2_fuentes_t')||0)){localStorage.setItem('nexo2_fuentes',JSON.stringify(g.fu.sel||{}));localStorage.setItem('nexo2_fuentes_t',String(g.fu.t))}}catch(e){}Object.entries(g.mod||{}).forEach(([id,ch])=>{const o=OBRAS.find(x=>x.id===id);if(o){if(ch.baseOv){BASE_OV[id]=ch.baseOv;delete ch.baseOv}Object.assign(o,ch)}});(g.nuevas||[]).forEach(c=>{if(c&&c.id&&!OBRAS.some(x=>x.id===c.id)){if(c.baseOv){BASE_OV[c.id]=c.baseOv;delete c.baseOv}OBRAS.push(c)}});(g.del||[]).forEach(id=>{const i=OBRAS.findIndex(x=>x.id===id);if(i>=0)OBRAS.splice(i,1)});(g.delN||[]).forEach(id=>{if(id&&!DELN.includes(id))DELN.push(id)})}}catch(e){}
+try{const g=JSON.parse(cfgLeer()||'null');if(g){window.__PLANT=g.plant||null;window.__AVISOS=g.avisos||null;try{if(g.fu&&g.fu.t>(+localStorage.getItem('nexo2_fuentes_t')||0)){localStorage.setItem('nexo2_fuentes',JSON.stringify(g.fu.sel||{}));localStorage.setItem('nexo2_fuentes_t',String(g.fu.t))}}catch(e){}Object.entries(g.mod||{}).forEach(([id,ch])=>{const o=OBRAS.find(x=>x.id===id);if(o){if(ch.baseOv){BASE_OV[id]=ch.baseOv;delete ch.baseOv}Object.assign(o,ch)}});(g.nuevas||[]).slice().sort((a,b)=>String((a&&a.nombre)||'').localeCompare(String((b&&b.nombre)||''),'es')||String((a&&a.id)||'').localeCompare(String((b&&b.id)||''))).forEach(c=>{if(c&&c.id&&!OBRAS.some(x=>x.id===c.id)){if(c.baseOv){BASE_OV[c.id]=c.baseOv;delete c.baseOv}OBRAS.push(c)}});(g.del||[]).forEach(id=>{const i=OBRAS.findIndex(x=>x.id===id);if(i>=0)OBRAS.splice(i,1)});(g.delN||[]).forEach(id=>{if(id&&!DELN.includes(id))DELN.push(id)})}}catch(e){}
 /* avisos que viajan por la nube: llegan a todos los aparatos (PC, iPad, iPhone); cada aparato recuerda cuáles ya leyó */
 const AVISOS=[],AV_VISTOS_LS='nexo2_avisos_vistos';
 const avVistos=()=>{try{return new Set(JSON.parse(localStorage.getItem(AV_VISTOS_LS)||'[]'))}catch(e){return new Set()}};
@@ -3797,7 +3797,7 @@ function ovAplicar(o,ov){if(!ov)return;try{
   Object.entries(ov.k||{}).forEach(([k,v])=>{const t=o.tasks.find(x=>tkey(o,x)===k);if(t)t.ctl=v});
  }catch(e){console.error('ovAplicar',o.id,e)}}
 function ovFlush(){let ch=false;OBRAS.forEach(o=>{if(!o.tasks||!o.tasks.length)return;if(!OV_B[o.id]){OV_B[o.id]=ovMapa(o);OV_L[o.id]='null'}const d=ovDiff(o),s=JSON.stringify(d);if(s!==OV_L[o.id]){OV_L[o.id]=s;if(d)o.ov=d;else delete o.ov;ch=true}});if(ch)cfgGuardar()}
-function ovInit(){OBRAS.forEach(o=>{if(!o.tasks)return;OV_B[o.id]=ovMapa(o);if(o.ov)ovAplicar(o,o.ov);OV_L[o.id]=JSON.stringify(ovDiff(o))})}
+function ovInit(){OBRAS.forEach(o=>{if(!o.tasks)return;OV_B[o.id]=ovMapa(o);if(o.ov)ovAplicar(o,o.ov);try{const ti=new Map(o.tasks.map((t,i)=>[t,i]));o.cards.sort((a,b)=>((ti.get(a.task)??1e9)-(ti.get(b.task)??1e9))||String(ckey(o,a)).localeCompare(String(ckey(o,b))))}catch(e){}OV_L[o.id]=JSON.stringify(ovDiff(o))})}
 function ovRebase(o){if(!o.tpl)return;const sc={...o,tasks:[],cards:[],planos:[],cert:[],base:o.base,mod2:o.mod2,sup:[]};tplResync(sc);OV_B[o.id]=ovMapa(sc)}
 {const _d=draw;draw=function(){_d();clearTimeout(OV_T);OV_T=setTimeout(ovFlush,500)};document.addEventListener('visibilitychange',()=>{if(document.hidden)ovFlush()})}
 
@@ -5082,7 +5082,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261124-201033';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261124-201854';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -6341,7 +6341,8 @@ function b3Items(){
   }else if(r==='auditor'){
     agendaAud(obras,30).forEach(a=>{const dd=habiles(TODAY,a.f);L.push({u:a.f<TODAY?0:dd<=5?1:3,f:a.f,tags:[tag((a.tipo==='sup'?'SUPERVISIÓN':a.tipo==='cert'?'CERTIFICADO':'PLANO A REVISAR')+' · '+dmd(a.f),a.tipo==='rev'?'tg-mat':'tg-aud')],t:a.tipo==='sup'?'Supervisión de obra':a.motivo,d:a.o.nombre,a:a.act.a==='doc'?{act:'doc',id:a.act.id}:{act:a.act.a,t:a.act.t,o:a.act.o,...(a.act.s?{s:a.act.s}:{}),...(a.act.c?{c:a.act.c}:{})}})});
   }
-  return L.sort((a,b)=>a.u-b.u||a.f-b.f);
+  /* mismo orden en todos los aparatos: a igual urgencia y fecha, por obra y texto */
+  return L.sort((a,b)=>a.u-b.u||a.f-b.f||String(a.d||'').localeCompare(String(b.d||''),'es')||String(a.t||'').localeCompare(String(b.t||''),'es'));
 }
 function b3Bar(L,cuenta){if(!L.length)return'';const n=L.length,ver=L.slice(0,3);
   return `<section class="b3-bar" aria-label="Para hacer hoy"><div class="b3-bh"><div class="b3-ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${B3SVG.bell}</svg>${L.some(x=>x.u<=1)?'<span class="b3-dot" aria-hidden="true"></span>':''}</div><div class="b3-bt"><span class="r">PARA HACER HOY</span><span class="h">${cuenta||`${n} ${n===1?'ítem':'ítems'} en tus obras`}</span></div></div>
