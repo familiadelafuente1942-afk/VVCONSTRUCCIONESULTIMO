@@ -5088,7 +5088,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261124-210848';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261124-212518';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -6410,7 +6410,7 @@ try{draw()}catch(e){}
 /* cronograma por día / semana / mes, certificados a un toque y edición de la base que también corrige el conforme a obra */
 try{S.gesc=localStorage.getItem('nexo2_gesc')||'sem'}catch(e){S.gesc='sem'}
 function cronoEscala(o){const E=[['dia','Día'],['sem','Semana'],['mes','Mes']],n=(o.cert||[]).length;
-  return `<div class="gesc-row"><div class="seg" role="group" aria-label="Escala del cronograma">${E.map(([k,l])=>`<button type="button" data-act="gesc" data-k="${k}" aria-pressed="${(S.gesc||'sem')===k}">${l}</button>`).join('')}</div>${n?`<button type="button" class="btn sm" data-act="certVer" data-o="${o.id}">Ver certificados · ${n}</button>`:''}<button type="button" class="btn sm ${S.gdrag?'gold':''}" data-act="gdrag" aria-pressed="${!!S.gdrag}">${S.gdrag?'✓ Moviendo barras':'↔ Mover y estirar barras'}</button>${S.gdrag?`<label class="chk2" style="margin:0"><input type="checkbox" data-chg="gcasc" ${S.gcasc===false?'':'checked'}> Correr también las tareas que siguen</label>`:''}<button type="button" class="btn sm gold" data-act="gfull">${S.gfull?'✕ Salir de pantalla completa':'⛶ Pantalla completa'}</button></div>`}
+  return `<div class="gesc-row"><div class="seg" role="group" aria-label="Escala del cronograma">${E.map(([k,l])=>`<button type="button" data-act="gesc" data-k="${k}" aria-pressed="${(S.gesc||'sem')===k}">${l}</button>`).join('')}</div>${n?`<button type="button" class="btn sm" data-act="certVer" data-o="${o.id}">Ver certificados · ${n}</button>`:''}<button type="button" class="btn sm ${S.gdrag?'gold':''}" data-act="gdrag" aria-pressed="${!!S.gdrag}">${S.gdrag?'✓ Moviendo barras':'↔ Mover y estirar barras'}</button>${S.gdrag?`<label class="chk2" style="margin:0"><input type="checkbox" data-chg="gcasc" ${S.gcasc===true?'checked':''}> Correr también las tareas que empiezan después</label>`:''}<button type="button" class="btn sm gold" data-act="gfull">${S.gfull?'✕ Salir de pantalla completa':'⛶ Pantalla completa'}</button></div>`}
 /* pantalla completa: el cronograma ocupa toda la pantalla, con los encabezados y los nombres fijos al desplazarse */
 (function(){const tc=tabCrono;tabCrono=function(o){const h=tc(o);if(!S.gfull)return h;
   let cuerpo=h;try{const tp=document.createElement('template');tp.innerHTML=h;const g=tp.content.querySelector('#gwrap'),e=tp.content.querySelector('.gesc-row'),v=tp.content.querySelector('.vsel');if(g)cuerpo=`<div class="cf-ctrl">${v?v.outerHTML:''}${e?e.outerHTML:''}</div>${g.outerHTML}`}catch(_){}
@@ -6501,10 +6501,10 @@ CHG.eFin=(v,el)=>{const o=findO(EOID);if(!o)return;const L=EMODO==='base'?o.base
   let D=null,bloqClick=0;
   const listaDe=o=>esDir()?o.base:o.tasks;
   const puede=o=>esDir()||puedeEditar(o);
-  function aplicar(o,id,dias,modo){const L=listaDe(o),t=L.find(x=>x.id===id);if(!t||!dias)return false;const casc=S.gcasc!==false;
+  function aplicar(o,id,dias,modo){const L=listaDe(o),t=L.find(x=>x.id===id);if(!t||!dias)return false;const casc=S.gcasc===true;/* por defecto cada barra se mueve sola, sin arrastrar a otras */
     const antes=new Map(L.map(x=>[x.id,x.start+'|'+x.end]));
     const hab=x=>Math.max(1,workBetween(x.start-DAY,x.end)),corre=(x,dl)=>{const dd=hab(x);let ns=x.start+dl*DAY;ns=dl<0?(()=>{let y=ns;while(!isWork(y))y-=DAY;return y})():nextWork(ns);x.start=ns;x.end=addWork(ns,dd-1);x.weeks=dd/5};
-    if(modo==='mover'){const s0=t.start;if(casc)L.forEach(x=>{if(x!==t&&x.start>=s0)corre(x,dias)});corre(t,dias)}
+    if(modo==='mover'){const s0=t.start;const e0m=t.end;if(casc)L.forEach(x=>{if(x!==t&&x.start>e0m)corre(x,dias)});corre(t,dias)}
     else{const e0=t.end;let fe=t.end+dias*DAY;while(!isWork(fe))fe-=DAY;if(fe<t.start)fe=t.start;const dd=Math.max(1,workBetween(t.start-DAY,fe));t.end=addWork(t.start,dd-1);t.weeks=dd/5;const dl=Math.round((t.end-e0)/DAY);
       if(casc&&dl)L.forEach(x=>{if(x!==t&&x.start>e0)corre(x,dl)})}
     L.sort((p,q)=>p.start-q.start);
