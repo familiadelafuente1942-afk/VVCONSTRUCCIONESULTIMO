@@ -464,8 +464,11 @@ export default async function handler(req, res) {
           if (Array.isArray(P.avisos) && P.avisos.length) {
             const L = Array.isArray(N.avisos) ? N.avisos.slice() : []; const ids = new Set(L.map((x) => x && x.id)); let add = 0;
             for (const x of P.avisos) if (x && x.id && !ids.has(x.id) && Date.now() - Number(x.t || 0) < 14 * 864e5) { L.push(x); add++; }
-            if (add) { L.sort((x, y) => Number(x.t || 0) - Number(y.t || 0)); N.avisos = L.slice(-40); ch = true; }
+            if (add) { L.sort((x, y) => (Number(x.t || 0) - Number(y.t || 0)) || String(x.id).localeCompare(String(y.id))); const L2 = L.slice(-40); if (L2.map((z) => z.id).join() !== (N.avisos || []).map((z) => z && z.id).join()) { N.avisos = L2; ch = true; } }
           }
+          // cronograma borrado por Dirección (sinCrono): un aparato con una versión vieja de la app no lo puede deshacer sin querer
+          for (const [id, ch0] of Object.entries(P.mod || {})) if (ch0 && ch0.sinCrono === true) { N.mod = N.mod || {}; const e = N.mod[id] || {}; if (e.sinCrono === undefined) { N.mod[id] = { ...e, sinCrono: true }; ch = true; } }
+          for (const x of (P.nuevas || [])) if (x && x.sinCrono === true) { const y = N.nuevas.find((z) => z && z.id === x.id); if (y && y.sinCrono === undefined) { y.sinCrono = true; ch = true; } }
           if (ch) { vOut = JSON.stringify(N); await escribir(H, "cfg_prev", prev); }
         }
       } catch { /* si no se puede leer, se guarda como vino */ }
