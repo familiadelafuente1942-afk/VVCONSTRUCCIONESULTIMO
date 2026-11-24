@@ -915,6 +915,10 @@ export default async function handler(req, res) {
             if (x.parcial) x.parcial = 0;
             if (!x.cumplida) { x.cumplida = t; si.push(nom); }
           } else {
+            // motivo de lo no cumplido: sigue en curso, o retraso por falta de material / definición / otro
+            const MO = ["avanza", "material", "definicion", "otro"];
+            if (m.e === "no" && typeof m.falta === "string" && m.falta.trim().slice(0, 300) !== (x.falta || "")) { x.falta = m.falta.trim().slice(0, 300); if (!no.includes(nom)) no.push(nom + (x.falta ? " (falta " + x.falta + ")" : "")); }
+            if (m.e === "no" && MO.includes(m.motivo) && x.est !== m.motivo) { x.est = m.motivo; if (x.cumplida) x.cumplida = 0; if (x.parcial) x.parcial = 0; no.push(nom + (m.motivo === "avanza" ? "" : " (retraso: " + (m.motivo === "material" ? "falta material" : m.motivo === "definicion" ? "falta definición" : "otro motivo") + ")")); }
             if (m.e === "no" && x.est === "pendiente") { x.est = "avanza"; if (!x.cumplida) no.push(nom); }
             if (x.cumplida) { x.cumplida = 0; no.push(nom); }
             if (x.parcial) { x.parcial = 0; if (!no.includes(nom)) no.push(nom); }
@@ -923,7 +927,7 @@ export default async function handler(req, res) {
         });
         if (!si.length && !no.length && !pz.length && !fo.length) { res.status(400).json({ error: "No cambiaste ninguna tarea" }); return; }
         const nom = quien === "ct" ? ct.nombre : quien === "dir" ? "Dirección" : "Jefatura de obra";
-        const tx = [si.length ? "Tareas cumplidas: " + si.join("; ") : "", pz.length ? "Cumplimiento parcial: " + pz.join("; ") : "", no.length ? "Vuelven a pendiente: " + no.join("; ") : "", fo.length ? "Fotos de cómo quedó: " + fo.join("; ") : ""].filter(Boolean).join(" · ");
+        const tx = [si.length ? "Tareas cumplidas: " + si.join("; ") : "", pz.length ? "Cumplimiento parcial: " + pz.join("; ") : "", no.length ? "No cumplidas / con retraso: " + no.join("; ") : "", fo.length ? "Fotos de cómo quedó: " + fo.join("; ") : ""].filter(Boolean).join(" · ");
         it.hist = (Array.isArray(it.hist) ? it.hist : []).concat([{ t, por: quien === "ct" ? "ct" : quien, nom, tx }]).slice(-100);
         it.editado = t;
         await escribir(H, clave, { items });
