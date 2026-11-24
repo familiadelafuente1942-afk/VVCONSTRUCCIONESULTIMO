@@ -5067,7 +5067,7 @@ const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearIn
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261124-141542';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261124-141852';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso&&!window.__nxVerIv)window.__nxVerIv=setInterval(()=>{if(!ocupado()){clearInterval(window.__nxVerIv);act()}},3000);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -6322,9 +6322,9 @@ function b3Items(){
   return L.sort((a,b)=>a.u-b.u||a.f-b.f);
 }
 function b3Bar(L,cuenta){if(!L.length)return'';const n=L.length,ver=L.slice(0,3);
-  return `<section class="b3-bar" aria-label="Para hacer hoy"><div class="b3-bh"><div class="b3-ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${B3SVG.bell}</svg>${L.some(x=>x.u<=1)?'<span class="b3-dot" aria-hidden="true"></span>':''}</div><div class="b3-bt"><span class="r">PARA HACER HOY</span><span class="h">${cuenta||`${n} ${n===1?'cosa':'cosas'} en tus obras`}</span></div></div>
+  return `<section class="b3-bar" aria-label="Para hacer hoy"><div class="b3-bh"><div class="b3-ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${B3SVG.bell}</svg>${L.some(x=>x.u<=1)?'<span class="b3-dot" aria-hidden="true"></span>':''}</div><div class="b3-bt"><span class="r">PARA HACER HOY</span><span class="h">${cuenta||`${n} ${n===1?'ítem':'ítems'} en tus obras`}</span></div></div>
   <div class="b3-list">${ver.map(x=>`<button class="b3-it" ${at(x.a)}><span class="b3-tags">${x.tags.join('')}</span><span class="b3-t">${esc(x.t)}</span><span class="b3-d">${esc(x.d)}</span></button>`).join('')}${n>ver.length?`<button class="b3-mas" data-act="b3Todo">Ver las ${n}</button>`:''}</div></section>`}
-A.b3Todo=()=>{const L=b3Items();openSheet(`<span class="eyebrow">Para hacer hoy</span><h2>${L.length} ${L.length===1?'cosa':'cosas'} para resolver</h2><div class="b3-list">${L.map(x=>`<button class="b3-it" ${at(x.a)}><span class="b3-tags">${x.tags.join('')}</span><span class="b3-t">${esc(x.t)}</span><span class="b3-d">${esc(x.d)}</span></button>`).join('')}</div>`,'Para hacer hoy')};
+A.b3Todo=()=>{const L=b3Items();openSheet(`<span class="eyebrow">Para hacer hoy</span><h2>${L.length} ${L.length===1?'ítem':'ítems'} para resolver</h2><div class="b3-list">${L.map(x=>`<button class="b3-it" ${at(x.a)}><span class="b3-tags">${x.tags.join('')}</span><span class="b3-t">${esc(x.t)}</span><span class="b3-d">${esc(x.d)}</span></button>`).join('')}</div>`,'Para hacer hoy')};
 /* --- tus obras: etapa real y semáforo --- */
 function b3Obras(obras){if(!obras.length)return'';const r=ROLE();
   return `<section class="b3-sec"><h2 class="b3-h">Tus obras</h2>${obras.map(o=>{let ro=0,na=0;
