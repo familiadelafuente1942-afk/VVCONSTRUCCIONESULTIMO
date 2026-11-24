@@ -35,7 +35,10 @@ async function leer(H, clave) {
   const r = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=valor&clave=eq.${clave}`, { headers: H });
   if (!r.ok) throw new Error("db " + r.status);
   const rows = await r.json();
-  return rows[0] ? rows[0].valor : null;
+  const v = rows[0] ? rows[0].valor : null;
+  // en los cumplimientos cada obra numera sus puntos 1, 2, 3… (no sigue la numeración del informe de todas las obras)
+  if (v && /^ctrec_/.test(clave) && Array.isArray(v.items)) v.items.forEach((x) => { if (x && x.aud && x.aud.inf && Array.isArray(x.aud.items)) x.aud.items.forEach((z, k) => { if (z) z.n = k + 1; }); });
+  return v;
 }
 async function escribir(H, clave, valor) {
   const r = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?on_conflict=clave`, {
@@ -839,7 +842,7 @@ export default async function handler(req, res) {
           const a = q.aud || {};
           const EA = ["avanza", "material", "definicion", "otro", "terminado", "parcial", "pendiente"];
           rec.aud = { fecha: str(a.fecha, 10), personal: num(a.personal, 0, 999), ociosos: num(a.ociosos, 0, 999), concl: str(a.concl, 3000),
-            items: (Array.isArray(a.items) ? a.items : []).slice(0, 80).map((x) => ({ n: num(x.n, 0, 999) || undefined, tarea: str(x.tarea, 300), est: EA.includes(x.est) ? x.est : "otro", parcial: x.est === "parcial" ? (num(x.pct || x.parcial, 0, 100) || 50) : undefined, falta: str(x.falta, 300), pedido: str(x.pedido, 10), gente: num(x.gente, 0, 999), fin: str(x.fin, 10), nota: str(x.nota, 600), fotos: fts(x.fotos) })),
+            items: (Array.isArray(a.items) ? a.items : []).slice(0, 80).map((x, k) => ({ n: a.inf ? k + 1 : (num(x.n, 0, 999) || undefined), tarea: str(x.tarea, 300), est: EA.includes(x.est) ? x.est : "otro", parcial: x.est === "parcial" ? (num(x.pct || x.parcial, 0, 100) || 50) : undefined, falta: str(x.falta, 300), pedido: str(x.pedido, 10), gente: num(x.gente, 0, 999), fin: str(x.fin, 10), nota: str(x.nota, 600), fotos: fts(x.fotos) })),
             reclamos: (Array.isArray(a.reclamos) ? a.reclamos : []).slice(0, 40).map((r) => ({ id: idOk(r.id), num: str(r.num, 8), titulo: str(r.titulo, 200), tipo: str(r.tipo, 40), dias: num(r.dias, 0, 9999) })),
             inf: a.inf && typeof a.inf === "object" ? { semana: str(a.inf.semana, 160), resp: str(a.inf.resp, 120), obraTxt: str(a.inf.obraTxt, 120), u: pubOk(a.inf.u) ? a.inf.u : "", n: str(a.inf.n, 120), total: num(a.inf.total, 0, 999) } : undefined,
             fotosP: (Array.isArray(a.fotosP) ? a.fotosP : []).filter((f) => f && pubOk(f.u)).slice(0, 12).map((f) => ({ u: f.u, n: str(f.n, 400) })) };
