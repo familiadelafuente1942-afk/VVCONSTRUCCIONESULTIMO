@@ -165,6 +165,26 @@ export default async function handler(req, res) {
           await escribir(H, "seg_flags", { ...fl, golf293: true });
         }
       } catch (e) { /* si falla, se reintenta en la próxima carga */ }
+      // obras nuevas cargadas en NEXO 2 (ej. Golf 274): se suman solas al Seguimiento, una sola vez cada una (si se borran a mano, no vuelven)
+      try {
+        const fl = (await leer(H, "seg_flags")) || {};
+        const ya = Array.isArray(fl.nexoAdd) ? fl.nexoAdd : [];
+        const c = await leer(H, "cfg");
+        const O = (c && typeof c.v === "string" && JSON.parse(c.v)) || {};
+        const fuera = new Set([...(Array.isArray(O.del) ? O.del : []), ...(Array.isArray(O.delN) ? O.delN : [])]);
+        const nrm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "").replace(/(^|[^0-9])0+(?=[0-9])/g, "$1");
+        let cambio = false; const agregadas = [];
+        for (const nx of Array.isArray(O.nuevas) ? O.nuevas : []) {
+          if (!nx || !ident(nx.id) || fuera.has(nx.id) || ya.includes(nx.id)) continue;
+          const nom = str(nx.nombre, 80); if (!nom) continue;
+          agregadas.push(nx.id);
+          if (obras.some((o) => o.nexo === nx.id || nrm(o.nombre) === nrm(nom))) continue;
+          obras.push({ id: "nx" + nx.id.replace(/[^A-Za-z0-9]/g, "").slice(0, 30), nombre: nom, orden: obras.length, nota: "", etapa: "", nexo: nx.id, capataz: "", por: "NEXO 2", creado: Date.now(), editado: Date.now() });
+          cambio = true;
+        }
+        if (cambio) await escribir(H, "seg_obras", { items: obras });
+        if (agregadas.length) await escribir(H, "seg_flags", { ...fl, nexoAdd: [...ya, ...agregadas].slice(-300) });
+      } catch (e) { /* si falla, se reintenta en la próxima carga */ }
       const [tareas, personal, gastos, sueldos, agenda, hitos, bitOld, adicionales] = await Promise.all(["tareas", "personal", "gastos", "sueldos", "agenda", "hitos", "bitacora", "adicionales"].map((c) => leerCol(H, c)));
       let registros = await leerCol(H, "registros");
       if (bitOld.length) { // la "bitácora" pasó a llamarse Registros: se traen las anotaciones viejas
