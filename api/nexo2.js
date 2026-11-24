@@ -860,6 +860,30 @@ export default async function handler(req, res) {
         await escribir(H, clave, { items: items.slice(-500) });
         res.status(200).json({ ok: true, rec }); return;
       }
+      if (b.op === "ct_aud_editar") {
+        // sumar, corregir o quitar puntos de un cumplimiento ya enviado (se recorre la obra y aparecen cosas nuevas)
+        const id = idOk(b.id);
+        const v = await leer(H, clave);
+        const items = ((v && v.items) || []);
+        const it = items.find((x) => x.id === id);
+        if (!it || !it.aud || !Array.isArray(it.aud.items)) { res.status(404).json({ error: "No existe ese cumplimiento" }); return; }
+        if (quien === "ct" && it.ctId !== ct.id) { res.status(403).json({ error: "No es tu cumplimiento" }); return; }
+        const txt = (x) => String(x == null ? "" : x).replace(/\s+/g, " ").trim().slice(0, 300);
+        const I = it.aud.items, ed = [], qu = [], ad = [];
+        (Array.isArray(b.cambios) ? b.cambios : []).slice(0, 200).forEach((c) => { const x = I[Number(c && c.i)]; const t = txt(c && c.tarea); if (x && t && t !== x.tarea) { ed.push(t); x.tarea = t; } });
+        const Q = new Set((Array.isArray(b.quitar) ? b.quitar : []).map(Number).filter((k) => I[k]));
+        Q.forEach((k) => qu.push((I[k].n ? I[k].n + ". " : "") + (I[k].tarea || "")));
+        it.aud.items = I.filter((x, k) => !Q.has(k));
+        let mx = it.aud.items.reduce((m, x) => Math.max(m, Number(x.n) || 0), 0);
+        (Array.isArray(b.add) ? b.add : []).slice(0, 60).map(txt).filter(Boolean).forEach((t) => { if (it.aud.items.length >= 200) return; mx++; it.aud.items.push({ n: mx, tarea: t, est: "pendiente", obra: it.obra, nuevo: Date.now() }); ad.push(mx + ". " + t); });
+        if (!ed.length && !qu.length && !ad.length) { res.status(400).json({ error: "No cambiaste ningún punto" }); return; }
+        const t = Date.now(), nom = quien === "ct" ? ct.nombre : quien === "dir" ? "Dirección" : "Jefatura de obra";
+        const tx = [ad.length ? "Puntos nuevos: " + ad.join("; ") : "", ed.length ? "Puntos corregidos: " + ed.join("; ") : "", qu.length ? "Puntos quitados: " + qu.join("; ") : ""].filter(Boolean).join(" · ");
+        it.hist = (Array.isArray(it.hist) ? it.hist : []).concat([{ t, por: quien === "ct" ? "ct" : quien, nom, tx }]).slice(-100);
+        it.editado = t;
+        await escribir(H, clave, { items });
+        res.status(200).json({ ok: true, rec: it }); return;
+      }
       if (b.op === "ct_aud_cumplir") {
         // marcar tareas de una auditoría / respuesta al informe como cumplidas (o desmarcarlas)
         const id = idOk(b.id);
