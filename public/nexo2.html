@@ -4968,12 +4968,15 @@ function merge3(base,loc,rem){
 /* la app no se recarga sola mientras se está trabajando: solo si hace rato que no se toca nada y no hay ventanas abiertas */
 window.__nxAct=Date.now();['pointerdown','keydown','wheel','touchstart','input'].forEach(ev=>document.addEventListener(ev,()=>{window.__nxAct=Date.now()},{passive:true,capture:true}));
 window.nxOcupado=()=>{try{return !!(document.querySelector('#layer .sheet,.sheet,input:focus,textarea:focus,select:focus')||(typeof S!=='undefined'&&S&&(S.gfull||S.gdrag))||Date.now()-(window.__nxAct||0)<120000)}catch(e){return true}};
-function recargarCuando(){const ocupado=()=>window.nxOcupado();
-  if(!ocupado()){location.reload();return}
-  /* si hay una ventana abierta, se avisa arriba para que no quede la lista vieja en pantalla */
-  /* sin cartel: arriba ya está el aviso chico de actualización; se recarga sola apenas se deja de tocar */
-  const iv=setInterval(()=>{if(!ocupado()){clearInterval(iv);location.reload()}},2000);
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!ocupado())location.reload()})}
+/* recarga sin molestar: NUNCA con la app en pantalla mientras se trabaja.
+   Se hace cuando la app vuelve después de estar en segundo plano (>20 s), o tras 10 minutos sin tocar nada en la pantalla de inicio.
+   Mientras tanto el aviso chico de arriba dice "Hay cambios nuevos · tocá para verlos". */
+window.__nxRec=window.__nxRec||{pend:0,ver:0,hid:0};
+function nxRecargarYa(){const R=window.__nxRec;try{if(R.ver&&window.__nxVerAct){window.__nxVerAct();return}}catch(e){}location.reload()}
+function recargarCuando(ver){const R=window.__nxRec;R.pend=1;if(ver)R.ver=1;else R.datos=1;try{indSync()}catch(e){}
+  if(R.iv)return;
+  R.iv=setInterval(()=>{try{if(document.visibilityState==='visible'&&!window.nxOcupado()&&Date.now()-(window.__nxAct||0)>600000&&(typeof S==='undefined'||!S||S.tab==='inicio'))nxRecargarYa()}catch(e){}},5000);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){R.hid=Date.now();return}if(R.hid&&Date.now()-R.hid>20000&&!document.querySelector('input:focus,textarea:focus'))nxRecargarYa()})}
 /* el cronograma generado más nuevo gana: un aparato con datos viejos no puede pisarlo */
 const CRONO=['tpl','mod2','ov','baseOv','edits','inicio','m2','plantas','subsuelo','pileta','nivel','resp','cg'];
 function fusion(viejo,nuevo){
@@ -5002,8 +5005,8 @@ function indSync(){try{const S=window.__sync,off=!navigator.onLine||S.est==='err
   if(off){tx=navigator.onLine?'No se pudo guardar en la nube · tocá para reintentar':'Sin conexión · pendiente de sincronizar';c='#e0894f'}else if(pend&&!S.ocupado&&S.est!=='cargando'){tx='Guardando…';c='#c9a24a'}
   else if(S.ocupado>0||S.est==='cargando'){tx='Actualizando…';c='#c9a24a'}
   else{const s=Math.max(0,Math.round((Date.now()-(S.ok||Date.now()))/1000));tx='Actualizado hace '+(s<60?s+' s':Math.floor(s/60)+' min');c='#4fa86f'}
-  if(window.__nxVerNueva&&!off&&!pend){tx='Versión nueva · se actualiza sola';c='#c9a24a'}
-  document.querySelectorAll('.brand .mono').forEach(e=>{let i=e.querySelector('.nxi');if(!i){i=document.createElement('span');i.className='nxi';i.style.cssText='display:block;font-size:11px;font-weight:600;cursor:pointer';i.onclick=ev=>{ev.stopPropagation();if(sucio.size)window.nexoSubirYa&&window.nexoSubirYa();else if(window.__nxVerNueva&&window.__nxVerAct)window.__nxVerAct()};e.appendChild(i)}if(i.textContent!==tx)i.textContent=tx;i.style.color=c})}catch(x){}}
+  if(window.__nxRec&&window.__nxRec.pend&&!off&&!pend){tx=window.__nxRec.ver&&!window.__nxRec.datos?'Versión nueva · tocá para actualizar':'Hay cambios nuevos · tocá para verlos';c='#c9a24a'}
+  document.querySelectorAll('.brand .mono').forEach(e=>{let i=e.querySelector('.nxi');if(!i){i=document.createElement('span');i.className='nxi';i.style.cssText='display:block;font-size:11px;font-weight:600;cursor:pointer';i.onclick=ev=>{ev.stopPropagation();if(sucio.size)window.nexoSubirYa&&window.nexoSubirYa();else if(window.__nxRec&&window.__nxRec.pend)nxRecargarYa()};e.appendChild(i)}if(i.textContent!==tx)i.textContent=tx;i.style.color=c})}catch(x){}}
 setInterval(indSync,1000);window.addEventListener('online',indSync);window.addEventListener('offline',indSync);
 async function subir(k){
   let v=lget(k);if(v==null||v===VACIO)return true;
@@ -5075,14 +5078,14 @@ async function bajar(){
 /* otra pestaña o ventana de este mismo aparato guardó cambios (por ej. Dirección generó el cronograma): este panel se recarga para mostrarlos */
 {let pend=null;const ocupado=()=>window.nxOcupado();
 const puede=()=>{try{const a=JSON.parse(sessionStorage.getItem('nexo2_autorec')||'[]').filter(t=>Date.now()-t<120000);if(a.length>=3)return false;a.push(Date.now());sessionStorage.setItem('nexo2_autorec',JSON.stringify(a))}catch(e){}return true};
-const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearInterval(pend);pend=null;if(puede())location.reload()};
+const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261124-195230';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261124-200614';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
-window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso&&!window.__nxVerIv)window.__nxVerIv=setInterval(()=>{if(!ocupado()){clearInterval(window.__nxVerIv);act()}},3000);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
+window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
 async function ver(){if(document.visibilityState!=='visible')return;try{const r=await fetch('/nexo2-version.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();if(!j||!j.v||j.v===NEXO_BUILD){const b=document.getElementById('nx-ver');if(b)b.remove();return}
   aviso=j.v;let ya='';try{ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}
   if(ya!==j.v&&!ocupado()){act();return}barra()}catch(e){}}
