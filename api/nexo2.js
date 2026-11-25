@@ -211,6 +211,14 @@ async function pushEnviar(H, subs, payload) {
   return vivos;
 }
 
+// certificado de tarea adicional (contratistas): solo datos simples, con tope de tamaño
+function certLimpio(c) {
+  try {
+    const raw = JSON.stringify(c || {}); if (raw.length > 12000) return null;
+    const lim = (v, d) => { if (d > 4) return undefined; if (typeof v === "string") return v.slice(0, 3000); if (typeof v === "number" || typeof v === "boolean") return v; if (Array.isArray(v)) return v.slice(0, 40).map((x) => lim(x, d + 1)); if (v && typeof v === "object") { const o = {}; Object.keys(v).slice(0, 40).forEach((k) => { o[String(k).slice(0, 40)] = lim(v[k], d + 1); }); return o; } return undefined; };
+    return lim(JSON.parse(raw), 0);
+  } catch (e) { return null; }
+}
 export default async function handler(req, res) {
   const sk = process.env.SUPABASE_SERVICE_KEY;
   if (!sk) { res.status(500).json({ error: "Falta SUPABASE_SERVICE_KEY en Vercel." }); return; }
@@ -842,6 +850,7 @@ export default async function handler(req, res) {
           monto: num(q.monto, 0, 1e12), fotos: fts(q.fotos), archivos: arch(q.archivos), doc: esDoc, estado: esDoc ? "recibido" : "abierto", creado: t, editado: t,
           hist: [{ t, por: "ct", nom: ct.nombre, tx: esDoc ? (tipo === "presupuesto" ? "Presupuesto enviado" : tipo === "auditoria" ? "Auditoría de obra enviada" : "Listado de materiales enviado") : "Reclamo cargado" }],
         };
+        if (tipo === "adicional" && q.cert) { const cc = certLimpio(q.cert); if (cc) rec.cert = cc; }
         if (tipo === "auditoria") {
           // auditoría del estado de la obra: qué se puede avanzar y qué no (y por qué), con la gente que hay
           const a = q.aud || {};
@@ -868,6 +877,18 @@ export default async function handler(req, res) {
         items.push(rec);
         await escribir(H, clave, { items: items.slice(-500) });
         res.status(200).json({ ok: true, rec }); return;
+      }
+      if (b.op === "ct_cert_set") {
+        // el contratista completa o corrige el certificado de un adicional ya enviado (cotización, autorización…)
+        const id = idOk(b.id); const cc = certLimpio(b.cert);
+        if (!cc) { res.status(400).json({ error: "Certificado inválido" }); return; }
+        const v = await leer(H, clave); const items = (v && v.items) || []; const it = items.find((x) => x.id === id);
+        if (!it || it.tipo !== "adicional") { res.status(404).json({ error: "No existe ese adicional" }); return; }
+        if (quien === "ct" && it.ctId !== ct.id) { res.status(403).json({ error: "No es tuyo" }); return; }
+        const t = Date.now(); it.cert = cc; const tot = ["materiales", "manoObra", "equipos", "subcontratos", "otros"].reduce((a, k) => { const x = (cc.cot || {})[k] || {}; const n = (z) => Number(String(z == null ? "" : z).replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, "")) || 0; return a + n(x.c) * n(x.p); }, 0);
+        if (tot) it.monto = Math.round(tot);
+        it.hist = (Array.isArray(it.hist) ? it.hist : []).concat([{ t, por: quien === "ct" ? "ct" : quien, nom: quien === "ct" ? ct.nombre : "Dirección", tx: "Certificado del adicional actualizado" + (cc.res ? " · " + cc.res : "") }]).slice(-100); it.editado = t;
+        await escribir(H, clave, { items }); res.status(200).json({ ok: true, rec: it }); return;
       }
       if (b.op === "ct_titulo") {
         // el contratista corrige el título de lo que mandó (ej. "Otro": que diga de qué se trata)
