@@ -222,7 +222,7 @@ async function ctAdicSync(H, rec) {
     if (!rec.cert && rec.monto) cot.otros = { unidad: "gl", cant: "1", punit: String(rec.monto) };
     const fe = new Date(rec.creado || Date.now()); const iso = new Date(fe.getTime() - 3 * 36e5).toISOString().slice(0, 10);
     const r = {
-      id, obra: rec.obra, adicionalNro: nro, ubicacion: String(c.ubic || rec.tarea || ""), fecha: iso, contratista: String(rec.ctNombre || "V+V Construcciones"), comitente: String(c.comit || ""),
+      id, obra: rec.obra, adicionalNro: nro, ubicacion: String(c.ubic || rec.tarea || ""), fecha: iso, contratista: "Belfast Construction Management", comitente: String(c.comit || ""),
       solicitadoPor: String(c.solic || ""), fechaPedido: String(c.fped || ""), medioPedido: String(c.medio || "Verbal"), requerimiento: String(c.req || ""), tipoAdicional: String(c.tipoAd || "Tarea nueva"),
       descripcionTecnica: rec.desc && String(rec.desc).trim().toLowerCase().startsWith(String(rec.titulo || "").trim().toLowerCase()) ? String(rec.desc) : [rec.titulo, rec.desc].filter(Boolean).join("\n"), modificaCert: !!c.modCert, detalleModificacion: String(c.detMod || ""), docsAdjuntos: Array.isArray(c.docs) ? c.docs : [], identificacionPlanos: "",
       cotiz: cot, incidenciaPlazo: c.plazo === "dias" ? "dias" : "sin", diasIncidencia: c.plazo === "dias" ? String(c.dias || "") : "", validezCotizacion: String(c.validez || "15"), requisitos: Array.isArray(c.reqs) ? c.reqs : [],
