@@ -1389,7 +1389,7 @@ const finDe=tasks=>Math.max(...tasks.map(t=>t.end));
 const finObra=o=>finDe(o.tasks);
 const finBase=o=>finDe(o.base);
 const desvioSem=o=>Math.round((finObra(o)-finBase(o))/(7*DAY));
-function avance(o){const tot=o.tasks.reduce((s,t)=>s+t.weeks,0);return Math.round(o.tasks.reduce((s,t)=>s+t.weeks*((t.real?.av)||0)/100,0)/tot*100)}
+function avance(o){const tot=((o&&o.tasks)||[]).reduce((s,t)=>s+(t.weeks||0),0);if(!tot)return 0;return Math.round(o.tasks.reduce((s,t)=>s+t.weeks*((t.real?.av)||0)/100,0)/tot*100)}
 function avancePlanDe(tasks){const tot=tasks.reduce((s,t)=>s+t.weeks,0);let dn=0;tasks.forEach(t=>{if(TODAY>t.end)dn+=t.weeks;else if(TODAY>=t.start)dn+=t.weeks*(TODAY-t.start)/(t.end-t.start+3*DAY)});return Math.round(dn/tot*100)}
 const avancePlan=o=>avancePlanDe(o.base);
 const iniciada=o=>o.tasks.some(t=>t.start<=TODAY);
@@ -4202,7 +4202,7 @@ function carFacts(o){const r=ROLE(),dv=desvioSem(o),ro=o.cards.filter(c=>color(c
   const s=o.sup.find(x=>x.estado==='programada');
   return[['Ahora',esc(actual(o).name)],['Próxima tarea',n?`${esc(n.name)} · ${fmt(n.start)}`:'Entrega'],['Tarjetas',`<span class="${ro?'t-rojo':'t-verde'}">${ro?plural(ro,'vencida','vencidas'):'al día'}</span>${na?` · ${na} por vencer`:''}`],['Próxima supervisión',s?fmt(s.fecha):'—']]}
 /* primera diapositiva: todas las obras juntas, con los totales */
-function carTodas(obras){const n=obras.length,av=Math.round(obras.reduce((a,o)=>a+avance(o),0)/n),ro=obras.reduce((a,o)=>a+o.cards.filter(c=>color(c)==='rojo').length,0),na=obras.reduce((a,o)=>a+o.cards.filter(c=>['naranja','amarillo'].includes(color(c))).length,0);
+function carTodas(obras){const n=obras.length,_cc=obras.filter(o=>(o.tasks||[]).length),av=_cc.length?Math.round(_cc.reduce((a,o)=>a+avance(o),0)/_cc.length):0,ro=obras.reduce((a,o)=>a+o.cards.filter(c=>color(c)==='rojo').length,0),na=obras.reduce((a,o)=>a+o.cards.filter(c=>['naranja','amarillo'].includes(color(c))).length,0);
   let f=[['Obras',String(n)],['Avance promedio',av+'%'],['Tarjetas',`<span class="${ro?'t-rojo':'t-verde'}">${ro?plural(ro,'vencida','vencidas'):'al día'}</span>${na?` · ${na} por vencer`:''}`]];
   if(ROLE()==='direccion'){const E=econ(obras),A=E.reduce((a,x)=>a+x.ahorro,0),P=E.reduce((a,x)=>a+x.perdida,0);f.push(['Ahorro / pérdida',`<span class="t-verde">+${moneyK(A)}</span> <span class="t-rojo">−${moneyK(P)}</span>`])}
   const sh=obras.slice(0,6);
@@ -5105,7 +5105,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261125-230518';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261125-233502';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
