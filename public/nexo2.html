@@ -3164,8 +3164,8 @@ const A={
   leerTodo:()=>{misNotifs().forEach(n=>{n.leido=true;if(n.nube)avVisto(n.id)});draw()},
   matriz:()=>sheetMatriz(),
   modelos:()=>sheetLib(),
-  manualTarjetas:()=>{openSheet(`<span class="eyebrow">Manual</span><h2>Las tarjetas</h2><p class="small soft">Cómo se generan, el semáforo y qué ve cada panel. Deslizá para pasar de hoja.</p>`+[1,2,3,4,5].map(n=>`<img src="/nexo2/manual-t-${n}.jpg?b=1" alt="Manual de las tarjetas, hoja ${n} de 5" loading="lazy" style="width:100%;display:block;margin:12px 0;border-radius:14px;border:1px solid var(--line,rgba(255,255,255,.2))">`).join(''),'Manual: Las tarjetas')},
-  manualRoles:()=>{openSheet(`<span class="eyebrow">Manual</span><h2>Paso a paso por rol</h2><p class="small soft">De la creación de la obra hasta la entrega, y qué hace cada panel. Deslizá para pasar de hoja.</p>`+[1,2,3,4,5,6].map(n=>`<img src="/nexo2/manual-r-${n}.jpg?b=1" alt="Paso a paso por rol, hoja ${n} de 6" loading="lazy" style="width:100%;display:block;margin:12px 0;border-radius:14px;border:1px solid var(--line,rgba(255,255,255,.2))">`).join(''),'Manual: Paso a paso por rol')},
+  manualTarjetas:()=>{openSheet(`<span class="eyebrow">Manual</span><h2>Las tarjetas</h2><p class="small soft">Cómo se generan, el semáforo y qué ve cada panel. Deslizá para pasar de hoja.</p>`+[1,2,3,4,5].map(n=>`<img src="/nexo2/manual-t-${n}.jpg?b=2" alt="Manual de las tarjetas, hoja ${n} de 5" loading="lazy" style="width:100%;display:block;margin:12px 0;border-radius:14px;border:1px solid var(--line,rgba(255,255,255,.2))">`).join(''),'Manual: Las tarjetas')},
+  manualRoles:()=>{openSheet(`<span class="eyebrow">Manual</span><h2>Paso a paso por rol</h2><p class="small soft">De la creación de la obra hasta la entrega, y qué hace cada panel. Deslizá para pasar de hoja.</p>`+[1,2,3,4,5,6].map(n=>`<img src="/nexo2/manual-r-${n}.jpg?b=2" alt="Paso a paso por rol, hoja ${n} de 6" loading="lazy" style="width:100%;display:block;margin:12px 0;border-radius:14px;border:1px solid var(--line,rgba(255,255,255,.2))">`).join(''),'Manual: Paso a paso por rol')},
   nuevaObra:()=>{NO={nombre:'',ubic:'',plantas:2,subsuelo:false,pileta:false,m2:400,nivel:'alto',inicio:new Date(Date.now()-108e5).toISOString().slice(0,10),jefe:'',estudio:'',pasante:'',jornal:75000,dot:6,late:0,margen:15,edits:[]};sheetNuevaObra()},
   iaSug:ds=>iaAsk(ds.q)
 };
@@ -5105,7 +5105,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261125-201959';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261125-202449';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
