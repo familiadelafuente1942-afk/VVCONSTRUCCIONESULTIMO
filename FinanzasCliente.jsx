@@ -1477,7 +1477,7 @@ export default function App() {
             ? <CertTab modo="cliente" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />
             : <CertGeneral obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} modo="cliente" />}
         </div>}
-        {tab === "cobrosgen" && <><SaldosParcialesTab data={data} save={save} obras={obras} /><CobrosGeneralesTab /></>}
+        {tab === "cobrosgen" && <><SaldosParcialesTab data={data} save={save} obras={obras} /></>}
       </div>
       <NavInferior actual={tab} onIr={setTab} items={[["ia", "IA"], ["precios", "Valores"], ["presupuesto", "Presup."], ["cliente", "Certificado"], ["cobrosgen", "Cobros"]]} />
       {verConfig && <ConfigModal data={data} save={save} onClose={() => setVerConfig(false)} />}
