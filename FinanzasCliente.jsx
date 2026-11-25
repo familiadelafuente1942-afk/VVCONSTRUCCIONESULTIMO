@@ -513,6 +513,7 @@ function resumenFinanciero(data) {
   L.push(`\nDETALLE POR OBRA:`);
   Object.values(porO).forEach(p => { const o = p.o, pc = presupCliente(o), pco = presupCosto(o), ult = certsDe(o.id).slice(-1)[0]; const avance = (pc > 0 && ult) ? clienteAcumDe(ult.cantidades, o) / pc * 100 : 0; const anticipo = anticipoDe(o), dispAnt = anticipo - p.amort, res = (p.fact - p.cd) - p.imp - p.impr - p.fijo; L.push(`· ${o.nombre}: presupuesto cliente ${money(pc)}, presupuesto costo ${money(pco)}, avance ${avance.toFixed(0)}%. Facturado ${money(p.fact)}, costo de obra ${money(p.cd)}, utilidad ${money(p.fact - p.cd)}, resultado ${money(res)}. Anticipo ${money(anticipo)} (disponible ${money(dispAnt)}). Certificados emitidos: ${p.nCert}. Plazo ${num(o.plazoMeses) || "?"} meses (${quincenasObra(o)} certificados quincenales previstos).`); });
   if (!obras.length) L.push("(Todavía no hay obras cargadas.)");
+  try { (data.saldosParciales || []).slice(-6).forEach(c => { L.push(`\nSALDO PARCIAL "${c.titulo}" del ${fmtISO(c.fecha)}:`); c.filas.forEach(f => L.push(`- ${f.obra}: saldo ${money(f.saldo)}${f.ajuste ? ", ajustes a la fecha " + money(f.ajuste) : " (ajuste incluido)"}`)); L.push(`  Total ${money(c.filas.reduce((a, f) => a + (f.saldo || 0), 0))}`); }); } catch { }
   return L.join("\n");
 }
 function limpiarTel(t) { return String(t || "").replace(/[^\d]/g, ""); }
@@ -1476,11 +1477,79 @@ export default function App() {
             ? <CertTab modo="cliente" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />
             : <CertGeneral obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} modo="cliente" />}
         </div>}
-        {tab === "cobrosgen" && <CobrosGeneralesTab />}
+        {tab === "cobrosgen" && <><SaldosParcialesTab data={data} save={save} obras={obras} /><CobrosGeneralesTab /></>}
       </div>
       <NavInferior actual={tab} onIr={setTab} items={[["ia", "IA"], ["precios", "Valores"], ["presupuesto", "Presup."], ["cliente", "Certificado"], ["cobrosgen", "Cobros"]]} />
       {verConfig && <ConfigModal data={data} save={save} onClose={() => setVerConfig(false)} />}
     </>}
+  </div>);
+}
+
+
+// ═══════════ SALDOS PARCIALES: cortes de saldo por obra guardados con su fecha (quedan en data.saldosParciales; la IA también los ve)
+function SaldosParcialesTab({ data, save, obras }) {
+  const cortes = [...(data.saldosParciales || [])].sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)) || (b.creado || 0) - (a.creado || 0));
+  const [abierto, setAbierto] = useState(null);
+  const [nuevo, setNuevo] = useState(null);
+  const filaVacia = () => ({ id: uid(), obra: "", saldo: "", ajuste: "", incl: true });
+  const empezar = () => setNuevo({ fecha: hoyISO(), titulo: "Saldos de obra", nota: "", filas: (obras.length ? obras : [{ nombre: "" }]).map(o => ({ ...filaVacia(), obra: o.nombre || "" })) });
+  const setF = (i, k, v) => setNuevo(n => ({ ...n, filas: n.filas.map((f, j) => j === i ? { ...f, [k]: v } : f) }));
+  const tot = (fs, k) => fs.reduce((a, f) => a + numMoney(f[k]), 0);
+  function guardar() {
+    const filas = nuevo.filas.filter(f => f.obra.trim() && numMoney(f.saldo)).map(f => ({ obra: f.obra.trim(), saldo: numMoney(f.saldo), ajuste: f.incl ? 0 : numMoney(f.ajuste), incl: !!f.incl || !numMoney(f.ajuste) }));
+    if (!filas.length) { alert("Cargá al menos una obra con su saldo."); return; }
+    const c = { id: uid(), fecha: nuevo.fecha || hoyISO(), titulo: (nuevo.titulo || "Saldos de obra").trim(), nota: nuevo.nota || "", filas, creado: Date.now() };
+    save({ ...data, saldosParciales: [...(data.saldosParciales || []), c] });
+    setNuevo(null); setAbierto(c.id);
+  }
+  function borrar(c) { if (!confirm(`¿Borrar el saldo parcial del ${fmtISO(c.fecha)}? No se puede deshacer.`)) return; save({ ...data, saldosParciales: (data.saldosParciales || []).filter(x => x.id !== c.id) }); }
+  const th = { textAlign: "left", fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: T.muted, padding: "6px 4px", fontWeight: 700 };
+  const td = { padding: "8px 4px", borderTop: `1px solid ${T.border}`, fontSize: 14, color: T.text };
+  const tdn = { ...td, textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600 };
+  return (<div style={{ background: T.card, borderRadius: 16, padding: 16, margin: "14px 16px 12px", boxShadow: SHDsm, borderTop: `3px solid ${BRASS}` }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+      <div><div style={{ fontSize: 18, fontWeight: 700, color: T.text }}>Saldos parciales</div><div style={{ fontSize: 12.5, color: T.muted, marginTop: 2 }}>Cortes de saldo por obra, guardados con su fecha</div></div>
+      {!nuevo && <button onClick={empezar} className="vv-gema" style={{ border: "none", borderRadius: 999, padding: "9px 14px", fontSize: 13, fontWeight: 700, color: "#2A1C05", cursor: "pointer" }}>+ Nuevo</button>}
+    </div>
+    {nuevo && <div style={{ marginTop: 12, padding: 12, borderRadius: 14, border: `1px solid ${T.border}`, background: T.bg }}>
+      <div style={{ display: "flex", gap: 8 }}>
+        <label style={{ flex: 1, fontSize: 12, color: T.sub }}>Fecha<input type="date" value={nuevo.fecha} onChange={e => setNuevo({ ...nuevo, fecha: e.target.value })} style={inp} /></label>
+        <label style={{ flex: 2, fontSize: 12, color: T.sub }}>Título<input value={nuevo.titulo} onChange={e => setNuevo({ ...nuevo, titulo: e.target.value })} style={inp} /></label>
+      </div>
+      {nuevo.filas.map((f, i) => (<div key={f.id} style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input value={f.obra} placeholder="Obra" onChange={e => setF(i, "obra", e.target.value)} style={{ ...inpSm, flex: 1 }} />
+          <button onClick={() => setNuevo(n => ({ ...n, filas: n.filas.filter((_, j) => j !== i) }))} aria-label="Quitar obra" style={{ border: `1px solid ${T.border}`, background: "transparent", color: T.sub, borderRadius: 10, padding: "8px 11px", cursor: "pointer" }}>✕</button>
+        </div>
+        <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
+          <input inputMode="numeric" value={f.saldo ? "$ " + fmtMiles(f.saldo) : ""} placeholder="Saldo $" onChange={e => setF(i, "saldo", e.target.value)} style={{ ...inpSm, flex: 1 }} />
+          {f.incl ? <span style={{ flex: 1, fontSize: 12.5, color: T.muted }}>Ajuste incluido en el saldo</span> : <input inputMode="numeric" value={f.ajuste ? "$ " + fmtMiles(f.ajuste) : ""} placeholder="Ajustes a la fecha $" onChange={e => setF(i, "ajuste", e.target.value)} style={{ ...inpSm, flex: 1 }} />}
+        </div>
+        <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12.5, color: T.sub, marginTop: 6 }}><input type="checkbox" checked={f.incl} onChange={e => setF(i, "incl", e.target.checked)} /> El ajuste ya está incluido en el saldo</label>
+      </div>))}
+      <button onClick={() => setNuevo(n => ({ ...n, filas: [...n.filas, filaVacia()] }))} style={{ marginTop: 10, border: `1px dashed ${T.border}`, background: "transparent", color: T.sub, borderRadius: 10, padding: "9px", width: "100%", cursor: "pointer" }}>+ Sumar otra obra</button>
+      <label style={{ display: "block", fontSize: 12, color: T.sub, marginTop: 10 }}>Nota (opcional)<input value={nuevo.nota} onChange={e => setNuevo({ ...nuevo, nota: e.target.value })} style={inp} /></label>
+      <div style={{ marginTop: 10, fontSize: 13.5, color: T.text }}>Total saldo: <b>{money(tot(nuevo.filas, "saldo"))}</b> · Ajustes: <b>{money(nuevo.filas.reduce((a, f) => a + (f.incl ? 0 : numMoney(f.ajuste)), 0))}</b></div>
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <button onClick={() => setNuevo(null)} style={{ flex: 1, border: `1px solid ${T.border}`, background: "transparent", color: T.sub, borderRadius: 999, padding: 11, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+        <button onClick={guardar} className="vv-gema" style={{ flex: 2, border: "none", borderRadius: 999, padding: 11, fontWeight: 700, color: "#2A1C05", cursor: "pointer" }}>Guardar saldo parcial</button>
+      </div>
+    </div>}
+    {!cortes.length && !nuevo && <div style={{ marginTop: 10, fontSize: 13, color: T.muted }}>Todavía no hay saldos parciales guardados.</div>}
+    {cortes.map(c => { const ts = c.filas.reduce((a, f) => a + (f.saldo || 0), 0), ta = c.filas.reduce((a, f) => a + (f.ajuste || 0), 0), ab = abierto === c.id; return (
+      <div key={c.id} style={{ marginTop: 10, borderRadius: 14, border: `1px solid ${T.border}`, overflow: "hidden" }}>
+        <button onClick={() => setAbierto(ab ? null : c.id)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "12px 12px", background: "transparent", border: "none", cursor: "pointer", color: T.text, textAlign: "left" }}>
+          <span><b style={{ fontSize: 15 }}>{c.titulo}</b><span style={{ display: "block", fontSize: 12.5, color: T.muted }}>{fmtISO(c.fecha)} · {c.filas.length} obras{ta ? " · ajustes " + money(ta) : ""}</span></span>
+          <span style={{ fontWeight: 700, fontSize: 15.5, color: T.accent, whiteSpace: "nowrap" }}>{money(ts)} {ab ? "▴" : "▾"}</span>
+        </button>
+        {ab && <div style={{ padding: "0 12px 12px" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr><th style={th}>Obra</th><th style={{ ...th, textAlign: "right" }}>Saldo</th><th style={{ ...th, textAlign: "right" }}>Ajustes</th><th style={{ ...th, textAlign: "right" }}>%</th></tr></thead>
+            <tbody>{c.filas.map((f, i) => <tr key={i}><td style={td}>{f.obra}</td><td style={tdn}>{money(f.saldo)}</td><td style={{ ...tdn, fontWeight: f.ajuste ? 600 : 400, color: f.ajuste ? T.text : T.muted, fontSize: f.ajuste ? 14 : 12 }}>{f.ajuste ? money(f.ajuste) : "Incluido"}</td><td style={tdn}>{ts ? Math.round(f.saldo * 100 / ts) : 0}%</td></tr>)}
+              <tr><td style={{ ...td, fontWeight: 700 }}>Total</td><td style={{ ...tdn, fontWeight: 800 }}>{money(ts)}</td><td style={{ ...tdn, fontWeight: 800 }}>{money(ta)}</td><td style={tdn}>100%</td></tr></tbody></table>
+          {c.nota && <div style={{ marginTop: 8, fontSize: 12.5, color: T.sub }}>{c.nota}</div>}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}><button onClick={() => borrar(c)} style={{ border: "none", background: "transparent", color: "#c0392b", fontSize: 12.5, cursor: "pointer" }}>Borrar este saldo parcial</button></div>
+        </div>}
+      </div>); })}
   </div>);
 }
 
@@ -3281,6 +3350,7 @@ function contextoDatos(data) {
   } catch { }
   const obras = ordenarObras(data.obras), gastos = data.gastos || [], movs = data.movimientos || [], propias = ordenarObras(data.propias), soc = data.sociedad || [], edif = data.edificios || [], cont = data.contactos || [], pres = data.presupuestosSoc || [];
   const nomObra = (id) => (obras.find(o => o.id === id) || {}).nombre || "General/sin asignar";
+  try { (data.saldosParciales || []).slice(-6).forEach(c => { L.push(`== SALDO PARCIAL "${c.titulo}" del ${fmtISO(c.fecha)} ==`); c.filas.forEach(f => L.push(`- ${f.obra}: saldo ${money(f.saldo)}${f.ajuste ? ", ajustes a la fecha " + money(f.ajuste) : " (ajuste incluido en el saldo)"}`)); L.push(`  Total saldo ${money(c.filas.reduce((a, f) => a + (f.saldo || 0), 0))}${c.nota ? " · " + c.nota : ""}`); L.push(""); }); } catch { }
   if (obras.length) { L.push("== OBRAS DE CLIENTE =="); obras.forEach(o => L.push(`- ${o.nombre}: ${num(o.m2) || 0} m2, precio cliente ${m(o.precioCliente)}/m2, costo ${m(o.costoM2)}/m2, plazo ${o.plazoMeses || "?"} meses`)); }
   // Avance por rubro: el % ACUMULADO de cada rubro del último certificado de
   // cliente cargado (lo mismo que se ve en la pantalla de "Certificado").
