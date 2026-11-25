@@ -2618,6 +2618,7 @@ function sheetCard(id){
   ${col==='rojo'&&verCostos()?`<div class="costbox"><span class="eyebrow" style="color:var(--rojo)">Costo de la espera</span><b>${money(costoEst(c))}</b><span class="formula">${diasRojo(c)} días hábiles × ${dotacion(o)} personas × ${money(o.jornal)} × ${c.impacto?FACT[c.impacto]*100+'%':'50% (estimado)'}</span>${c.impactoTxt?`<span class="small">"${esc(c.impactoTxt)}"</span>`:''}</div>`:''}
   ${nxc?`<div class="nextbox"><span class="eyebrow">Planificación de la etapa siguiente</span><button class="nx" data-act="card" data-id="${nxc.id}">${cico(nxc.tipo,15)}<span>${CARD[nxc.tipo].n} · ${esc(nx.name)}</span><b>${cProg(nxc).k}/${cProg(nxc).n}</b></button><span class="muted small">No frena esta etapa, pero conviene ir gestionándolo.</span></div>`:''}
   ${own&&(c.tipo==='doc'||c.tipo==='mat')&&pend.length?`<div class="row2"><a class="btn wa" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${c.tipo==='doc'?'Reclamar por WhatsApp':'Pedir al corralón por WhatsApp'}</a></div>`:''}
+  ${typeof window.escBox==='function'?window.escBox(c):''}
   ${own?`<button class="btn ghost red-t" data-act="delCard" data-c="${c.id}">Eliminar tarjeta</button>`:''}
   ${esDir()?cardEdForm(c):''}
   ${r==='direccion'?'<p class="muted small">Vista de control: la Dirección ve el estado y el costo; la jefatura completa las tarjetas.</p>':''}`,c.task.name+" · "+CARD[c.tipo].n.split(" ")[0]);
@@ -3783,7 +3784,7 @@ function ovMapa(o){const m={r:{},c:{},p:{},dc:{},t:{},k:{}};(o.tasks||[]).forEac
   o.tasks.forEach(t=>{const k=tkey(o,t),der=t.real&&t.real.src==='inf';if(t.real&&!der)m.r[k]=JSON.stringify(t.real);const b=o.base.find(x=>x.id===t.id);if(!der&&b&&(b.start!==t.start||b.end!==t.end))m.t[k]=JSON.stringify([t.start,t.end,t.weeks])});
   const _tr=o.pTrash||[],_cs=[...o.cards];_tr.forEach(t=>t.its.forEach(r=>{if(!_cs.includes(r.c))_cs.push(r.c)}));
   _cs.forEach(cd=>{const its={};[...cd.items,..._tr.flatMap(t=>t.its.filter(r=>r.c===cd&&!cd.items.includes(r.i)).map(r=>r.i))].forEach(i=>{its[ikey(i)]=[i.estado,i.fecha||0,i.obs||'',i.resp,i.respuesta?[i.respuesta.txt||'',i.respuesta.fecha||0,i.respuesta.por||'',i.respuesta.nuevo?1:0,(()=>{const dd=i.respuesta.doc&&DOCS.find(z=>z.id===i.respuesta.doc);return dd?dkey(o,dd):''})()]:0,i.txt,i.tipo,i.g||'',i.origen||'',i.x||0]});
-    m.c[ckey(o,cd)]=JSON.stringify({e:cd.enviada||0,im:cd.impacto||'',it:cd.impactoTxt||'',tp:cd.tipo,d:cd.rdesc||'',a:cd.apert==null?null:cd.apert,p:cd.plazo==null?null:cd.plazo,rt:cd.rtipo||'',cu:cd.custom?1:0,ky:cd.ckey||'',tk:tkey(o,cd.task),i:its})});
+    m.c[ckey(o,cd)]=JSON.stringify({e:cd.enviada||0,im:cd.impacto||'',it:cd.impactoTxt||'',tp:cd.tipo,d:cd.rdesc||'',a:cd.apert==null?null:cd.apert,p:cd.plazo==null?null:cd.plazo,rt:cd.rtipo||'',cu:cd.custom?1:0,ky:cd.ckey||'',tk:tkey(o,cd.task),i:its,...(cd.esc?{es:cd.esc}:{})})});
   [...(o.planos||[]),..._tr.map(t=>t.s)].forEach(s=>{m.p[skey(s)]=JSON.stringify(s.reclamos?{r:s.rubro,f:s.folder,n:s.nombre,m:s.manual?1:0,rc:s.reclamos,ur:s.ultReclamo||0}:{r:s.rubro,f:s.folder,n:s.nombre,m:s.manual?1:0})});
   [...DOCS.filter(x=>x.obra===o),..._tr.flatMap(t=>t.docs)].forEach(x=>{const s=x.slot?[...(o.planos||[]),..._tr.map(t=>t.s)].find(p=>p.id===x.slot):null;m.dc[dkey(o,x)]=JSON.stringify({sk:s?skey(s):'',cat:x.cat,n:x.nombre,v:x.ver,e:x.estado,p:x.por,f:x.fecha,o:x.obs||'',nw:x.nuevo?1:0,u:x.u||''})});
   return m}
@@ -3799,7 +3800,7 @@ function ovAplicar(o,ov){if(!ov)return;try{
   Object.entries(ov.c||{}).forEach(([k,v])=>{let c=o.cards.find(x=>ckey(o,x)===k)||o.cards.find(x=>x.alias&&x.alias.includes(k));const viaAlias=!!(c&&ckey(o,c)!==k);
     if(!c){const tk=o.tasks.find(t=>tkey(o,t)===v.tk);if(!tk||!LIB[tk.rubro])return;c=addCard(o,tk,v.tp,[],{custom:!!v.cu,ckey:v.ky||undefined,origen:'manual',created:v.e||TODAY})}
     if(v.cu){c.custom=true;c.ckey=v.ky}
-    if(!viaAlias||!c.enviada)c.enviada=v.e||c.enviada||null;if(!viaAlias){c.impacto=v.im||null;c.impactoTxt=v.it||'';if(v.d)c.rdesc=v.d;if(v.a!=null)c.apert=v.a;if(v.p!=null)c.plazo=v.p;if(v.rt)c.rtipo=v.rt;if(v.tp&&c.tipo!==v.tp)c.tipo=v.tp;}
+    if(!viaAlias||!c.enviada)c.enviada=v.e||c.enviada||null;if(!viaAlias){c.esc=v.es||null;c.impacto=v.im||null;c.impactoTxt=v.it||'';if(v.d)c.rdesc=v.d;if(v.a!=null)c.apert=v.a;if(v.p!=null)c.plazo=v.p;if(v.rt)c.rtipo=v.rt;if(v.tp&&c.tipo!==v.tp)c.tipo=v.tp;}
     const keep=new Set();Object.entries(v.i||{}).forEach(([ik,a])=>{let it=c.items.find(x=>ikey(x)===ik);if(!it){it=addItem(c,{txt:a[5],tipo:a[6],g:a[7],resp:a[3],origen:a[8]||'manual'});it.k=ik;if(viaAlias)it._ck=k}
       it.estado=a[0];it.fecha=a[1]||null;it.obs=a[2];it.resp=a[3];it.txt=a[5]||it.txt;it.tipo=a[6]||it.tipo;it.g=a[7]||'';it.respuesta=a[4]?{txt:a[4][0],fecha:a[4][1],file:null,nuevo:!!a[4][3],por:a[4][2]}:null;it._rdk=a[4]&&a[4][4]||'';it.x=a[9]||null;keep.add(ik)});
     const mia=x=>(x._ck||ckey(o,c))===k;c.items=c.items.filter(x=>!mia(x)||keep.has(ikey(x)))});
@@ -5104,7 +5105,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261125-215638';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261125-223636';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -5836,6 +5837,7 @@ function sheetTarjeta(oid,tid,foco){const o=findO(oid);if(!o)return;const t=o.ta
       <div class="cfotos">${(c.f||[]).map(u=>`<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="Foto del control"></a>`).join('')}${own?`<label class="btn sm ${e.foto?'ghost':'gold'}" style="cursor:pointer">${e.foto?'+ Otra foto':'📷 Subir foto (obligatoria)'}<input type="file" accept="image/*" capture="environment" hidden data-chg="ctlFoto" data-o="${o.id}" data-t="${t.id}" data-k="${g.k}"></label>`:''}${!e.foto?'<span class="small t-rojo">Falta la foto</span>':''}</div>${c.por?`<span class="muted small">${esc(c.por)} · ${fmt(c.t)}</span>`:''}</div>`}).join('')}</div>`:'';
   openSheet(`${prep?`<span class="tag t-${tagCol}">${NOMBRE[peor]||''}</span>`:''}<h2>${esc(t.name)}</h2><p class="muted small">${esc(o.nombre)} · arranca ${fmt(t.start)} · fecha límite ${fmt(lim)}${peor==='rojo'?' · '+diasH(Math.max(...cs.map(diasRojo)))+' en rojo':''}</p>
    ${prep?`<div class="avc"><span><b>Listo para arrancar: ${listos} de ${prep}</b></span></div><div class="bar"><i class="c-${listos===prep?'verde':tagCol}" style="width:${Math.round(listos/prep*100)}%"></i></div>`:''}
+   ${typeof window.escBox==='function'&&!est&&!cli?window.escBox(cs.find(c=>c.esc&&!c.esc.ok&&!cDone(c))||cs.find(c=>!cDone(c))):''}
    <span class="eyebrow" style="margin-top:10px">Antes de empezar</span>${SECC.map(sec).join('')}
    ${ctrlH?`<span class="eyebrow" style="margin-top:14px">Al terminar</span>${ctrlH}`:''}
    ${r==='direccion'?'<p class="muted small">Vista de control: la Dirección ve el estado; la jefatura completa la tarjeta.</p>':''}`,t.name);
@@ -6418,6 +6420,49 @@ const _vC=vCliente;window.vCliente=vCliente=function(){const h=_vC();try{const o
 /* los avisos para otro rol viajan por la nube (así la jefatura ve "El Estudio respondió…" en su aparato) */
 const _ntf=notify;window.notify=notify=function(to,o,txt,act,extra){if(SISTEMA.test(txt||''))return;try{if(to!==ROLE()&&!(extra&&extra.reclamo)){const a=avisoNube(to,o,txt);if(act){a.act=act;const n=NOTIF.find(z=>z.id===a.id);if(n)n.act=act}try{cfgGuardar()}catch(e){}return}}catch(e){}return _ntf(to,o,txt,act,extra||{})};
 /* elegí tu panel (maqueta 01): 4 tarjetas iguales con foto de 120 px */
+/* ===== Dirección: "Para hacer hoy" en 3 paneles — Adicionales · Reclamos de contratistas · Reclamos de la jefatura ===== */
+const ESC_MOT=[['doc','Falta documentación / planos del estudio'],['def','Falta una definición del estudio'],['mat','Falta material'],['otro','Otro motivo']];
+const escAbierto=c=>!!(c&&c.esc&&!c.esc.ok&&!cDone(c));
+const jefeDe=o=>(o&&o.jefe)||'la jefatura';
+function dirItems(){const obras=misObras(),A1=[],A2=[],A3=[];
+  /* 1 · adicionales para aprobar (los que manda el contratista y los que carga la jefatura) */
+  try{adicPend().forEach(a=>{const rs=(a.cert&&a.cert.resolucion)||'';if(/Rechaz/i.test(rs))return;const ct=!!(a.cert&&a.cert.ctRec);
+    A1.push({u:/^APROBADO|^Aprobado/.test(rs)?3:1,f:TODAY,tags:[tag(/^APROBADO|^Aprobado/.test(rs)?'APROBADO · FALTAN REQUISITOS':'PARA APROBAR','tg-pide'),...(ct?[tag('DEL CONTRATISTA','tg-ct')]:[])],t:`Adicional N° ${a.n}: ${String(a.txt||'').split('\n')[0].slice(0,80)}`,d:`${a.obra.nombre} · ${a.total?money(a.total):'sin cotizar'} · ${adicEstado(a)[0]}`,a:{act:'adic',id:a.id}})})}catch(e){}
+  /* 2 · reclamos de los contratistas a la jefatura: cómo los está atendiendo */
+  try{if(!CTALL.t||Date.now()-CTALL.t>15000)ctLoadAll();
+    OBRAS.forEach(o=>((CTR[o.id]||{}).items||[]).filter(x=>ctAbierto(x)&&!x.enAud&&x.tipo!=='adicional').forEach(x=>{const sr=!x.primeraResp,h=Date.now()-(x.creado||Date.now());
+      A2.push({u:sr?(h>48*36e5?0:1):2,f:x.creado||TODAY,tags:[sr?tag('SIN RESPUESTA · HACE '+ctDur(h).toUpperCase(),h>48*36e5?'tg-venc':'tg-vence'):tag('EN GESTIÓN','tg-mat'),tag(String(CT_TIPO[x.tipo]||'Aviso').toUpperCase(),'tg-ct')],t:`${x.ctNombre||'Contratista'}: ${x.titulo||'aviso'}`,d:`${o.nombre}${x.num?' · N° '+x.num:''} · ${sr?'la jefatura ('+jefeDe(o)+') todavía no contestó':'contestó la jefatura'}`,a:{act:'ctVer',o:o.id,id:x.id}})}))}catch(e){}
+  /* 3 · jefatura: pedidos para destrabar (el estudio no entrega) y tarjetas vencidas sin aviso */
+  try{const vistas=new Set();cardsDe(obras).filter(c=>!cDone(c)).forEach(c=>{const o=c.obra,ven=color(c)==='rojo',k=timing(c);
+    if(escAbierto(c)){vistas.add(c.obra.id+'|'+c.task.id);const m=(ESC_MOT.find(z=>z[0]===c.esc.m)||ESC_MOT[3])[1];
+      A3.push({u:0,f:c.esc.t||TODAY,tags:[tag('PIDE DESTRABAR','tg-venc'),...(ven?[tag('VENCIDA','tg-venc')]:[])],t:`${c.task.name}: ${m}`,d:`${o.nombre} · ${c.esc.por||jefeDe(o)} avisó el ${dm(c.esc.t)}${c.esc.txt?' · '+String(c.esc.txt).slice(0,90):''}`,a:{act:'card',id:c.id}})}});
+    cardsDe(obras).filter(c=>!cDone(c)&&color(c)==='rojo').forEach(c=>{const kk=c.obra.id+'|'+c.task.id;if(vistas.has(kk))return;vistas.add(kk);const o=c.obra,k=timing(c);
+      const tp=[...new Set(cardsDe([o]).filter(z=>z.task===c.task&&!cDone(z)&&color(z)==='rojo').map(z=>CARD[z.tipo].n.toLowerCase()))].join(', ');
+      A3.push({u:1,f:k.limit,tags:[tag('VENCIDA · SIN AVISO','tg-venc')],t:`${c.task.name} (${tp})`,d:`${o.nombre} · ${jefeDe(o)} tiene la tarjeta vencida y no pidió ayuda · arranca ${dm(c.task.start)}`,a:{act:'card',id:c.id}})})}catch(e){}
+  const so=(a,b)=>a.u-b.u||a.f-b.f||String(a.d||'').localeCompare(String(b.d||''),'es')||String(a.t||'').localeCompare(String(b.t||''),'es');
+  return [A1.sort(so),A2.sort(so),A3.sort(so)]}
+window.dirItems=dirItems;
+const DIRP=[['ADICIONALES','para aprobar','adicional','adicionales','No hay adicionales esperando aprobación.'],['RECLAMOS DE CONTRATISTAS','a la jefatura de obra','reclamo abierto','reclamos abiertos','Los contratistas no tienen reclamos abiertos.'],['RECLAMOS DE LA JEFATURA','para destrabar con el estudio','ítem','ítems','La jefatura no pidió ayuda y no hay tarjetas vencidas.']];
+function dirPanel(k,L){const[ti,sub,s1,s2,vac]=DIRP[k],n=L.length,ver=L.slice(0,3),sr=k===1?L.filter(x=>x.u<=1).length:k===2?L.filter(x=>x.u===0).length:0;
+  const cuenta=n?`${n} ${n===1?s1:s2}${k===1&&sr?' · '+sr+' sin respuesta':''}${k===2&&sr?' · '+sr+' '+(sr===1?'pedido':'pedidos')+' de la jefatura':''}`:'Nada pendiente';
+  return `<section class="b3-bar" aria-label="${ti}"><div class="b3-bh"><div class="b3-ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${B3SVG.bell}</svg>${L.some(x=>x.u<=1)?'<span class="b3-dot" aria-hidden="true"></span>':''}</div><div class="b3-bt"><span class="r">${ti} · ${sub.toUpperCase()}</span><span class="h">${cuenta}</span></div></div>
+  <div class="b3-list">${n?ver.map(x=>`<button class="b3-it ${x.cls||''}" ${at(x.a)}>${b3ObH(x)}<span class="b3-tags">${x.tags.join('')}</span><span class="b3-t">${esc(x.t)}</span>${b3DH(x)?`<span class="b3-d">${esc(b3DH(x))}</span>`:''}</button>`).join(''):`<p class="muted small" style="margin:0">${vac}</p>`}${n>ver.length?`<button class="b3-mas" data-act="dirTodo" data-k="${k}">Ver los ${n}</button>`:''}</div></section>`}
+A.dirTodo=ds=>{const k=+ds.k,L=dirItems()[k],[ti,sub]=DIRP[k];openSheet(`<span class="eyebrow">${ti.charAt(0)+ti.slice(1).toLowerCase()} · ${sub}</span><h2>${L.length} ${L.length===1?DIRP[k][2]:DIRP[k][3]}</h2><div class="b3-list">${L.map(x=>`<button class="b3-it ${x.cls||''}" ${at(x.a)}>${b3ObH(x)}<span class="b3-tags">${x.tags.join('')}</span><span class="b3-t">${esc(x.t)}</span>${b3DH(x)?`<span class="b3-d">${esc(b3DH(x))}</span>`:''}</button>`).join('')}</div>`,ti)};
+const _viDir=vInicio;window.vInicio=vInicio=function(){if(ROLE()!=='direccion')return _viDir();const obras=misObras(),P=dirItems();let extra='';try{extra=econPanel(obras)}catch(e){}
+  return `${carrusel(obras)}${P.map((L,k)=>dirPanel(k,L)).join('')}${extra}`};
+/* la jefatura avisa a la Dirección que el estudio no entrega (o falta material) para que lo destrabe */
+window.escBox=function(c){if(!c)return'';const o=c.obra,own=puedePedir(o),dir=ROLE()==='direccion';
+  if(escAbierto(c)){const m=(ESC_MOT.find(z=>z[0]===c.esc.m)||ESC_MOT[3])[1];return `<div class="infobox alert" style="display:flex;flex-direction:column;gap:6px"><b>🚨 Pedido a la Dirección para destrabar</b><span class="small">${esc(m)} · avisó ${esc(c.esc.por||jefeDe(o))} el ${fmt(c.esc.t)}${c.esc.txt?'<br>'+esc(c.esc.txt):''}</span>${dir||own?`<button class="btn sm" data-act="escCerrar" data-c="${c.id}" style="align-self:flex-start">${dir?'Marcar destrabado':'Ya se destrabó · quitar pedido'}</button>`:''}</div>`}
+  if(own&&!cDone(c))return `<button class="btn ghost full" data-act="escPedir" data-c="${c.id}">🚨 Pedir a la Dirección que lo destrabe</button><p class="muted small" style="margin-top:-4px">Usalo si el estudio no te entrega la documentación o falta algo que vos no podés resolver. Si la tarjeta se vence sin este aviso, la Dirección la ve como vencida sin aviso.</p>`;
+  return ''};
+A.escPedir=ds=>{const c=findC(ds.c);if(!c)return;openSheet(`<span class="eyebrow">${esc(c.obra.nombre)} · ${esc(c.task.name)}</span><h2>Pedir a la Dirección que lo destrabe</h2><form class="sec" data-submit="escPedir" data-c="${c.id}"><label class="f">¿Qué pasa?<select id="esc-m">${ESC_MOT.map(([v,l])=>`<option value="${v}">${esc(l)}</option>`).join('')}</select></label><label class="f">Detalle para la Dirección<textarea id="esc-t" rows="3" placeholder="Ej: pedí el plano de encofrado hace 10 días y no llegó"></textarea></label><button class="btn gold" type="submit">Enviar a la Dirección</button></form>`,'Pedir ayuda')};
+SUBMIT.escPedir=f=>{const c=findC(f.dataset.c);if(!c)return;const m=($('#esc-m')||{}).value||'otro',t=val('esc-t');c.esc={t:Date.now(),m,txt:t,por:(S.u&&S.u.name)||jefeDe(c.obra)};
+  try{notify('direccion',c.obra,`${c.obra.nombre}: la jefatura pide destrabar ${c.task.name} — ${(ESC_MOT.find(z=>z[0]===m)||ESC_MOT[3])[1]}`,{t:'card',id:c.id})}catch(e){}
+  try{ovFlush()}catch(e){}toast('Aviso enviado a la Dirección');draw();sheetCard(c.id)};
+A.escCerrar=ds=>{const c=findC(ds.c);if(!c)return;c.esc=null;try{ovFlush()}catch(e){}toast('Pedido cerrado');draw();sheetCard(c.id)};
+/* la IA de NEXO también ve los pedidos para destrabar */
+try{const _iaD=iaDatosObra;window.iaDatosObra=iaDatosObra=function(o){const d=_iaD(o);try{d.pedidos_de_la_jefatura_para_destrabar=(o.cards||[]).filter(escAbierto).map(c=>({tarea:c.task.name,motivo:(ESC_MOT.find(z=>z[0]===c.esc.m)||ESC_MOT[3])[1],detalle:c.esc.txt||'',fecha:iso(c.esc.t),por:c.esc.por||''}));d.tarjetas_vencidas_sin_aviso=(o.cards||[]).filter(c=>!cDone(c)&&color(c)==='rojo'&&!escAbierto(c)).map(c=>c.task.name+' · '+CARD[c.tipo].n)}catch(e){}return d}}catch(e){}
+
 try{draw()}catch(e){}
 })();
 </script>
