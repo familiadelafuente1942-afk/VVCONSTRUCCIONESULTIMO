@@ -5105,7 +5105,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261125-223802';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261125-224957';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -6398,7 +6398,7 @@ function b3Novs(){const r=ROLE(),obras=misObras(),N=[],ya=new Set(),hace=TODAY-1
   if(r!=='estudio')obras.forEach(o=>{try{const dv=desvioSem(o);if(dv>0)add('dv'+o.id,TODAY,`La obra viene ${plural(dv,'semana','semanas')} atrasada respecto del plan`,o,{act:'obra',id:o.id})}catch(e){}});
   misNotifs().filter(n=>!SISTEMA.test(n.txt||'')).forEach(n=>add('n'+(n.obra?n.obra.id:'')+n.txt,n.fecha||TODAY,n.txt,n.obra,{act:'abrirNotif',id:n.id}));
   return N.sort((a,b)=>b.t-a.t).slice(0,6)}
-function b3NovHTML(){const N=b3Novs();if(!N.length)return'';
+function b3NovHTML(){/* jefatura y Dirección: las novedades son adicionales, tarjetas vencidas y reclamos (ya están en sus paneles) */if(ROLE()==='jefe'||ROLE()==='direccion')return'';const N=b3Novs();if(!N.length)return'';
   return `<section class="sec novs"><div class="sec-head"><h2>Novedades</h2></div><div class="list">${N.map(n=>`<button class="nov" ${at(n.a)}><span class="ndot"></span><span><b>${esc(n.txt)}</b><span class="muted small">${n.o?esc(n.o.nombre)+' · ':''}${n.t>=TODAY?'hoy':fmt(n.t)}</span></span><span class="go">›</span></button>`).join('')}</div></section>`}
 function b3Head(){const r=ROLE(),org=(()=>{try{return r==='estudio'?CONSTRUCTORAS.find(c=>c.id===S.cons).n:ORG}catch(e){return ORG}})();
   return `<div class="b3-head"><div style="display:flex;flex-direction:column;gap:2px"><span class="b3-rot">${esc(String(org).toUpperCase())} · ${esc((ROT[r]||'').toUpperCase())}</span><span class="b3-hola">Hola, ${esc(pnom(S.u&&S.u.name))}</span><span class="b3-fecha">${fechaHoy()}</span></div>${(typeof LOCK!=='undefined'&&LOCK)?'':'<button class="b3-cp" data-act="salir">Cambiar panel</button>'}</div>`}
