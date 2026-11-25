@@ -849,6 +849,7 @@ export default async function handler(req, res) {
           rec.aud = { fecha: str(a.fecha, 10), personal: num(a.personal, 0, 999), ociosos: num(a.ociosos, 0, 999), concl: str(a.concl, 3000),
             items: (Array.isArray(a.items) ? a.items : []).slice(0, 80).map((x, k) => ({ n: a.inf ? k + 1 : (num(x.n, 0, 999) || undefined), tarea: str(x.tarea, 300), est: EA.includes(x.est) ? x.est : "otro", parcial: x.est === "parcial" ? (num(x.pct || x.parcial, 0, 100) || 50) : undefined, falta: str(x.falta, 300), pedido: str(x.pedido, 10), gente: num(x.gente, 0, 999), fin: str(x.fin, 10), nota: str(x.nota, 600), fotos: fts(x.fotos) })),
             reclamos: (Array.isArray(a.reclamos) ? a.reclamos : []).slice(0, 40).map((r) => ({ id: idOk(r.id), num: str(r.num, 8), titulo: str(r.titulo, 200), tipo: str(r.tipo, 40), dias: num(r.dias, 0, 9999) })),
+            clase: a.clase === "def" ? "def" : undefined,
             inf: a.inf && typeof a.inf === "object" ? { semana: str(a.inf.semana, 160), resp: str(a.inf.resp, 120), obraTxt: str(a.inf.obraTxt, 120), u: pubOk(a.inf.u) ? a.inf.u : "", n: str(a.inf.n, 120), total: num(a.inf.total, 0, 999) } : undefined,
             fotosP: (Array.isArray(a.fotosP) ? a.fotosP : []).filter((f) => f && pubOk(f.u)).slice(0, 12).map((f) => ({ u: f.u, n: str(f.n, 400) })) };
         }
@@ -884,9 +885,11 @@ export default async function handler(req, res) {
         it.aud.items = I.filter((x, k) => !Q.has(k));
         let mx = it.aud.items.reduce((m, x) => Math.max(m, Number(x.n) || 0), 0);
         (Array.isArray(b.add) ? b.add : []).slice(0, 60).map(txt).filter(Boolean).forEach((t) => { if (it.aud.items.length >= 200) return; mx++; it.aud.items.push({ n: mx, tarea: t, est: "pendiente", obra: it.obra, nuevo: Date.now() }); ad.push(mx + ". " + t); });
-        if (!ed.length && !qu.length && !ad.length) { res.status(400).json({ error: "No cambiaste ningún punto" }); return; }
+        let cl = "";
+        if (b.clase === "def" || b.clase === "cump") { const ya = it.aud.clase === "def" ? "def" : "cump"; if (b.clase !== ya) { if (b.clase === "def") it.aud.clase = "def"; else delete it.aud.clase; cl = b.clase === "def" ? "Pasado a Pedido de definiciones" : "Pasado a Cumplimiento semanal"; if (typeof it.titulo === "string") it.titulo = b.clase === "def" ? it.titulo.replace(/^(Cumplimiento semanal|Respuesta al informe)/, "Pedido de definiciones") : it.titulo.replace(/^Pedido de definiciones/, "Cumplimiento semanal"); } }
+        if (!ed.length && !qu.length && !ad.length && !cl) { res.status(400).json({ error: "No cambiaste ningún punto" }); return; }
         const t = Date.now(), nom = quien === "ct" ? ct.nombre : quien === "dir" ? "Dirección" : "Jefatura de obra";
-        const tx = [ad.length ? "Puntos nuevos: " + ad.join("; ") : "", ed.length ? "Puntos corregidos: " + ed.join("; ") : "", qu.length ? "Puntos quitados: " + qu.join("; ") : ""].filter(Boolean).join(" · ");
+        const tx = [cl, ad.length ? "Puntos nuevos: " + ad.join("; ") : "", ed.length ? "Puntos corregidos: " + ed.join("; ") : "", qu.length ? "Puntos quitados: " + qu.join("; ") : ""].filter(Boolean).join(" · ");
         it.hist = (Array.isArray(it.hist) ? it.hist : []).concat([{ t, por: quien === "ct" ? "ct" : quien, nom, tx }]).slice(-100);
         it.editado = t;
         await escribir(H, clave, { items });
