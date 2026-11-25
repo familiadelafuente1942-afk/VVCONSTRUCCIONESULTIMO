@@ -1710,10 +1710,7 @@ OBRAS.forEach(o=>o.planos.forEach(s=>{if(slotDocs(s).length)return;const its=slo
   its.filter(i=>!iDone(i)&&i.card.enviada).forEach(i=>{i.estado='ok';i.fecha=Math.max(f,i.card.enviada)})}));
 
 /* adicionales */
-[{obra:'o1',n:'003',sector:'Estar · parrilla · baño',txt:'El propietario pidió modificar muros de mampostería ya ejecutados en PB: demolición parcial en parrilla y baño y apertura de 1 m de piso a techo.',origen:'Estudio · verbal',escrito:false,plano:true,total:0,autorizo:null,plazo:null},
- {obra:'o1',n:'002',sector:'Living',txt:'Se modificaron las vigas V110 y V120 con 10 cm más de altura en el sector living.',origen:'Estudio · por mail',escrito:true,plano:true,total:0,autorizo:null,plazo:2},
- {obra:'o1',n:'001',sector:'Pileta',txt:'Marcado de la pileta pedido en obra el 12 de febrero, fuera del alcance original.',origen:'Dirección de obra · por escrito',escrito:true,plano:true,total:5000000,autorizo:null,plazo:0},
- {obra:'o2',n:'001',sector:'Planta alta',txt:'Cambio de tabique de baño principal para ampliar vestidor.',origen:'Propietario · por WhatsApp',escrito:true,plano:false,total:1850000,autorizo:null,plazo:1}
+[{obra:'o2',n:'001',sector:'Planta alta',txt:'Cambio de tabique de baño principal para ampliar vestidor.',origen:'Propietario · por WhatsApp',escrito:true,plano:false,total:1850000,autorizo:null,plazo:1}
 ].filter(a=>!(OBRAS.find(o=>o.id===a.obra)||{}).cero).forEach(a=>ADIC.push({id:'a'+(++uid),...a,obra:OBRAS.find(o=>o.id===a.obra)}));
 function reqs(a){return[['Pedido por escrito',a.escrito],['Plano de definición o modificación adjunto',a.plano],['Cotización mayor a $0',a.total>0],['Incidencia en plazo acordada',a.plazo!==null],['Autorización con nombre y fecha',!!a.autorizo]]}
 function adicEstado(a){const f=reqs(a).filter(r=>!r[1]).length;if(!f)return['Autorizado','t-verde'];if(f===1&&!a.autorizo)return['Espera autorización','t-amarillo'];return['Bloqueado · faltan '+f,'t-rojo']}
@@ -2215,7 +2212,9 @@ function tabInformes(o){
   <div class="list">${o.informes.slice().reverse().map(i=>`<div class="entry row"><span><b>Informe N° ${i.n} · semana del ${fmt(i.desde)}</b><span class="muted small">Avance ${i.av}% · ${i.trab} días trabajados · ${i.lluvia} de lluvia · ${plural(i.fotos.length,'foto','fotos')}</span></span><span class="fbtns"><button class="btn sm" data-act="verInforme" data-id="${i.id}">Ver</button><button class="btn sm ghost" data-act="pdfInforme" data-id="${i.id}">PDF</button>${own?`<button class="btn sm ghost" data-act="infEditar" data-id="${i.id}" data-d="${i.desde}">Editar</button>`:''}${own&&i.nube?`<button class="btn sm ghost" data-act="infBorrar" data-id="${i.id}">Borrar</button>`:''}</span></div>`).join('')||'<p class="muted">Todavía no hay informes guardados.</p>'}</div>`;
 }
 function adicCard(x){const[e,c]=adicEstado(x);return `<button class="card" data-act="adic" data-id="${x.id}"><span class="top"><b>${esc(x.obra.nombre)} · Adicional N° ${x.n}</b><span class="status ${c}">${e}</span></span><span class="muted small">${esc(x.sector)} · ${esc(x.txt)}</span>${verCostos()||ROLE()==='estudio'?`<span class="mono">${x.total?money(x.total):'Sin cotizar'}</span>`:''}</button>`}
-function tabAdic(o){const ad=ADIC.filter(x=>x.obra===o);return `${acEdita(o)?`<button class="btn gold full" data-act="adicCertNuevo" data-o="${o.id}">+ Nuevo certificado de tarea adicional</button>`:''}<div class="list">${ad.map(adicCard).join('')||'<p class="muted">Sin adicionales.</p>'}</div><p class="note">Los requisitos los verifica la app. Mientras falte uno, el adicional queda bloqueado. ${puedePedir(o)?'Se inicia desde un hecho tipo "Cambio" del Registro.':''}</p>`}
+/* adicionales siempre en orden: por obra y del N° 001 en adelante */
+function adicSort(){try{const oi=o=>{const i=OBRAS.indexOf(o);return i<0?999:i};ADIC.sort((a,b)=>(oi(a.obra)-oi(b.obra))||((parseInt(a.n,10)||9999)-(parseInt(b.n,10)||9999))||String(a.id).localeCompare(String(b.id)))}catch(e){}}
+function tabAdic(o){adicSort();const ad=ADIC.filter(x=>x.obra===o);return `${acEdita(o)?`<button class="btn gold full" data-act="adicCertNuevo" data-o="${o.id}">+ Nuevo certificado de tarea adicional</button>`:''}<div class="list">${ad.map(adicCard).join('')||'<p class="muted">Sin adicionales.</p>'}</div><p class="note">Los requisitos los verifica la app. Mientras falte uno, el adicional queda bloqueado. ${puedePedir(o)?'Se inicia desde un hecho tipo "Cambio" del Registro.':''}</p>`}
 
 /* --- auditoría: resumen para jefatura, dirección y estudio --- */
 const CAMPO=['Frente de trabajo liberado','Replanteo ejecutado y verificado','Niveles de referencia materializados','Estructura receptora finalizada'];
@@ -3443,7 +3442,7 @@ function situacion(){const a=avisoData();if(!a.h)return'';
 function margenProm(){let m=0,n=0;estCards().filter(c=>cDone(c)).forEach(c=>{const k=timing(c).limit,f=doneFecha(c);if(!f)return;if(f<=k){n++;m+=workBetween(f,k)}});return{d:n?Math.round(m/n*10)/10:0,n}}
 function newsEstudio(){const m=margenProm(),r2=pctATiempo(estCards());return `<div class="news"><span class="news-ico">★</span><p>${r2.n?`El <b>${r2.pct}%</b> de sus entregas llegó a tiempo, `:'Sus entregas a tiempo llegaron '}en promedio <b>${m.d.toLocaleString('es-AR')} días hábiles antes</b> de que la obra las necesitara.</p></div>`}
 KPI.est_margen.calc=()=>{const m=margenProm();return{v:`${m.d>0?'+':''}${m.d.toLocaleString('es-AR')} d`,l:'de anticipación promedio en las entregas a tiempo',s:`${plural(m.n,'tarjeta','tarjetas')} antes de su fecha límite`,c:m.d>0?'verde':'naranja'}};
-function adicPend(){return ADIC.filter(a=>puedeVer(a.obra)&&adicEstado(a)[0]!=='Autorizado')}
+function adicPend(){adicSort();return ADIC.filter(a=>puedeVer(a.obra)&&adicEstado(a)[0]!=='Autorizado')}
 function vInicio(){
   const r=ROLE(),obras=misObras();
   if(r==='auditor')return `${situacion()}${novedades()}${kpis()}<section class="sec"><div class="sec-head"><h2>Agenda de los próximos 30 días</h2><span class="legend-a"><i class="a-sup"></i>Supervisión <i class="a-rev"></i>Revisión <i class="a-cert"></i>Certificado</span></div>${agendaHTML(agendaAud(obras,30))}</section>`;
@@ -5105,7 +5104,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261125-202449';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261125-210607';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -6641,4 +6640,5 @@ body:has(.crono-full) .iafab,body:has(.crono-full) #vozstop{display:none!importa
 })();
 </script>
 <style>.gseg.c-verde,.gseg.c-amarillo,.gseg.c-rojo{box-shadow:inset -2px 0 0 rgba(255,255,255,.9)}</style>
+<script>try{const _dA=draw;draw=function(){try{adicSort()}catch(e){}return _dA.apply(this,arguments)}}catch(e){}</script>
 </body></html>
