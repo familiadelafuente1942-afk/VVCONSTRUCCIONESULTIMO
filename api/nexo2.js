@@ -211,6 +211,28 @@ async function pushEnviar(H, subs, payload) {
   return vivos;
 }
 
+// el adicional que manda el contratista entra también en la planilla de Adicionales de NEXO 2 (misma obra, su propio N° correlativo)
+async function ctAdicSync(H, rec) {
+  try {
+    if (!rec || rec.tipo !== "adicional" || !/^[A-Za-z0-9_-]{1,40}$/.test(String(rec.obra || ""))) return;
+    const c = rec.cert || {}; const clave = "adic_" + rec.obra; const id = "ct" + String(rec.id).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 36);
+    const v = await leer(H, clave); const items = ((v && v.items) || []); const prev = items.find((x) => x.id === id);
+    const nro = prev && prev.adicionalNro ? prev.adicionalNro : String(items.reduce((m, x) => Math.max(m, parseInt(x.adicionalNro, 10) || 0), 0) + 1).padStart(3, "0");
+    const cot = {}; ["materiales", "manoObra", "equipos", "subcontratos", "otros"].forEach((k) => { const x = (c.cot || {})[k] || {}; cot[k] = { unidad: String(x.u || ""), cant: String(x.c || ""), punit: String(x.p || "") }; });
+    if (!rec.cert && rec.monto) cot.otros = { unidad: "gl", cant: "1", punit: String(rec.monto) };
+    const fe = new Date(rec.creado || Date.now()); const iso = new Date(fe.getTime() - 3 * 36e5).toISOString().slice(0, 10);
+    const r = {
+      id, obra: rec.obra, adicionalNro: nro, ubicacion: String(c.ubic || rec.tarea || ""), fecha: iso, contratista: String(rec.ctNombre || "V+V Construcciones"), comitente: String(c.comit || ""),
+      solicitadoPor: String(c.solic || ""), fechaPedido: String(c.fped || ""), medioPedido: String(c.medio || "Verbal"), requerimiento: String(c.req || ""), tipoAdicional: String(c.tipoAd || "Tarea nueva"),
+      descripcionTecnica: [rec.titulo, rec.desc].filter(Boolean).join("\n"), modificaCert: !!c.modCert, detalleModificacion: String(c.detMod || ""), docsAdjuntos: Array.isArray(c.docs) ? c.docs : [], identificacionPlanos: "",
+      cotiz: cot, incidenciaPlazo: c.plazo === "dias" ? "dias" : "sin", diasIncidencia: c.plazo === "dias" ? String(c.dias || "") : "", validezCotizacion: String(c.validez || "15"), requisitos: Array.isArray(c.reqs) ? c.reqs : [],
+      resolucion: String(c.res || "En revisión"), autorizadoPor: String(c.aut || ""), ctRec: rec.id, ctNum: rec.num || "", fotos: rec.fotos || [], editado: Date.now(), por: "ct",
+    };
+    const out = items.filter((x) => x.id !== id); out.push(prev ? { ...prev, ...r } : r);
+    await escribir(H, clave, { items: out.slice(-300) });
+    return id;
+  } catch (e) { return; }
+}
 // certificado de tarea adicional (contratistas): solo datos simples, con tope de tamaño
 function certLimpio(c) {
   try {
@@ -725,8 +747,24 @@ export default async function handler(req, res) {
         if (raw.length > 20000) { res.status(400).json({ error: "El certificado es demasiado largo" }); return; }
         const rec = { ...JSON.parse(raw), id, obra, editado: Date.now(), por: quien };
         const v = await leer(H, clave);
+        const prevA = ((v && v.items) || []).find((x) => x.id === id);
+        if (prevA) ["ctRec", "ctNum", "fotos"].forEach((k) => { if (prevA[k] != null && rec[k] == null) rec[k] = prevA[k]; });
         const items = ((v && v.items) || []).filter((x) => x.id !== id); items.push(rec);
         await escribir(H, clave, { items: items.slice(-300) });
+        if (rec.ctRec) {
+          // la resolución de Dirección vuelve al contratista (aprobado para ejecutar → en verde en su app)
+          try {
+            const k2 = "ctrec_" + obra; const v2 = await leer(H, k2); const it = v2 && (v2.items || []).find((x) => x.id === String(rec.ctRec));
+            if (it) {
+              const res0 = (it.cert && it.cert.res) || "En revisión"; const res1 = String(rec.resolucion || "En revisión").slice(0, 60);
+              it.cert = { ...(it.cert || {}), res: res1, aut: String(rec.autorizadoPor || "").slice(0, 120) };
+              if (rec.cotiz) { it.cert.cot = {}; Object.entries(rec.cotiz).slice(0, 8).forEach(([kk, x]) => { it.cert.cot[kk] = { u: String((x || {}).unidad || ""), c: String((x || {}).cant || ""), p: String((x || {}).punit || "") }; }); }
+              const t = Date.now(); it.editado = t;
+              if (res1 !== res0) { it.hist = (Array.isArray(it.hist) ? it.hist : []).concat([{ t, por: "dir", nom: "Dirección", tx: "Adicional: " + res1 + (rec.autorizadoPor ? " · " + rec.autorizadoPor : "") }]).slice(-100); if (!it.primeraResp) it.primeraResp = t; }
+              await escribir(H, k2, { ...v2, items: v2.items });
+            }
+          } catch (e) {}
+        }
         res.status(200).json({ ok: true, rec }); return;
       }
       res.status(400).json({ error: "Operación desconocida" }); return;
@@ -874,6 +912,7 @@ export default async function handler(req, res) {
           const ids = new Set(rec.aud.reclamos.map((r) => r.id).filter(Boolean));
           items.forEach((x) => { if (ids.has(x.id) && x.ctId === ct.id && !x.doc) { x.enAud = rec.id; x.enAudNum = rec.num; } });
         }
+        if (rec.tipo === "adicional") rec.adicId = await ctAdicSync(H, rec);
         items.push(rec);
         await escribir(H, clave, { items: items.slice(-500) });
         res.status(200).json({ ok: true, rec }); return;
@@ -887,6 +926,7 @@ export default async function handler(req, res) {
         if (quien === "ct" && it.ctId !== ct.id) { res.status(403).json({ error: "No es tuyo" }); return; }
         const t = Date.now(); it.cert = cc; const tot = ["materiales", "manoObra", "equipos", "subcontratos", "otros"].reduce((a, k) => { const x = (cc.cot || {})[k] || {}; const n = (z) => Number(String(z == null ? "" : z).replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, "")) || 0; return a + n(x.c) * n(x.p); }, 0);
         if (tot) it.monto = Math.round(tot);
+        it.adicId = (await ctAdicSync(H, it)) || it.adicId;
         it.hist = (Array.isArray(it.hist) ? it.hist : []).concat([{ t, por: quien === "ct" ? "ct" : quien, nom: quien === "ct" ? ct.nombre : "Dirección", tx: "Certificado del adicional actualizado" + (cc.res ? " · " + cc.res : "") }]).slice(-100); it.editado = t;
         await escribir(H, clave, { items }); res.status(200).json({ ok: true, rec: it }); return;
       }
@@ -1108,7 +1148,11 @@ export default async function handler(req, res) {
         if (quien !== "dir") { res.status(403).json({ error: "Solo Dirección" }); return; }
         const ids = Array.from(new Set([...Object.keys(cods.obras || {}), ...lista.map((c) => c.obra)]));
         const out = {};
-        await Promise.all(ids.map(async (id) => { const v = await leer(H, "ctrec_" + id); if (v && v.items && v.items.length) out[id] = v.items; }));
+        await Promise.all(ids.map(async (id) => { const v = await leer(H, "ctrec_" + id); if (v && v.items && v.items.length) {
+          // adicionales con certificado que todavía no pasaron a la planilla de Adicionales
+          let cambio = false; for (const x of v.items) { if (x.tipo === "adicional" && x.cert && !x.adicId) { x.adicId = await ctAdicSync(H, x); if (x.adicId) cambio = true; } }
+          if (cambio) await escribir(H, "ctrec_" + id, { ...v, items: v.items });
+          out[id] = v.items; } }));
         res.status(200).json({ ok: true, obras: out, cts: lista, jw: reg.jw || {}, enc: reg.enc || [] }); return;
       }
       if (b.op === "ct_cod_edit") {
