@@ -5105,7 +5105,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261125-223636';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261125-223802';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -6430,7 +6430,7 @@ function dirItems(){const obras=misObras(),A1=[],A2=[],A3=[];
     A1.push({u:/^APROBADO|^Aprobado/.test(rs)?3:1,f:TODAY,tags:[tag(/^APROBADO|^Aprobado/.test(rs)?'APROBADO · FALTAN REQUISITOS':'PARA APROBAR','tg-pide'),...(ct?[tag('DEL CONTRATISTA','tg-ct')]:[])],t:`Adicional N° ${a.n}: ${String(a.txt||'').split('\n')[0].slice(0,80)}`,d:`${a.obra.nombre} · ${a.total?money(a.total):'sin cotizar'} · ${adicEstado(a)[0]}`,a:{act:'adic',id:a.id}})})}catch(e){}
   /* 2 · reclamos de los contratistas a la jefatura: cómo los está atendiendo */
   try{if(!CTALL.t||Date.now()-CTALL.t>15000)ctLoadAll();
-    OBRAS.forEach(o=>((CTR[o.id]||{}).items||[]).filter(x=>ctAbierto(x)&&!x.enAud&&x.tipo!=='adicional').forEach(x=>{const sr=!x.primeraResp,h=Date.now()-(x.creado||Date.now());
+    OBRAS.forEach(o=>((CTR[o.id]||{}).items||[]).filter(x=>ctAbierto(x)&&!x.enAud&&x.tipo!=='adicional'&&(x.tipo!=='auditoria'||!x.primeraResp||(x.aud&&x.aud.clase==='def'))).forEach(x=>{const sr=!x.primeraResp,h=Date.now()-(x.creado||Date.now());
       A2.push({u:sr?(h>48*36e5?0:1):2,f:x.creado||TODAY,tags:[sr?tag('SIN RESPUESTA · HACE '+ctDur(h).toUpperCase(),h>48*36e5?'tg-venc':'tg-vence'):tag('EN GESTIÓN','tg-mat'),tag(String(CT_TIPO[x.tipo]||'Aviso').toUpperCase(),'tg-ct')],t:`${x.ctNombre||'Contratista'}: ${x.titulo||'aviso'}`,d:`${o.nombre}${x.num?' · N° '+x.num:''} · ${sr?'la jefatura ('+jefeDe(o)+') todavía no contestó':'contestó la jefatura'}`,a:{act:'ctVer',o:o.id,id:x.id}})}))}catch(e){}
   /* 3 · jefatura: pedidos para destrabar (el estudio no entrega) y tarjetas vencidas sin aviso */
   try{const vistas=new Set();cardsDe(obras).filter(c=>!cDone(c)).forEach(c=>{const o=c.obra,ven=color(c)==='rojo',k=timing(c);
