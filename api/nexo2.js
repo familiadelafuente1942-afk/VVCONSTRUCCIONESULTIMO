@@ -869,6 +869,16 @@ export default async function handler(req, res) {
         await escribir(H, clave, { items: items.slice(-500) });
         res.status(200).json({ ok: true, rec }); return;
       }
+      if (b.op === "ct_titulo") {
+        // el contratista corrige el título de lo que mandó (ej. "Otro": que diga de qué se trata)
+        const id = idOk(b.id); const tit = String(b.titulo == null ? "" : b.titulo).replace(/\s+/g, " ").trim().slice(0, 200);
+        if (!tit) { res.status(400).json({ error: "Escribí el título" }); return; }
+        const v = await leer(H, clave); const items = (v && v.items) || []; const it = items.find((x) => x.id === id);
+        if (!it) { res.status(404).json({ error: "No existe" }); return; }
+        if (quien === "ct" && it.ctId !== ct.id) { res.status(403).json({ error: "No es tuyo" }); return; }
+        if (tit !== it.titulo) { const t = Date.now(); it.hist = (Array.isArray(it.hist) ? it.hist : []).concat([{ t, por: quien === "ct" ? "ct" : quien, nom: quien === "ct" ? ct.nombre : "Dirección", tx: "Título cambiado: " + tit }]).slice(-100); it.titulo = tit; it.editado = t; await escribir(H, clave, { items }); }
+        res.status(200).json({ ok: true, rec: it }); return;
+      }
       if (b.op === "ct_aud_editar") {
         // sumar, corregir o quitar puntos de un cumplimiento ya enviado (se recorre la obra y aparecen cosas nuevas)
         const id = idOk(b.id);
