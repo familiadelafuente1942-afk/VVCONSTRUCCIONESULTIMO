@@ -185,6 +185,24 @@ export default async function handler(req, res) {
         if (cambio) await escribir(H, "seg_obras", { items: obras });
         if (agregadas.length) await escribir(H, "seg_flags", { ...fl, nexoAdd: [...ya, ...agregadas].slice(-300) });
       } catch (e) { /* si falla, se reintenta en la próxima carga */ }
+      // la lista de obras sigue a NEXO 2: si la obra se borró en NEXO 2 no se muestra (su historia queda guardada y vuelve si la obra se restaura)
+      let obrasVer = obras;
+      try {
+        const c = await leer(H, "cfg");
+        const O = (c && typeof c.v === "string" && JSON.parse(c.v)) || {};
+        const fuera = new Set([...(Array.isArray(O.del) ? O.del : []), ...(Array.isArray(O.delN) ? O.delN : [])]);
+        if (fuera.size) {
+          const nrm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "").replace(/(^|[^0-9])0+(?=[0-9])/g, "$1");
+          const MAP = { puentes132: "o1", castores475: "o2", puentes246: "o4", golf293: "o3" };
+          const porNom = {};
+          const pon = (k, id) => { if (!porNom[k] || (fuera.has(porNom[k]) && !fuera.has(id))) porNom[k] = id; };
+          for (const n of Array.isArray(O.nuevas) ? O.nuevas : []) if (n && n.id && n.nombre) pon(nrm(n.nombre), n.id);
+          for (const [id, ch] of Object.entries(O.mod || {})) if (ch && ch.nombre) pon(nrm(ch.nombre), id);
+          try { const rs = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave,valor->>nombre&clave=like.snap_*`, { headers: H }); if (rs.ok) for (const r of await rs.json()) { const nm = r.nombre || r["?column?"]; const id = String(r.clave).slice(5); if (nm) pon(nrm(nm), id); } } catch (e) {}
+          const nid = (o) => o.nexo || MAP[o.id] || porNom[nrm(o.nombre)] || "";
+          obrasVer = obras.filter((o) => !fuera.has(nid(o)));
+        }
+      } catch (e) { obrasVer = obras; }
       const [tareas, personal, gastos, sueldos, agenda, hitos, bitOld, adicionales] = await Promise.all(["tareas", "personal", "gastos", "sueldos", "agenda", "hitos", "bitacora", "adicionales"].map((c) => leerCol(H, c)));
       let registros = await leerCol(H, "registros");
       if (bitOld.length) { // la "bitácora" pasó a llamarse Registros: se traen las anotaciones viejas
@@ -193,7 +211,7 @@ export default async function handler(req, res) {
         await escribir(H, "seg_registros", { items: registros });
         await escribir(H, "seg_bitacora", { items: [] });
       }
-      res.status(200).json({ ok: true, quien, obras, tareas, personal, gastos, sueldos, agenda, hitos, registros, adicionales, ahora: Date.now() });
+      res.status(200).json({ ok: true, quien, obras: obrasVer, tareas, personal, gastos, sueldos, agenda, hitos, registros, adicionales, ahora: Date.now() });
       return;
     }
 
