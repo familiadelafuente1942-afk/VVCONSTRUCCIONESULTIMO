@@ -1218,7 +1218,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   async function exportarResultadosPDF(mesKey, en, esCierre) {
     const lib = await cargarJsPDF(); if (!lib) { alert("No pude cargar el generador de PDF (revisá internet)."); return; }
     const { jsPDF } = lib; const doc = new jsPDF({ unit: "mm", format: "a4" }); const W = 210; const M = 16; let y = 18;
-    const money = n => "$" + (Number(n) || 0).toLocaleString("es-AR");
+    const money = n => (n < 0 ? "−$" : "$") + Math.abs(Math.round(Number(n) || 0)).toLocaleString("es-AR");
     const [mm, yy] = String(mesKey || "").split("/").map(Number);
     const nombreMes = `${MESES_LARGOS[(mm || 1) - 1] || ""} '${String(yy || 0).padStart(2, "0")}`;
     doc.setFillColor(15, 27, 45); doc.rect(0, 0, W, 26, "F");
@@ -1238,19 +1238,17 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     doc.setFontSize(13); fila("TOTAL EMPRESA", money(en.totalEmpresa), true);
     y += 6; doc.setFontSize(10);
     doc.setFillColor(27, 58, 91); doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(9);
-    doc.rect(M, y, W - 2 * M, 8, "F"); doc.text("Socio", M + 2, y + 5.5); doc.text("Monto", 120, y + 5.5); doc.text("%", W - M - 2, y + 5.5, { align: "right" }); y += 8;
-    doc.setTextColor(40, 40, 40); doc.setFont("helvetica", "normal");
-    [["Valeria", en.valeria], ["Sebastián", en.disponibleSeb != null ? en.disponibleSeb : en.sebastianReparto], ["Valentina", en.valentina]].forEach(([nombre, monto], i) => {
+    doc.rect(M, y, W - 2 * M, 8, "F"); doc.text("Reparto de la ganancia", M + 2, y + 5.5); doc.text("Monto", 130, y + 5.5, { align: "right" }); doc.text("% de la ganancia", W - M - 2, y + 5.5, { align: "right" }); y += 8;
+    doc.setTextColor(40, 40, 40); doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+    repartoGanancia(en).forEach((r, i) => {
       if (i % 2) { doc.setFillColor(244, 247, 250); doc.rect(M, y, W - 2 * M, 7, "F"); }
-      doc.text(nombre, M + 2, y + 5); doc.text(money(monto), 120, y + 5); doc.text(pct(monto, en.totalEmpresa) + "%", W - M - 2, y + 5, { align: "right" }); y += 7;
+      doc.text(r.n, M + 2, y + 5); doc.text(money(r.m), 130, y + 5, { align: "right" }); doc.text(r.p + "%", W - M - 2, y + 5, { align: "right" }); y += 7;
     });
-    y += 6; doc.setFontSize(10);
-    doc.setFillColor(27, 58, 91); doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(9);
-    doc.rect(M, y, W - 2 * M, 8, "F"); doc.text("Inversiones", M + 2, y + 5.5); doc.text("Monto", 120, y + 5.5); doc.text("% de la ganancia", W - M - 2, y + 5.5, { align: "right" }); y += 8;
-    doc.setTextColor(40, 40, 40); doc.setFont("helvetica", "normal");
-    doc.text("(Terralagos)", M + 2, y + 5); doc.text(money(en.terralagos), 120, y + 5); doc.text(pct(en.terralagos, en.totalEmpresa) + "%", W - M - 2, y + 5, { align: "right" }); y += 7;
+    doc.setDrawColor(176, 137, 79); doc.line(M, y, W - M, y); doc.setFont("helvetica", "bold");
+    doc.text("Total ganancia", M + 2, y + 5.5); doc.text(money(en.totalEmpresa), 130, y + 5.5, { align: "right" }); doc.text("100%", W - M - 2, y + 5.5, { align: "right" }); y += 10;
     doc.setFontSize(8); doc.setFont("helvetica", "italic"); doc.setTextColor(120, 120, 120);
-    doc.text("Ya sumada a la utilidad de arriba (no es un gasto), pero restada de la parte de Sebastián porque la puso él.", M, y + 4); y += 8;
+    doc.text("Canning (Terralagos) es inversión: forma parte de la ganancia y la puso Sebastián, por eso se descuenta de su parte.", M, y + 2); y += 6;
+    if (en.remanente > 0) { doc.text(`Sebastián además tiene ${money(en.remanente)} que quedó del mes anterior: disponible ${money(en.disponibleSeb != null ? en.disponibleSeb : (en.remanente + (en.sebastianReparto || 0)))}.`, M, y + 2); y += 6; }
     doc.setFont("helvetica", "italic"); doc.setFontSize(8); doc.setTextColor(120, 120, 120);
     doc.text("Generado desde Mi Asistente.", M, 285);
     const nombreArchivo = `Resultados_${nombreMes.replace(/[^\w]+/g, "-")}_${esCierre ? "cierre" : "parcial"}_${hoyStr().replace(/\//g, "-")}.pdf`;
@@ -2281,7 +2279,18 @@ function remanenteHasta(mesKey, cobros, pagos, gastos, cierres) {
   previos.forEach(mk => { if (ov(mk) != null) carry = ov(mk); const en = (cierres || {})[mk] || calcularResultadoMes(mk, cobros, pagos, gastos); carry = Math.max(0, carry + (en.sebastianReparto || 0)); });
   return carry;
 }
-function pct(valor, total) { if (!total) return "0"; return ((valor || 0) / total * 100).toLocaleString("es-AR", { maximumFractionDigits: 1 }); }
+// Reparto de la ganancia del mes entre Valeria, Valentina, Sebastián y la inversión en Canning (Terralagos):
+// cada parte sale como % de la ganancia (Total Empresa), sin decimales y sumando siempre 100.
+function repartoGanancia(en) {
+  const filas = [["Valeria", en.valeria || 0], ["Valentina", en.valentina || 0], ["Sebastián", en.sebastianReparto || 0], ["Canning (Terralagos)", en.terralagos || 0]];
+  const tot = en.totalEmpresa || 0;
+  if (!tot) return filas.map(([n, m]) => ({ n, m: Math.round(m), p: 0 }));
+  const raw = filas.map(([n, m]) => ({ n, m: Math.round(m), x: m / tot * 100 }));
+  const base = raw.map(r => Math.floor(r.x)); let falta = 100 - base.reduce((a, b) => a + b, 0);
+  raw.map((r, i) => [r.x - Math.floor(r.x), i]).sort((a, b) => b[0] - a[0]).forEach(([, i]) => { if (falta > 0) { base[i]++; falta--; } });
+  return raw.map((r, i) => ({ n: r.n, m: r.m, p: base[i] }));
+}
+function pct(valor, total) { if (!total) return "0"; return Math.round((valor || 0) / total * 100).toLocaleString("es-AR"); }
 function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, exportarPDF, onSaldo }) {
   const mesActual = hoyStr().slice(3);
   const [mesVer, setMesVer] = useState(mesActual);
@@ -2320,34 +2329,17 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, e
 
       <div style={{ height: 1, background: T.border, margin: "14px 0" }} />
 
-      <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Cómo se dividió este mes</div>
+      <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Reparto de la ganancia · ${Math.round(en.totalEmpresa || 0).toLocaleString("es-AR")}</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <div style={{ flex: "1 1 40%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
-          <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Valeria</div>
-          <div style={{ fontFamily: T.serif, fontSize: 16.5, fontWeight: 700, color: T.text, marginTop: 3 }}>${(en.valeria || 0).toLocaleString("es-AR")}</div>
-          <div style={{ fontSize: 11, color: T.sub, fontWeight: 700, marginTop: 2 }}>{pct(en.valeria, en.totalEmpresa)}%</div>
-        </div>
-        <div style={{ flex: "1 1 40%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
-          <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Sebastián</div>
-          <div style={{ fontFamily: T.serif, fontSize: 16.5, fontWeight: 700, color: colorRes, marginTop: 3 }}>{disponibleSeb < 0 ? "−" : ""}${Math.abs(disponibleSeb).toLocaleString("es-AR")}</div>
-          <div style={{ fontSize: 10.5, color: T.muted, marginTop: 6, lineHeight: 1.55, textAlign: "left", display: "inline-block" }}>
-            {remanente > 0 && <div>Quedó del mes anterior: ${remanente.toLocaleString("es-AR")}</div>}
-            <div>+ Cobrado este mes: ${(en.cobrado || 0).toLocaleString("es-AR")}</div>
-            <div>− Pagos (personal + Valeria + Valentina + Terralagos): ${(en.pagado || 0).toLocaleString("es-AR")}</div>
-            <div>− Gastos: ${(en.gastos || 0).toLocaleString("es-AR")}</div>
-          </div>
-        </div>
-        <div style={{ flex: "1 1 40%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
-          <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Valentina</div>
-          <div style={{ fontFamily: T.serif, fontSize: 16.5, fontWeight: 700, color: T.text, marginTop: 3 }}>${(en.valentina || 0).toLocaleString("es-AR")}</div>
-          <div style={{ fontSize: 11, color: T.sub, fontWeight: 700, marginTop: 2 }}>{pct(en.valentina, en.totalEmpresa)}%</div>
-        </div>
-        <div style={{ flex: "1 1 40%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
-          <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Invertido en Terralagos</div>
-          <div style={{ fontFamily: T.serif, fontSize: 16.5, fontWeight: 700, color: T.text, marginTop: 3 }}>${(en.terralagos || 0).toLocaleString("es-AR")}</div>
-          <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>{pct(en.terralagos, en.totalEmpresa)}% de la ganancia · ya sumado a la utilidad</div>
-        </div>
+        {repartoGanancia(en).map(r => (<div key={r.n} style={{ flex: "1 1 40%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
+          <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>{r.n}</div>
+          <div style={{ fontFamily: T.serif, fontSize: 16.5, fontWeight: 700, color: r.m < 0 ? "#C0392B" : T.text, marginTop: 3 }}>{r.m < 0 ? "−" : ""}${Math.abs(r.m).toLocaleString("es-AR")}</div>
+          <div style={{ fontSize: 13, color: T.accent, fontWeight: 800, marginTop: 2 }}>{r.p}%</div>
+          {r.n === "Sebastián" && remanente > 0 && <div style={{ fontSize: 10, color: T.muted, marginTop: 4 }}>+ ${Math.round(remanente).toLocaleString("es-AR")} del mes anterior · disponible ${Math.round(disponibleSeb).toLocaleString("es-AR")}</div>}
+          {r.n.startsWith("Canning") && <div style={{ fontSize: 10, color: T.muted, marginTop: 4 }}>inversión · la puso Sebastián</div>}
+        </div>))}
       </div>
+      <div style={{ fontSize: 10.5, color: T.muted, textAlign: "center", marginTop: 6 }}>Entre los cuatro suman el 100% de la ganancia del mes.</div>
 
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
         <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.08em" }}>Cobrado</div><div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginTop: 2 }}>${(en.cobrado || 0).toLocaleString("es-AR")}</div>{en.cobradoPend > 0 && <div style={{ fontSize: 10.5, color: "#B98A2E", marginTop: 1 }}>+${en.cobradoPend.toLocaleString("es-AR")} pend.</div>}</div>
