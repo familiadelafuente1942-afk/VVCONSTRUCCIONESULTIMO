@@ -14,7 +14,7 @@ jobs:
           const {chromium}=require('playwright');
           (async()=>{const b=await chromium.launch();const p=await b.newPage({viewport:{width:1180,height:820}});
           await p.route('**/api/nexo2',async r=>{if(r.request().method()!=='POST')return r.continue();return r.fulfill({json:{ok:false,error:'solo lectura'}})});
-          await p.goto('https://nexoentorno.vercel.app/nexo2.html',{waitUntil:'domcontentloaded',timeout:90000});await p.waitForTimeout(30000);
+          await p.goto('https://nexoentorno.vercel.app/nexo2.html',{waitUntil:'domcontentloaded',timeout:90000});await p.waitForTimeout(25000);await p.reload({waitUntil:'domcontentloaded'});await p.waitForTimeout(25000);console.log('OBRAS_EN_APP',await p.evaluate(()=>OBRAS.map(o=>o.id+':'+o.nombre).join(', ')));
           const out=await p.evaluate(()=>{const R=[];const T=PLANT_REG.base;R.push('PLANT_REG tareas '+T.tareas.length+' restricciones '+(T.restricciones||[]).length+' (archivo: '+PLANTILLA_BASE.tareas.length+'/'+PLANTILLA_BASE.restricciones.length+')');
             T.tareas.filter(t=>['E10','E09','E18'].includes(t.etapa)).forEach(t=>R.push('PT '+t.codigo+' | '+t.etapa+' | '+t.nombre+' | nivel:'+t.por_nivel+' | dur '+t.duracion_base+' | hito '+t.hito+' | cond '+t.condicion+' | pred '+(t.predecesoras||[]).map(x=>x.codigo+':'+x.alcance+':'+x.tipo+':'+x.desfase_semanas+(x.solo_primer_nivel?':1er':'')).join(',')));
             (T.restricciones||[]).forEach(r=>R.push('PR '+r.codigo+' | '+r.tipo+' | '+r.tarea_ancla+' | '+r.alcance_ancla+' | '+r.descripcion));
