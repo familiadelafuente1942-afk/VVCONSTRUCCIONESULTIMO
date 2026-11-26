@@ -1,0 +1,32 @@
+name: nx-tarjetas
+on:
+  workflow_dispatch:
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Diagnóstico de tarjetas y calefacción (solo lectura, sin montos)
+        run: |
+          npm i playwright@1.47.2 >/dev/null 2>&1 && npx playwright install --with-deps chromium >/dev/null 2>&1
+          cat > t.js <<'JS'
+          const {chromium}=require('playwright');
+          (async()=>{const b=await chromium.launch();const p=await b.newPage({viewport:{width:1180,height:820}});
+          await p.route('**/api/nexo2',async r=>{if(r.request().method()!=='POST')return r.continue();return r.fulfill({json:{ok:false,error:'solo lectura'}})});
+          await p.goto('https://nexoentorno.vercel.app/nexo2.html',{waitUntil:'domcontentloaded',timeout:90000});await p.waitForTimeout(30000);
+          const out=await p.evaluate(()=>{const R=[];const T=PLANT_REG.base;R.push('PLANT_REG tareas '+T.tareas.length+' restricciones '+(T.restricciones||[]).length+' (archivo: '+PLANTILLA_BASE.tareas.length+'/'+PLANTILLA_BASE.restricciones.length+')');
+            T.tareas.filter(t=>['E10','E09','E18'].includes(t.etapa)).forEach(t=>R.push('PT '+t.codigo+' | '+t.etapa+' | '+t.nombre+' | nivel:'+t.por_nivel+' | dur '+t.duracion_base+' | hito '+t.hito+' | cond '+t.condicion+' | pred '+(t.predecesoras||[]).map(x=>x.codigo+':'+x.alcance+':'+x.tipo+':'+x.desfase_semanas+(x.solo_primer_nivel?':1er':'')).join(',')));
+            (T.restricciones||[]).forEach(r=>R.push('PR '+r.codigo+' | '+r.tipo+' | '+r.tarea_ancla+' | '+r.alcance_ancla+' | '+r.descripcion));
+            T.tareas.filter(t=>t.hito&&t.duracion_base>0.4).forEach(t=>R.push('HITO_LARGO '+t.codigo+' '+t.nombre+' dur '+t.duracion_base));
+            ['o7688','o4541'].forEach(id=>{const o=OBRAS.find(x=>x.id===id);if(!o){R.push('NO_OBRA '+id);return}
+              R.push('OBRA '+o.nombre+' tpl '+!!o.tpl+' tareas '+o.tasks.length+' base '+o.base.length+' tarjetas '+o.cards.length+' calef '+(o.mod2&&o.mod2.calef)+' niveles '+JSON.stringify(o.mod2&&o.mod2.niveles)+' ss '+(o.mod2&&o.mod2.ss));
+              const sin=o.tasks.filter(t=>!o.cards.some(c=>c.task===t));R.push('SIN_TARJETA '+sin.length);sin.forEach(t=>R.push('  ST '+(t.cod||'-')+' | '+t.name));
+              o.tasks.forEach(t=>{const cs=o.cards.filter(c=>c.task===t);const by={};cs.forEach(c=>(by[c.tipo]=by[c.tipo]||[]).push(c));Object.entries(by).forEach(([k,L])=>{if(L.length>1)R.push('DUP '+t.name+' | '+k+' x'+L.length+' | '+L.map(c=>(c.rcod||'')+(c.prev?'/prev':'')+(c.custom?'/custom':'')+':'+c.items.length).join(' '))})});
+              o.cards.forEach(c=>c.items.forEach(i=>{if(!iDone(i))R.push('ABIERTO '+c.task.name+' | '+c.tipo+' | '+i.estado+' | '+i.txt)}));
+              R.push('PRE '+o.cards.reduce((s,c)=>s+c.items.filter(i=>i.estado==='pre').length,0)+' items · tareas pre '+o.tasks.filter(t=>t.real&&t.real.pre).length+' · respondidos '+o.cards.reduce((s,c)=>s+c.items.filter(i=>i.estado==='ok'||i.estado==='na'||i.estado==='recibido'||i.estado==='pedido'||i.respuesta).length,0));
+              o.tasks.filter(t=>t.etapaCod==='E10'||/calef|radiante|contrapiso|carpeta/i.test(t.name)).sort((a,b)=>a.start-b.start).forEach(t=>R.push('  CAL '+(t.cod||'-')+' | '+t.name+' | '+iso(t.start)+' → '+iso(t.end)+(t.real&&t.real.pre?' | pre':'')));
+            });return R});
+          out.forEach(l=>console.log(l));await b.close()})();
+          JS
+          node t.js
