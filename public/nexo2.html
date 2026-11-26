@@ -661,6 +661,11 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.9;
 .gvl.sup{border-left:1.5px dashed rgba(63,166,107,.55)} .gvl.cert{border-left:2px solid rgba(228,106,168,.6)}
 .gwarn{color:#16120b}
 .gwarn.c-futuro,.gwarn.c-verde{color:#fff}
+.dvq-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}
+.dvq{display:flex;flex-direction:column;align-items:center;gap:2px;border:2px solid transparent;border-radius:14px;padding:10px 4px;color:#16120b;cursor:pointer;opacity:.55;font:inherit}
+.dvq b{font-size:24px;line-height:1}.dvq span{font-size:11.5px;font-weight:600}
+.dvq.c-verde{color:#fff}.dvq.on{opacity:1;border-color:var(--fg,#fff);box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.dvq-lista{margin-top:4px}
 .dvp{min-width:52px;text-align:center;border-radius:999px;padding:2px 8px;color:#16120b;font-size:13px}
 .dvp.c-verde{color:#fff}
 .ogrid.aud>span>span{letter-spacing:.03em;font-size:9.5px}
@@ -1537,7 +1542,7 @@ const certEstado=c=>c.estado==='certificada'?'certificada':certFecha(c)-TODAY<30
 const CFG_LS='nexo2_obras_cfg';
 /* si este aparato no tenía lugar, la última copia buena está en la memoria de la pestaña */
 const cfgLeer=()=>{try{const m=sessionStorage.getItem('nxmem_'+CFG_LS);if(m!=null)return m}catch(e){}try{return localStorage.getItem(CFG_LS)}catch(e){return null}};
-const CFG_KEYS=['audNombre','nombre','ubic','plantas','subsuelo','pileta','m2','nivel','inicio','jefe','pasante','estudio','estTel','jornal','dot','late','margen','edits','invitados','imgUrl','sinImg','renders','rndOcultos','tpl','mod2','ov','resp','reanud','cero','cg','cgu','sinCrono'];
+const CFG_KEYS=['audNombre','nombre','ubic','plantas','subsuelo','pileta','m2','nivel','inicio','jefe','pasante','estudio','estTel','jornal','dot','late','margen','edits','invitados','imgUrl','sinImg','renders','rndOcultos','tpl','mod2','ov','resp','reanud','cero','cg','cgu','sinCrono','enCurso','ovt'];
 const BASE_OV={};let BASE_DEF={};
 const cfgPick=o=>{const r={};CFG_KEYS.forEach(k=>{if(o[k]!==undefined)r[k]=o[k]});return r};
 const CFG_ORIG=new Set(OBRAS.map(o=>o.id));
@@ -1761,8 +1766,8 @@ async function codCargar(){
     try{localStorage.removeItem(COD_LS);localStorage.removeItem(CLAVES_LS)}catch(e){}
     let nuevo=false;OBRAS.forEach(o=>{if(!o.codJefe||!o.codAud||!o.codEst||!o.clave){codInit(o);nuevo=true}});
     if(nuevo)await codApi({op:'cods_set',dir:dirAuthGet(),data:codData()});
-    draw();
   }catch(e){toast('No se pudieron cargar los códigos. Revisá la conexión.')}
+  try{draw()}catch(e){console.error('draw tras cargar códigos',e)}
 }
 let _codQ=Promise.resolve();
 const codGuardarLS=()=>{_codQ=_codQ.then(async()=>{try{const r=await codApi({op:'cods_set',dir:dirAuthGet(),data:codData()});if(r.ok&&DIRCOD){S.dirAuth=DIRCOD;try{localStorage.setItem('nexo2_dirauth',DIRCOD)}catch(e){}}else if(r.error)toast(r.error)}catch(e){toast('No se pudo guardar el código. Revisá la conexión.')}})};
@@ -2474,14 +2479,23 @@ function gantt(o,tasks,C){
   const vlines=C.audit?o.sup.map(s=>`<span class="gvl sup" style="left:${LBL+x(s.fecha)}px"></span>`).join('')+o.cert.map(c=>`<span class="gvl cert" style="left:${LBL+x(certFecha(c))}px"></span>`).join(''):'';
   return `<div class="gwrap" id="gwrap" data-scroll="${Math.max(0,x(TODAY)-200)}"><div class="gantt" style="width:${width+LBL}px"><div class="gmonths"><div class="glabel">Tarea</div><div class="gtrack" style="width:${width}px">${months}</div></div>${hit}${rows}${aud}${vlines}<span class="gtoday" style="left:${LBL+x(TODAY)}px"><b>hoy</b></span></div></div>`;
 }
-/* desvío de cada tarea: base contra conforme a obra, con el semáforo */
+/* desvío de cada tarea: base contra conforme a obra. 4 cuadros por rango (conteo); al tocar uno se despliega la lista de esas tareas, de mayor a menor desvío */
+const DVSEL={};
+const DV_RANGOS=[['verde','hasta 2 d'],['amarillo','3 a 5 d'],['naranja','6 a 10 d'],['rojo','más de 10 d']];
 function desvios(o){
   const ts=o.tasks.filter(t=>t.real);if(!ts.length)return'';
+  const dvs=ts.map(t=>({t,dv:desvioTarea(o,t)})),por={verde:[],amarillo:[],naranja:[],rojo:[]};
+  dvs.forEach(x=>{const c=semDesvio(x.dv);if(c)por[c].push(x)});
+  Object.values(por).forEach(L=>L.sort((a,b)=>b.dv-a.dv));
   const tarde=ts.filter(t=>(desvioTarea(o,t)||0)>2);
   const causas={};tarde.forEach(t=>{if(t.real.causa)causas[t.real.causa]=(causas[t.real.causa]||0)+1});const top=Object.entries(causas).sort((a,b)=>b[1]-a[1])[0];
-  return `<div class="card"><div class="top"><h3>¿Cuánto se desvió cada tarea?</h3></div><p class="small soft">Días hábiles de diferencia entre lo que fijaba la base y lo que pasó en obra. ${tarde.length?`${plural(tarde.length,'tarea viene','tareas vienen')} con más de 2 días.${top?` Causa más repetida: ${top[0].toLowerCase()}.`:''}`:'Todas dentro de los 2 días.'}</p>
-  <div class="legend"><span><i class="sw c-verde"></i>hasta 2 d</span><span><i class="sw c-amarillo"></i>3 a 5 d</span><span><i class="sw c-naranja"></i>6 a 10 d</span><span><i class="sw c-rojo"></i>más de 10 d</span></div>
-  ${ts.map(t=>{const dv=desvioTarea(o,t),c=semDesvio(dv);return `<button class="prow" data-act="tarea" data-o="${o.id}" data-id="${t.id}"><span><b>${esc(t.name)}</b><span class="muted small">${esc(t.equipo)} · base ${durPlanB(o,t)} d · ${t.real.fin?'real '+durReal(t)+' d':'en curso '+t.real.av+'%'}${t.real.causa&&(dv||0)>2?' · '+esc(t.real.causa):''}</span></span><b class="dvp c-${c}">${dv===null?'—':dv>0?'+'+dv+' d':dv<0?dv+' d':'0 d'}</b></button>`}).join('')}</div>`;
+  /* por defecto, el cuadro de mayor desvío que tenga tareas */
+  const def=['rojo','naranja','amarillo','verde'].find(c=>por[c].length)||'verde';
+  const sel=DVSEL[o.id]&&DV_RANGOS.some(r=>r[0]===DVSEL[o.id])?DVSEL[o.id]:def;
+  const filas=por[sel].map(({t,dv})=>{const c=semDesvio(dv);return `<button class="prow" data-act="tarea" data-o="${o.id}" data-id="${t.id}"><span><b>${esc(t.name)}</b><span class="muted small">${esc(t.equipo)} · base ${durPlanB(o,t)} d · ${t.real.fin?'real '+durReal(t)+' d':'en curso '+t.real.av+'%'}${t.real.causa&&(dv||0)>2?' · '+esc(t.real.causa):''}</span></span><b class="dvp c-${c}">${dv>0?'+'+dv+' d':dv<0?dv+' d':'0 d'}</b></button>`}).join('');
+  return `<div class="card"><div class="top"><h3>¿Cuánto se desvió cada tarea?</h3></div><p class="small soft">Días hábiles de diferencia entre lo que fijaba la base y lo que pasó en obra. ${tarde.length?`${plural(tarde.length,'tarea viene','tareas vienen')} con más de 2 días.${top?` Causa más repetida: ${top[0].toLowerCase()}.`:''}`:'Todas dentro de los 2 días.'} Tocá un cuadro para ver sus tareas.</p>
+  <div class="dvq-row">${DV_RANGOS.map(([c,l])=>`<button type="button" class="dvq c-${c}${c===sel?' on':''}" data-act="dvSel" data-o="${o.id}" data-c="${c}" aria-pressed="${c===sel}"><b>${por[c].length}</b><span>${l}</span></button>`).join('')}</div>
+  <div class="dvq-lista">${filas||'<p class="muted small">Ninguna tarea en este rango.</p>'}</div></div>`;
 }
 function modelBox(o){const f=factores(o),dir=esDir();return `<div class="modelbox"><div class="top"><span class="eyebrow" style="color:var(--gold)">Modelo de la obra</span>${dir?`<button class="btn sm" data-act="modeloObra" data-o="${o.id}">Editar modelo de obra</button>${esDir()?'<button class="btn sm" data-act="plantillas">Plantillas</button>':''}`:`<span class="lockmsg">${LOCKSVG} Definido por la Dirección</span>`}</div><div class="params"><div><span>Tipología</span><b>${modeloTxt(o)}</b></div><div><span>Superficie</span><b>${o.m2} m²</b></div><div><span>Terminación</span><b>${NIVEL[o.nivel].n}</b></div><div><span>Inicio</span><b>${fmt(d(o.inicio))}</b></div></div>${o.tpl?`<p class="small soft">Cronograma por fases generado desde la plantilla «Vivienda unifamiliar» (${o.mod2?NIV_TXT[Math.min(4,o.mod2.niveles)-1]:''}${o.mod2&&o.mod2.subsuelo?' + subsuelo':''}${o.mod2&&o.mod2.piscina?' · piscina':''} · ${o.mod2?o.mod2.term:''}). Las fechas se editan a mano y de forma independiente.</p>`:''}<details style="${o.tpl?'display:none':''}"><summary class="small muted">Cómo sale la base</summary><p class="small soft">Cada rubro tiene una duración estándar (Más › Modelos de obra) que se ajusta por los m² de cada planta en estructura y mampostería, por la superficie total en instalaciones y terminaciones, y por el nivel de terminación. Las tareas se solapan como en obra.</p><p class="formula">factor por planta ×${f.pl.toFixed(2)} · por superficie ×${f.tot.toFixed(2)} · terminación ×${f.nv.toFixed(2)} · margen contractual ${o.margen||0}%</p></details></div>`}
 
@@ -3775,9 +3789,9 @@ function tareaInfoTpl(o,t){if(!o.tpl)return '';const T=tplT(o),TT=t.cod?T.tareas
 
 /* ===== DIR-08 · el estado de cada obra queda en la nube (avance, tarjetas, planos) ===== */
 const OV_B={},OV_L={};let OV_T=0;
-const tkey=(o,t)=>(t.cod||!/^t\d+$/.test(t.id))?t.id:'r:'+t.rubro+'#'+o.tasks.filter(x=>!x.cod&&x.rubro===t.rubro).indexOf(t);
-const ckey=(o,c)=>tkey(o,c.task)+'|'+(c.ckey||c.rcod||c.tipo);
-const ikey=i=>{if(!i.k)i.k=i.txt;return i.k};
+function tkey(o,t){return (t.cod||!/^t\d+$/.test(t.id))?t.id:'r:'+t.rubro+'#'+o.tasks.filter(x=>!x.cod&&x.rubro===t.rubro).indexOf(t)}
+function ckey(o,c){return tkey(o,c.task)+'|'+(c.ckey||c.rcod||c.tipo)}
+function ikey(i){if(!i.k)i.k=i.txt;return i.k}
 const skey=s=>{if(!s.sk)s.sk=s.manual?'m'+Date.now().toString(36)+Math.random().toString(36).slice(2,5):s.rubro+'|'+s.folder+'|'+s.nombre;return s.sk};
 const dkey=(o,x)=>{const s=x.slot?[...(o.planos||[]),...(o.pTrash||[]).map(t=>t.s)].find(p=>p.id===x.slot):null;return(s?skey(s):'c:'+x.cat)+'|'+x.nombre+'|'+x.ver};
 function ovMapa(o){const m={r:{},c:{},p:{},dc:{},t:{},k:{}};(o.tasks||[]).forEach(t=>{if(t.ctl&&Object.keys(t.ctl).length)m.k[tkey(o,t)]=JSON.stringify(t.ctl)});
@@ -3814,7 +3828,7 @@ function ovAplicar(o,ov){if(!ov)return;try{
   (ov.xk||[]).forEach(k=>{const t=o.tasks.find(x=>tkey(o,x)===k);if(t)delete t.ctl});
   Object.entries(ov.k||{}).forEach(([k,v])=>{const t=o.tasks.find(x=>tkey(o,x)===k);if(t)t.ctl=v});
  }catch(e){console.error('ovAplicar',o.id,e)}}
-function ovFlush(){let ch=false;OBRAS.forEach(o=>{if(!o.tasks||!o.tasks.length)return;if(!OV_B[o.id]){OV_B[o.id]=ovMapa(o);OV_L[o.id]='null'}const d=ovDiff(o),s=JSON.stringify(d);if(s!==OV_L[o.id]){OV_L[o.id]=s;if(d)o.ov=d;else delete o.ov;ch=true}});if(ch)cfgGuardar()}
+function ovFlush(){let ch=false;OBRAS.forEach(o=>{if(!o.tasks||!o.tasks.length)return;if(!OV_B[o.id]){OV_B[o.id]=ovMapa(o);OV_L[o.id]='null'}const d=ovDiff(o),s=JSON.stringify(d);if(s!==OV_L[o.id]){OV_L[o.id]=s;if(d)o.ov=d;else delete o.ov;o.ovt=Date.now();ch=true}});if(ch)cfgGuardar()}
 function ovInit(){OBRAS.forEach(o=>{if(!o.tasks)return;OV_B[o.id]=ovMapa(o);if(o.ov)ovAplicar(o,o.ov);try{const ti=new Map(o.tasks.map((t,i)=>[t,i]));o.cards.sort((a,b)=>((ti.get(a.task)??1e9)-(ti.get(b.task)??1e9))||String(ckey(o,a)).localeCompare(String(ckey(o,b))))}catch(e){}OV_L[o.id]=JSON.stringify(ovDiff(o))})}
 function ovRebase(o){if(!o.tpl)return;const sc={...o,tasks:[],cards:[],planos:[],cert:[],base:o.base,mod2:o.mod2,sup:[]};tplResync(sc);OV_B[o.id]=ovMapa(sc)}
 {const _d=draw;draw=function(){_d();clearTimeout(OV_T);OV_T=setTimeout(ovFlush,500)};document.addEventListener('visibilitychange',()=>{if(document.hidden)ovFlush()})}
@@ -3822,6 +3836,7 @@ function ovRebase(o){if(!o.tpl)return;const sc={...o,tasks:[],cards:[],planos:[]
 /* ===== DIR-08 · respaldo antes de migrar o regenerar ===== */
 function respaldoObra(o,motivo){const r={t:Date.now(),m:motivo,tpl:!!o.tpl,mod2:o.mod2?JSON.parse(JSON.stringify(o.mod2)):null,f:{inicio:o.inicio,m2:o.m2,plantas:o.plantas,subsuelo:!!o.subsuelo,pileta:!!o.pileta,nivel:o.nivel},ed:JSON.parse(JSON.stringify(o.edits||[])),base:JSON.parse(JSON.stringify(o.base)),ov:ovDiff(o),nT:o.tasks.length,nC:o.cards.length};
   o.resp=[r,...(o.resp||[])].slice(0,10);return r}
+A.dvSel=ds=>{DVSEL[ds.o]=ds.c;draw()};
 A.respRest=ds=>{const o=findO(ds.o),r=(o.resp||[])[+ds.i];if(!o||!r||!esDir())return;if(!confirm('¿Restaurar el respaldo del '+fmtLargo(r.t)+'? Vuelve el cronograma, el modelo y el avance de ese momento.'))return;
   Object.assign(o,r.f);o.edits=r.ed;if(r.tpl){o.tpl=true;o.mod2=r.mod2}else{delete o.tpl;delete o.mod2}o.cg=Date.now();o.base=JSON.parse(JSON.stringify(r.base));if(r.ov)o.ov=r.ov;else delete o.ov;o.resp=o.resp.filter((x,i)=>i!==+ds.i);
   cfgGuardar();toast('Respaldo restaurado. Recargando…');setTimeout(()=>location.reload(),700)};
@@ -5012,7 +5027,7 @@ function fusion(viejo,nuevo){
       let b=de(B,id);
       if(!b){if((A.nuevas||[]).some(x=>x&&x.id===id))return;B.mod=B.mod||{};b=B.mod[id]={}}
       if((+b.cg||0)>=+a.cg)return;
-      CRONO.forEach(k=>{if(a[k]!==undefined)b[k]=a[k];else delete b[k]});ch=true});
+      CRONO.forEach(k=>{/* el estado de tarjetas y los respaldos van por su propio sello: un aparato con modelo más nuevo pero tarjetas viejas no pisa las de la nube */if((k==='ov'||k==='resp')&&(+b.ovt||0)>(+a.ovt||0))return;if(a[k]!==undefined)b[k]=a[k];else delete b[k]});if((+a.ovt||0)>(+b.ovt||0))b.ovt=a.ovt;ch=true});
     {const m=new Map();[...(A.avisos||[]),...(B.avisos||[])].forEach(x=>{if(x&&x.id)m.set(x.id,x)});const u=[...m.values()].sort((x,y)=>(x.t-y.t)||String(x.id).localeCompare(String(y.id))).slice(-40),ids=x=>(x||[]).map(z=>z.id).join();if(u.length&&ids(u)!==ids(B.avisos)){B.avisos=u;ch=true}}
     if(A.fu&&A.fu.t&&(!B.fu||(+B.fu.t||0)<A.fu.t)){B.fu=A.fu;ch=true}
     {const dn=new Set([...(A.delN||[]),...(B.delN||[])]);B.nuevas=B.nuevas||[];(A.nuevas||[]).forEach(x=>{if(x&&x.id&&!dn.has(x.id)&&!B.nuevas.some(y=>y&&y.id===x.id)){B.nuevas.push(x);ch=true}});if(dn.size&&JSON.stringify([...dn])!==JSON.stringify(B.delN||[])){B.delN=[...dn];ch=true}}
@@ -5033,8 +5048,11 @@ function indSync(){try{const S=window.__sync,off=!navigator.onLine||S.est==='err
   if(window.__nxRec&&window.__nxRec.pend&&!off&&!pend){tx=window.__nxRec.ver&&!window.__nxRec.datos?'Versión nueva · tocá para actualizar':'Hay cambios nuevos · tocá para verlos';c='#c9a24a'}
   document.querySelectorAll('.brand .mono').forEach(e=>{let i=e.querySelector('.nxi');if(!i){i=document.createElement('span');i.className='nxi';i.style.cssText='display:block;font-size:11px;font-weight:600;cursor:pointer';i.onclick=ev=>{ev.stopPropagation();if(sucio.size)window.nexoSubirYa&&window.nexoSubirYa();else if(window.__nxRec&&window.__nxRec.pend)nxRecargarYa()};e.appendChild(i)}if(i.textContent!==tx)i.textContent=tx;i.style.color=c})}catch(x){}}
 setInterval(indSync,1000);window.addEventListener('online',indSync);window.addEventListener('offline',indSync);
+const POSTS_T=[];
 async function subir(k){
   let v=lget(k);if(v==null||v===VACIO)return true;
+  /* freno: si se suben más de 25 veces en 1 minuto algo está en bucle; se frena 30 s y queda pendiente (no se pierde nada) */
+  {const ahora=Date.now();while(POSTS_T.length&&ahora-POSTS_T[0]>60000)POSTS_T.shift();if(POSTS_T.length>=25){console.warn('nexo2: demasiadas subidas, se frena 30 s');clearTimeout(tim[k]);tim[k]=setTimeout(()=>subir(k),30000);return false}POSTS_T.push(ahora)}
   estado('guardando');
   let recargar=false;
   try{const g=await fetch(API,{cache:'no-store'});if(g.ok){const d=(await g.json())[MAP[k]];
@@ -5107,7 +5125,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261126-160203';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261126-232158';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
