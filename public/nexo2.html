@@ -1461,7 +1461,7 @@ function subirPlano(s,fileId,por,txt){const o=s.obra;const prev=slotDocs(s).filt
   if(ROLE()!=='jefe')notify('jefe',o,`${ver==='A'?'Se subió':'Nueva versión de'} ${s.nombre} (rev ${ver})`,{t:'doc',id:x.id});
   if(ROLE()==='jefe')notify('estudio',o,`La jefatura cargó ${s.nombre} rev ${ver} recibido por fuera de la app`,{t:'doc',id:x.id});
   return x}
-const iDone=i=>i.estado==='ok'||i.estado==='na';
+const iDone=i=>i.estado==='ok'||i.estado==='na'||i.estado==='pre';/* 'pre' = Resuelto antes de Nexo (obra cargada ya en curso) */
 const cDone=c=>c.items.length>0&&c.items.every(iDone);
 const cProg=c=>{const n=c.items.length,k=c.items.filter(iDone).length;return{n,k,pct:n?Math.round(k/n*100):100}};
 function timing(c){if(c.plazo!=null){const s=c.prev&&c.obra?Math.min(c.task.start,inicioObraDe(c.obra)):c.task.start,pedir=s-c.plazo*7*DAY,open=Math.min(s-(c.apert||0)*7*DAY,pedir);return{limit:s,open,amar:Math.max(open,pedir-14*DAY),nar:pedir}}const limit=subWork(c.task.start,3);let open,span;if(c.origen==='manual'){open=Math.min(c.created,limit);span=Math.max(DAY,limit-open)}else{span=c.antic*7*DAY;open=limit-span}return{limit,open,amar:open+span/3,nar:open+2*span/3}}
@@ -5107,7 +5107,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261126-153300';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261126-160203';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -6875,6 +6875,122 @@ A.edAddOk=ds=>{const o=findO(EOID);if(!o||EMODO!=='base')return;const sc=seccion
 /* ---------- 2 · al guardar el modelo: inicio a más de 6 meses ---------- */
 {const f=SUBMIT.modelo2;if(f)SUBMIT.modelo2=function(form,ev){try{if(typeof tm2Read==='function')tm2Read();const M=TM&&TM.M;if(M&&M.inicio){const ini=d(M.inicio);if(Math.abs(ini-TODAY)>183*DAY){const txt=new Date(ini).toLocaleDateString('es-AR',{timeZone:'UTC'});
   if(!confirm(`La fecha de inicio del modelo es el ${txt}: queda a más de 6 meses de hoy. ¿Es correcta?`))return}}}catch(e){}return f.apply(this,arguments)}}
+})();
+</script>
+
+<script id="nx-en-curso">
+/* =====================================================================
+   Obra ya en curso: punto de arranque
+   - La Dirección elige la etapa/fase (o una tarea) donde está hoy la obra y una fecha de corte.
+   - Lo anterior queda terminado en el conforme a obra (fechas de la base) y sus tarjetas
+     se cierran como "Resuelto antes de Nexo" (estado 'pre'): gris, no vencen, no cuentan en
+     pérdida por esperas, desempeño ni auditorías.
+   - Las tareas en curso al corte siguen activas; sus tarjetas también se cierran salvo lo que se destilde.
+   - Todo se puede reabrir.
+   ===================================================================== */
+(function(){
+const st=document.createElement('style');st.textContent=`
+.irow2.st-pre{opacity:.62;filter:grayscale(1)}
+.irow2.st-pre .ipre{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 6px}
+.tg-pre{background:rgba(140,140,140,.18);color:#8a8f98;border:1px solid rgba(140,140,140,.45);border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700;letter-spacing:.04em}
+.ecg{border:1px solid rgba(184,145,90,.3);border-radius:14px;padding:10px 12px;margin:10px 0;background:rgba(255,255,255,.03)}
+.ecg h3{margin:0 0 6px;font-size:15px}
+.ect{border-top:1px solid rgba(140,140,140,.2);padding:8px 0}
+.ect:first-of-type{border-top:0}
+.ect .ecn{display:flex;gap:8px;align-items:flex-start;font-weight:700}
+.ecc{margin:4px 0 4px 26px;display:flex;flex-direction:column;gap:2px}
+.ecc label{display:flex;gap:8px;align-items:flex-start;font-weight:500;font-size:13.5px}
+.ecc .ecf{margin:2px 0 4px 26px;font-size:12.5px;color:#e67e22}
+.ecc .ecf li{margin:1px 0}
+.ecfalta{border-left:3px solid #e67e22;padding-left:8px}
+.ecg input[type=checkbox]{width:20px;height:20px;flex:0 0 auto;margin-top:1px;accent-color:var(--gold,#b8915a)}`;
+document.head.appendChild(st);
+const esPre=i=>i&&i.estado==='pre';
+const cPre=c=>!!(c&&c.items&&c.items.some(esPre));
+window.cPre=cPre;
+const tPre=t=>!!(t&&t.real&&t.real.pre);
+
+/* ---- métricas: lo resuelto antes de Nexo no cuenta ---- */
+try{const f=pctATiempo;pctATiempo=window.pctATiempo=function(cs){return f((cs||[]).filter(c=>!cPre(c)))}}catch(e){}
+try{const f=econ;econ=window.econ=function(obras){const sv=(obras||[]).map(o=>o.cards);(obras||[]).forEach(o=>{o.cards=o.cards.filter(c=>!cPre(c))});try{return f(obras)}finally{(obras||[]).forEach((o,k)=>{o.cards=sv[k]})}}}catch(e){}
+try{const f=equiposMet;equiposMet=window.equiposMet=function(){const L=obrasOrg(),sv=L.map(o=>o.tasks);L.forEach(o=>{o.tasks=o.tasks.filter(t=>!tPre(t))});try{return f()}finally{L.forEach((o,k)=>{o.tasks=sv[k]})}}}catch(e){}
+try{const f=metricas;metricas=window.metricas=function(){const r=f();try{r.forEach(x=>{const o=x.o;if(!o.tasks.some(tPre))return;const ts=o.tasks.filter(t=>t.real&&!tPre(t)&&(t.real.fin||t.real.av>=15));
+  x.rend=ts.length?Math.round(ts.reduce((s,t)=>{const b=baseDe(o,t);if(!b)return s+1;const pd=b.end-b.start+3*DAY;return s+(t.real.fin?pd/(t.real.fin-t.real.ini+3*DAY):clamp(t.real.av/100/((TODAY-t.real.ini)/pd),.3,1.5))},0)/ts.length*100):null})}catch(e){}return r}}catch(e){}
+
+/* ---- ítem cerrado antes de Nexo: gris y con "Reabrir" ---- */
+try{const f=itemRow;itemRow=window.itemRow=function(c,i,own,est,cli){if(!esPre(i))return f.apply(this,arguments);const puede=own||esDir();
+  return `<div class="irow2 st-pre" id="it-${i.id}"><div class="ihead"><span class="itxt">${esc(i.txt)}</span></div><div class="ipre"><span class="tg-pre">RESUELTO ANTES DE NEXO</span>${puede?`<button class="btn sm ghost" data-act="preReabrirItem" data-c="${c.id}" data-i="${i.id}">Reabrir</button>`:''}</div></div>`}}catch(e){}
+const findCard=id=>{for(const o of OBRAS){const c=(o.cards||[]).find(x=>x.id===id);if(c)return c}return null};
+const guardar=()=>{try{if(typeof ovFlush==='function')ovFlush()}catch(e){}try{if(typeof cfgGuardar==='function')cfgGuardar()}catch(e){}};
+A.preReabrirItem=ds=>{const c=findCard(ds.c);if(!c)return;const i=c.items.find(x=>String(x.id)===String(ds.i));if(!i)return;i.estado='falta';i.fecha=0;toast('Ítem reabierto: vuelve a estar en "Falta"');draw();guardar();try{sheetCard(c.id)}catch(e){}};
+A.preReabrirTarea=ds=>{const o=findO(ds.o);if(!o)return;const t=o.tasks.find(x=>x.id===ds.id);if(!t)return;let n=0;
+  if(ds.cards!=='1'&&tPre(t)){t.real=null;delete t.real}
+  o.cards.filter(c=>c.task===t).forEach(c=>c.items.forEach(i=>{if(esPre(i)){i.estado='falta';i.fecha=0;n++}}));
+  toast(ds.cards==='1'?`Se reabrieron ${n} ${n===1?'ítem':'ítems'} de las tarjetas`:`Tarea reabierta${n?' y '+n+(n===1?' ítem':' ítems')+' de sus tarjetas':''}`);draw();guardar();try{sheetTarea(o.id,t.id)}catch(e){}};
+/* botones de reabrir en la ficha de la tarea */
+try{const f=sheetTarea;sheetTarea=window.sheetTarea=function(oid,id){const r=f.apply(this,arguments);try{const o=findO(oid),t=o&&o.tasks.find(x=>x.id===id);if(!t||!(esDir()||puedeEditar(o)))return r;const h=document.querySelector('.sheet h2');if(!h||document.getElementById('pre-box'))return r;
+  const cp=o.cards.filter(c=>c.task===t&&cPre(c)).length;if(!tPre(t)&&!cp)return r;const b=document.createElement('div');b.id='pre-box';b.className='infobox';b.style.margin='8px 0';
+  b.innerHTML=`<span class="tg-pre">RESUELTO ANTES DE NEXO</span> <span class="small">${tPre(t)?'Esta tarea se dio por terminada al cargar la obra en curso.':''}${cp?` ${cp} ${cp===1?'tarjeta cerrada':'tarjetas cerradas'} así.`:''}</span><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">${tPre(t)?`<button class="btn sm" data-act="preReabrirTarea" data-o="${o.id}" data-id="${t.id}">Reabrir la tarea</button>`:''}${cp?`<button class="btn sm ghost" data-act="preReabrirTarea" data-o="${o.id}" data-id="${t.id}" data-cards="1">Reabrir sus tarjetas</button>`:''}</div>`;h.after(b)}catch(e){}return r}}catch(e){}
+
+/* ---- el asistente: elegir el punto y revisar el resumen ---- */
+let EC=null;
+const etDe=(o,t)=>t.etapaCod||('r:'+(t.rubro||'otros'));
+const etNom=(o,t)=>t.etapa||(typeof LIB!=='undefined'&&LIB[t.rubro]&&LIB[t.rubro].n)||t.rubro||'Otras tareas';
+function plan(o,sel,corteMs){const T=o.tasks.slice().sort((a,b)=>a.start-b.start||String(a.name).localeCompare(String(b.name),'es'));let grp;
+  if(sel.startsWith('t:'))grp=T.filter(t=>t.id===sel.slice(2));else if(sel.startsWith('e:'))grp=T.filter(t=>etDe(o,t)===sel.slice(2));else grp=T.filter(t=>'f'+(t.fase||1)===sel);
+  if(!grp.length)return null;const P=Math.min(...grp.map(t=>t.start)),G=new Set(grp);
+  const term=[],curso=[],post=[];
+  T.forEach(t=>{if(G.has(t)){(t.start<=Math.max(corteMs,P)?curso:post).push(t);return}
+    if(t.start<P){(fEnd(t.end)<corteMs?term:curso).push(t);return}
+    (t.start<=corteMs?curso:post).push(t)});
+  return{P,term,curso,post}}
+const faltan=c=>c.items.filter(i=>!iDone(i));
+function sheetEC(){const o=findO(EC.o);if(!o)return;const T=o.tasks;
+  const etapas=[];const vistos=new Set();T.slice().sort((a,b)=>a.start-b.start).forEach(t=>{const k=etDe(o,t);if(vistos.has(k))return;vistos.add(k);etapas.push([k,etNom(o,t)])});
+  let fs=[];try{fs=(PLANTILLA_BASE.fases||[]).map(f=>[f.numero,f.nombre])}catch(e){}
+  const fases=[...new Set(T.map(t=>t.fase||1))].sort();
+  const opts=`<optgroup label="Etapa o rubro">${etapas.map(([k,n])=>`<option value="e:${esc(k)}" ${EC.sel==='e:'+k?'selected':''}>${esc(n)}</option>`).join('')}</optgroup><optgroup label="Fase">${fases.map(f=>`<option value="f${f}" ${EC.sel==='f'+f?'selected':''}>${esc((fs.find(x=>x[0]===f)||[0,'Fase '+f])[1])}</option>`).join('')}</optgroup><optgroup label="Tarea puntual">${T.slice().sort((a,b)=>a.start-b.start).map(t=>`<option value="t:${esc(t.id)}" ${EC.sel==='t:'+t.id?'selected':''}>${esc(t.name)} · ${fmt(t.start)}</option>`).join('')}</optgroup>`;
+  const pl=EC.sel?plan(o,EC.sel,d(EC.corte)):null;
+  const card=(c,k)=>{const fl=faltan(c);if(!fl.length)return'';const key=c.id,on=!EC.off[key];
+    return `<label class="${fl.length&&c.items.some(i=>i.estado==='falta')?'ecfalta':''}"><input type="checkbox" data-ec="c" data-k="${esc(key)}" ${on?'checked':''}> <span>${esc(CARD[c.tipo]?CARD[c.tipo].n:'Tarjeta')}${c.rdesc?' · '+esc(c.rdesc):''} <span class="muted small">(${fl.length} ${fl.length===1?'ítem':'ítems'} sin cerrar)</span></span></label>${k?`<ul class="ecf">${fl.map(i=>`<li>${esc(i.txt)}${i.estado!=='falta'?' · '+esc(i.estado):''}</li>`).join('')}</ul>`:''}`};
+  const tarea=(t,cur)=>{const cs=o.cards.filter(c=>c.task===t&&faltan(c).length);const on=!EC.offT[t.id];const conFalta=cs.some(c=>c.items.some(i=>i.estado==='falta'));
+    return `<div class="ect"><div class="ecn">${cur?'':`<input type="checkbox" data-ec="t" data-k="${esc(t.id)}" ${on?'checked':''} aria-label="Dar por terminada ${esc(t.name)}">`}<span>${esc(t.name)} <span class="muted small" style="font-weight:500">${fmt(t.start)} → ${fmt(t.end)}${cs.length?' · '+cs.length+(cs.length===1?' tarjeta':' tarjetas'):' · sin tarjetas abiertas'}</span></span></div>${cs.length?`<div class="ecc">${cs.map(c=>card(c,cur||conFalta)).join('')}</div>`:''}</div>`};
+  let res='';
+  if(pl){const nT=pl.term.filter(t=>!EC.offT[t.id]).length,cards=[...pl.term.filter(t=>!EC.offT[t.id]),...pl.curso].flatMap(t=>o.cards.filter(c=>c.task===t&&faltan(c).length&&!EC.off[c.id]));
+    const tc=new Set(cards.map(c=>c.task)).size;
+    const termF=pl.term.filter(t=>o.cards.some(c=>c.task===t&&c.items.some(i=>i.estado==='falta')));
+    res=`<div class="infobox"><b>Se van a cerrar ${cards.length} ${cards.length===1?'tarjeta':'tarjetas'} de ${tc} ${tc===1?'tarea':'tareas'}</b> y quedan ${nT} ${nT===1?'tarea terminada':'tareas terminadas'} en el conforme a obra. Destildá lo que todavía falta de verdad (por ejemplo un plano o una definición pendiente): eso queda abierto.</div>
+    <div class="ecg"><h3>Tareas en curso al corte (${pl.curso.length})</h3><p class="muted small">Siguen activas para cargar el avance. Sus tarjetas se cierran salvo las que destildes; abajo de cada una están los ítems que estaban en "Falta".</p>${pl.curso.map(t=>tarea(t,true)).join('')||'<p class="muted small">Ninguna.</p>'}</div>
+    <div class="ecg"><h3>Terminadas antes de Nexo (${pl.term.length})</h3><p class="muted small">Quedan terminadas con las fechas de la base. Destildá una tarea si no está terminada. ${termF.length?`<b class="t-naranja">${termF.length} ${termF.length===1?'tiene':'tienen'} ítems en "Falta": están destacadas.</b>`:''}</p>${pl.term.map(t=>tarea(t,false)).join('')||'<p class="muted small">Ninguna.</p>'}</div>
+    <p class="muted small">Las ${pl.post.length} tareas posteriores siguen normales, con sus tarjetas.</p>
+    <button class="btn gold full" type="button" data-act="ecAplicar">Cerrar ${cards.length} ${cards.length===1?'tarjeta':'tarjetas'} y marcar ${nT} ${nT===1?'tarea terminada':'tareas terminadas'}</button>`}
+  keepScroll(()=>openSheet(`<span class="eyebrow">${esc(o.nombre)} · Dirección</span><h2>La obra ya está en curso</h2>
+  <p class="muted small">Elegí dónde está hoy la obra. Lo anterior queda terminado y sus tarjetas se cierran como <b>Resuelto antes de Nexo</b>: se ven en gris y no cuentan como vencidas, ni en la pérdida por esperas, ni en el desempeño ni en las auditorías. Todo se puede reabrir.</p>
+  <div class="row2"><label class="f">Punto de arranque (etapa, fase o tarea)<select id="ec-sel" data-chg="ecSel"><option value="">Elegí…</option>${opts}</select></label><label class="f">Fecha de corte<input id="ec-corte" type="date" value="${esc(EC.corte)}" data-chg="ecCorte"></label></div>
+  ${res||'<p class="muted small">Elegí el punto de arranque para ver el resumen.</p>'}
+  <button class="btn ghost full" type="button" data-act="close">Cancelar</button>`,'Obra en curso'))}
+A.obraEnCurso=ds=>{const o=findO(ds.o||S.obra);if(!o||!esDir())return;if(!o.tasks||!o.tasks.length){toast('Primero generá el cronograma de la obra');return}EC={o:o.id,sel:'',corte:iso(TODAY),off:{},offT:{}};sheetEC()};
+CHG.ecSel=v=>{if(!EC)return;EC.sel=v;EC.off={};EC.offT={};sheetEC()};
+CHG.ecCorte=v=>{if(!EC||!v)return;EC.corte=v;sheetEC()};
+document.addEventListener('change',e=>{const el=e.target;if(!EC||!el||!el.dataset||!el.dataset.ec)return;const k=el.dataset.k;if(el.dataset.ec==='c'){if(el.checked)delete EC.off[k];else EC.off[k]=1}else{if(el.checked)delete EC.offT[k];else EC.offT[k]=1}sheetEC()});
+A.ecAplicar=()=>{if(!EC)return;const o=findO(EC.o);const pl=plan(o,EC.sel,d(EC.corte));if(!pl)return;let nc=0,ni=0,nt=0;
+  try{if(typeof respaldoObra==='function')respaldoObra(o,'Antes de cargar la obra en curso')}catch(e){}
+  const term=pl.term.filter(t=>!EC.offT[t.id]);
+  term.forEach(t=>{if(!(t.real&&t.real.av>=100)){t.real={ini:t.start,fin:t.end,av:100,causa:'',dot:(o.dotacion&&o.dotacion.hoy)||0,pre:1};nt++}});
+  [...term,...pl.curso].forEach(t=>o.cards.filter(c=>c.task===t&&!EC.off[c.id]).forEach(c=>{let k=0;c.items.forEach(i=>{if(!iDone(i)){i.estado='pre';i.fecha=d(EC.corte);k++}});if(k){nc++;ni+=k}}));
+  o.enCurso={t:Date.now(),corte:EC.corte,punto:EC.sel};EC=null;closeSheet();draw();guardar();
+  toast(`Listo: ${nt} ${nt===1?'tarea terminada':'tareas terminadas'} y ${nc} ${nc===1?'tarjeta cerrada':'tarjetas cerradas'} (${ni} ítems) como Resuelto antes de Nexo`)};
+
+/* ---- accesos: Editar obra y modelo de obra ---- */
+try{const f=A.editarObra;A.editarObra=function(ds){const r=f.apply(this,arguments);try{const o=findO(ds.o);if(!o||!esDir()||!o.tasks||!o.tasks.length)return r;const sh=document.querySelector('.sheet');if(!sh||document.getElementById('ec-btn'))return r;
+  const b=document.createElement('div');b.className='sec boxed';b.id='ec-btn';b.innerHTML=`<span class="eyebrow">Obra ya en curso</span><p class="muted small">Si la obra empezó antes de usar la app, elegí dónde está hoy y lo anterior se cierra como <b>Resuelto antes de Nexo</b>.</p><button type="button" class="btn sm gold" data-act="obraEnCurso" data-o="${o.id}">La obra ya está en curso…</button>`;
+  const fm=sh.querySelector('form[data-submit]');if(fm)fm.after(b);else sh.appendChild(b)}catch(e){}return r}}catch(e){}
+try{const f=tm2Html;tm2Html=window.tm2Html=function(){let h=f.apply(this,arguments);try{if(!TM||!TM.aplicar)return h;const chk=`<label class="chk2" style="margin:8px 0"><input type="checkbox" id="tm-encurso" ${TM.enCurso?'checked':''} onchange="TM.enCurso=this.checked"> La obra ya está en curso: al generar, elegir dónde está hoy (lo anterior se cierra como "Resuelto antes de Nexo")</label>`;
+  const k=h.lastIndexOf('<button class="btn gold" type="submit"');if(k>0)h=h.slice(0,k)+chk+h.slice(k)}catch(e){}return h}}catch(e){}
+{const f=SUBMIT.modelo2;if(f)SUBMIT.modelo2=function(form,ev){const quiere=!!(TM&&TM.enCurso),oid=form&&form.dataset&&form.dataset.o,cg0=oid&&findO(oid)?findO(oid).cg:0;const r=f.apply(this,arguments);
+  if(quiere&&oid){let n=0;const iv=setInterval(()=>{n++;const o=findO(oid);if(o&&o.cg!==cg0&&o.tasks&&o.tasks.length&&!document.querySelector('.nxm-ov')){clearInterval(iv);setTimeout(()=>A.obraEnCurso({o:oid}),400)}else if(n>40)clearInterval(iv)},250)}return r}}
+/* la IA también lo sabe */
+try{const _ia=iaDatosObra;iaDatosObra=window.iaDatosObra=function(o){const dd=_ia(o);try{const n=(o.cards||[]).filter(cPre).length;if(n||o.enCurso)dd.resuelto_antes_de_nexo={tarjetas:n,tareas:(o.tasks||[]).filter(tPre).length,corte:o.enCurso?o.enCurso.corte:''}}catch(e){}return dd}}catch(e){}
 })();
 </script>
 
