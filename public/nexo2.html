@@ -5107,7 +5107,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261126-110440';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261126-153300';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -6706,4 +6706,176 @@ SUBMIT.ctEscPedir=f=>{const o=findO(f.dataset.o),m=($('#cte-m')||{}).value||'otr
 A.ctEscCerrar=ds=>{const o=findO(ds.o);enviar(o,ds.id,{cerrar:1},'Pedido cerrado')};
 })();
 </script>
+<script id="nx-base-editor">
+/* =====================================================================
+   Base del cronograma (Dirección):
+   1) aviso de tareas duplicadas (al agregar o renombrar) + marca en el cronograma
+   2) aviso de correlatividad, de duración < 50 % del modelo y de inicio del modelo a más de 6 meses
+   3) modal propio en lugar de confirm() (en algunos navegadores el nativo no aparece y cancela solo)
+   5) editor de la base por fase → rubros desplegables, con buscador y "Agregar tarea" en cada rubro
+   El generador del modelo NO se toca.
+   ===================================================================== */
+(function(){
+/* ---------- 3 · modal propio ---------- */
+const st=document.createElement('style');st.textContent=`
+.nxm-ov{position:fixed;inset:0;z-index:2147483000;background:rgba(8,10,14,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:18px}
+.nxm{max-width:460px;width:100%;border-radius:20px;padding:20px 18px 16px;background:var(--surface,rgba(30,32,38,.92));color:var(--fg,#f4f1ea);border:1px solid rgba(184,145,90,.45);box-shadow:0 24px 60px rgba(0,0,0,.45);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);font-family:inherit}
+.nxm h3{margin:0 0 8px;font-family:'Playfair Display',Georgia,serif;font-size:18px}
+.nxm p{margin:0 0 6px;white-space:pre-line;line-height:1.45;font-size:14.5px}
+.nxm .nxm-b{display:flex;gap:10px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}
+.nxm button{min-height:44px;padding:0 18px;border-radius:12px;font-weight:700;font-size:14.5px;cursor:pointer;border:1px solid rgba(184,145,90,.55);background:transparent;color:inherit}
+.nxm button.ok{background:var(--gold,#b8915a);color:#16120b;border-color:transparent}
+.nxm button.ok.peligro{background:#c0392b;color:#fff}
+.edtools{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin:6px 0 10px}
+.edtools label{flex:1 1 200px}
+.edsec{border:1px solid rgba(184,145,90,.28);border-radius:14px;margin:8px 0;padding:0 10px;background:rgba(255,255,255,.03)}
+.edsec>summary{cursor:pointer;list-style:none;padding:12px 2px;display:flex;justify-content:space-between;gap:8px;align-items:baseline;font-weight:700}
+.edsec>summary::-webkit-details-marker{display:none}
+.edsec>summary .eds-n::before{content:'▸ ';color:var(--gold,#b8915a)}
+.edsec[open]>summary .eds-n::before{content:'▾ '}
+.edsec>summary .eds-d{font-weight:500;font-size:12px;opacity:.75;text-align:right}
+.edsec .edadd{margin:6px 0 12px}
+.edsec .edaddf{border-top:1px dashed rgba(184,145,90,.35);padding-top:8px;margin:6px 0 12px}
+.edx{display:block;color:#e67e22;font-size:12px;font-weight:600;margin-top:2px}
+.edfase-h{margin:14px 0 2px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold,#b8915a);font-weight:700}`;
+document.head.appendChild(st);
+function nxConfirm(msg,opt){opt=opt||{};return new Promise(res=>{const ov=document.createElement('div');ov.className='nxm-ov';ov.setAttribute('role','dialog');ov.setAttribute('aria-modal','true');
+  const peligro=opt.peligro!=null?opt.peligro:/borr|elimin|quit|cero|regenerar|no se puede deshacer/i.test(msg);
+  const esc2=x=>String(x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  ov.innerHTML=`<div class="nxm"><h3>${esc2(opt.titulo||'Confirmar')}</h3><p>${esc2(msg)}</p><div class="nxm-b"><button type="button" class="no">${esc2(opt.no||'Cancelar')}</button><button type="button" class="ok ${peligro?'peligro':''}">${esc2(opt.si||'Sí, seguir')}</button></div></div>`;
+  const fin=v=>{document.removeEventListener('keydown',kd,true);ov.remove();res(v)};
+  const kd=e=>{if(e.key==='Escape'){e.preventDefault();fin(false)}else if(e.key==='Enter'){e.preventDefault();fin(true)}};
+  ov.addEventListener('click',e=>{if(e.target===ov)fin(false)});
+  ov.querySelector('.no').onclick=e=>{e.stopPropagation();fin(false)};ov.querySelector('.ok').onclick=e=>{e.stopPropagation();fin(true)};
+  document.addEventListener('keydown',kd,true);document.body.appendChild(ov);setTimeout(()=>{try{ov.querySelector('.ok').focus()}catch(e){}},30)})}
+window.nxConfirm=nxConfirm;
+/* confirm() de toda la app: muestra el modal propio y, si se acepta, repite el mismo toque/envío
+   (así no hay que reescribir cada acción; lo aceptado vale hasta el próximo toque del usuario) */
+const nativo=window.confirm.bind(window);let ULT=null,REPLAY=false;const OK=new Set();
+document.addEventListener('click',e=>{if(REPLAY)return;if(e.target&&e.target.closest&&e.target.closest('.nxm-ov'))return;ULT={tipo:'click',el:e.target,t:Date.now()};OK.clear()},true);
+document.addEventListener('submit',e=>{if(REPLAY)return;ULT={tipo:'submit',form:e.target,sub:e.submitter||null,t:Date.now()};OK.clear()},true);
+const reubicar=el=>{if(!el||el.isConnected)return el;const a=el.closest?el:null;if(!a||!a.dataset)return null;const sel=Object.entries(a.dataset).map(([k,v])=>`[data-${k.replace(/[A-Z]/g,m=>'-'+m.toLowerCase())}="${CSS.escape(v)}"]`).join('');return sel?document.querySelector(sel):null};
+function repetir(u){REPLAY=true;try{if(u.tipo==='click'){let el=u.el&&u.el.closest?u.el.closest('[data-act]')||u.el:u.el;el=reubicar(el);if(el)el.click()}
+  else{const f=reubicar(u.form)||u.form;if(f&&f.isConnected){if(f.requestSubmit){try{u.sub&&u.sub.isConnected?f.requestSubmit(u.sub):f.requestSubmit()}catch(e){f.requestSubmit()}}else f.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))}}}finally{REPLAY=false}}
+window.confirm=function(msg){msg=String(msg==null?'':msg);if(OK.has(msg))return true;const u=ULT;
+  if(!u||Date.now()-u.t>120000)return nativo(msg);
+  nxConfirm(msg).then(si=>{if(!si)return;OK.add(msg);repetir(u)});return false};
+
+/* ---------- utilidades de la base ---------- */
+const NIV_RE=/\b(subsuelo|ss|pb|planta baja|pa|planta alta|1°\s*piso|2°\s*piso|3°\s*piso|primer piso|segundo piso)\b/gi;
+const nivelDe=t=>{if(t.nivel)return String(t.nivel).toLowerCase();const m=String(t.name||'').toLowerCase().match(/\b(subsuelo|pb|planta baja|pa|planta alta|1°\s*piso|2°\s*piso|3°\s*piso)\b/);if(!m)return'';const x=m[1].replace(/\s+/g,' ');return x==='pa'||x==='planta alta'?'1° piso':x==='planta baja'?'pb':x};
+const STOP=new Set(['de','del','la','el','los','las','y','e','en','a','al','con','para','por','sobre','tarea','tareas','obra','general','nivel']);
+const tok=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(NIV_RE,' ').replace(/[^a-z0-9ñ ]/g,' ').split(/\s+/).filter(w=>w.length>2&&!STOP.has(w)).map(w=>w.replace(/(es|s)$/,''));
+function parecido(a,b){const A=new Set(tok(a)),B=new Set(tok(b));if(!A.size||!B.size)return false;let i=0;A.forEach(x=>{if(B.has(x))i++});const j=i/(A.size+B.size-i);const chico=A.size<=B.size?A:B,gr=chico===A?B:A;return j>=.5||(chico.size>=1&&[...chico].every(x=>gr.has(x)))}
+const etNom=(o,t)=>t.etapa||(typeof LIB!=='undefined'&&LIB[t.rubro]&&LIB[t.rubro].n)||t.rubro||'';
+const fechas=t=>`${fmt(t.start)} → ${fmt(t.end)}`;
+/* tareas que ya hacen lo mismo que la tarea "x" (nueva, renombrada o manual): mismo rubro/etapa y nivel con nombre parecido, o x abarca un rubro que ya existe */
+function duplicados(o,x,excluirId){const nx=nivelDe(x),out=[];
+  (o.base||[]).forEach(b=>{if(b.id===excluirId||b===x)return;const mismoRub=(x.etapaCod&&b.etapaCod)?x.etapaCod===b.etapaCod:(x.rubro&&b.rubro?x.rubro===b.rubro:true);const nb=nivelDe(b);const mismoNiv=!nx||!nb||nx===nb;
+    if(mismoRub&&mismoNiv&&parecido(x.name,b.name))out.push(b)});
+  if(!out.length){/* tarea manual que abarca un rubro completo del modelo (ej.: "Mampostería" cuando el modelo ya tiene la mampostería por nivel) */
+    const porEt={};(o.base||[]).forEach(b=>{if(b.id===excluirId||b===x||!b.cod)return;const k=b.etapaCod||b.rubro;(porEt[k]=porEt[k]||[]).push(b)});
+    Object.values(porEt).forEach(L=>{const n=etNom(o,L[0]);if(n&&parecido(x.name,n)){const Ln=nx?L.filter(b=>!nivelDe(b)||nivelDe(b)===nx):L;if(Ln.length)out.push(...Ln)}})}
+  return out}
+function msgDup(D,verbo){const d=D[0];return `Esta tarea ya existe en el cronograma: ${d.name} (${fechas(d)})${D.length>1?` y ${D.length-1} ${D.length===2?'tarea más':'tareas más'} del mismo rubro`:''}. ¿Querés ${verbo||'agregarla'} igual?`}
+const solapa=(a,b)=>a.start<=fEnd(b.end)&&b.start<=fEnd(a.end);
+/* manual que se superpone con tareas del modelo (para marcarla en el cronograma y en el editor) */
+function superpuestas(o,t){if(t.cod&&!t.manualNueva)return[];return duplicados(o,t,t.id).filter(b=>b.cod&&solapa(t,b))}
+window.nxSuperpuestas=superpuestas;
+/* predecesoras y sucesoras según las reglas del modelo, sobre la base */
+function relaciones(o,b){const out=[];if(!o.tpl||!b.cod)return out;let T;try{T=tplT(o)}catch(e){return out}
+  const FT=tplFac(T,(o.mod2&&o.mod2.m2)||800,T.coeficientes.superficie_referencia_m2),R=(o.mod2&&o.mod2.ritmo)||1,by={};(o.base||[]).filter(x=>x.cod).forEach(x=>(by[x.cod]=by[x.cod]||[]).push(x));
+  const tt=c=>T.tareas.find(x=>x.codigo===c);
+  const preds=t=>{const TT=tt(t.cod);if(!TT)return[];const r=[];TT.predecesoras.forEach(p=>{if(p.solo_primer_nivel&&t.lk&&t.li!==0)return;const L=by[p.codigo];if(!L)return;const pt=tt(p.codigo);let ps=L;
+    if(pt&&pt.por_nivel){const me=t.li;ps=p.alcance==='N'?L.filter(x=>x.lk===t.lk):p.alcance==='N-1'?L.filter(x=>x.li===me-1):p.alcance==='N+1'?L.filter(x=>x.li===me+1):p.alcance==='FIRST'?[L.slice().sort((a,c)=>a.li-c.li)[0]]:p.alcance==='LAST'?[L.slice().sort((a,c)=>c.li-a.li)[0]]:L}
+    ps.forEach(q=>{if(q)r.push({p,q})})});return r};
+  const req=(p,q)=>{const lg=tplLagD(p,FT,R)/5*7*DAY;return p.tipo==='CC'?q.start+lg:fEnd(q.end)+lg};
+  preds(b).forEach(({p,q})=>{if(b.start<req(p,q)-2*DAY)out.push({k:b.id+'<'+q.id,txt:`${b.name} arranca antes de que ${p.tipo==='CC'?'empiece':'termine'} ${q.name}.`})});
+  (o.base||[]).filter(x=>x.cod&&x!==b).forEach(s2=>preds(s2).forEach(({p,q})=>{if(q===b&&s2.start<req(p,b)-2*DAY)out.push({k:s2.id+'<'+b.id,txt:`${s2.name} arranca antes de que ${p.tipo==='CC'?'empiece':'termine'} ${b.name}.`})}));
+  return out}
+/* días hábiles que da el modelo para cada tarea de esta obra */
+const MCACHE={};function diasModelo(o,id){try{if(!o.tpl||!o.mod2)return 0;const k=o.id+'|'+JSON.stringify(o.mod2)+'|'+(o.mod2.plantilla||'');if(!MCACHE[k]){const m={};tplGenBase(o).forEach(g=>m[g.id]=Math.round(g.weeks*5));MCACHE[k]=m}return MCACHE[k][id]||0}catch(e){return 0}}
+
+/* ---------- 1 · marca en el cronograma: manual superpuesta con el modelo ---------- */
+try{const _av=tplAvisos;tplAvisos=window.tplAvisos=function(o,t){const r=_av(o,t)||[];try{if(!t.cod){const S2=superpuestas(o,o.base.find(b=>b.id===t.id)||t);if(S2.length)r.unshift(`tarea agregada a mano que se superpone con «${S2[0].name}» del modelo${S2.length>1?' y '+(S2.length-1)+' más':''}: revisá que no esté duplicada`)}}catch(e){}return r.slice(0,3)}}catch(e){}
+
+/* ---------- 5 · editor de la base por fase y rubro ---------- */
+const FASES=()=>{try{return(PLANTILLA_BASE.fases||[]).map(f=>[f.numero,f.nombre])}catch(e){return[[1,'Fase 1 · Estructura'],[2,'Fase 2 · Obra gruesa e instalaciones'],[3,'Fase 3 · Terminaciones y entrega']]}};
+const secKey=t=>t.etapaCod||('r:'+(t.rubro||'otros'));
+function secciones(o){const m=new Map();let ord=[];try{ord=tplT(o).etapas.map(e=>e.codigo)}catch(e){}
+  o.base.forEach(t=>{const k=secKey(t);if(!m.has(k))m.set(k,{k,nom:etNom(o,t)||'Otras tareas',fase:t.fase||1,L:[]});m.get(k).L.push(t)});
+  const L=[...m.values()];L.forEach(s=>s.L.sort((a,b)=>a.start-b.start||String(a.name).localeCompare(String(b.name),'es')));
+  return L.sort((a,b)=>(a.fase-b.fase)||((ord.indexOf(a.k)+1||99)-(ord.indexOf(b.k)+1||99))||(Math.min(...a.L.map(t=>t.start))-Math.min(...b.L.map(t=>t.start))))}
+function selDef(o){const act=o.base.filter(t=>fEnd(t.end)>=TODAY).sort((a,b)=>a.start-b.start)[0];return 'f'+((act&&act.fase)||1)}
+const fila=(o,t)=>{const sp=superpuestas(o,t);return `<div class="erow2 erow3" data-id="${t.id}" data-q="${esc(tok(t.name).join(' ')+' '+String(t.name).toLowerCase())}"><span class="en"><input class="enm" id="ed-n-${t.id}" value="${esc(t.name)}" maxlength="80" data-chg="eName" data-id="${t.id}" aria-label="Nombre de la tarea"><span class="muted small" id="ed-r-${t.id}"></span><span class="edx" id="ed-x-${t.id}">${sp.length?`⚠ Se superpone con «${esc(sp[0].name)}» del modelo`:''}</span></span><label class="f sm">Inicio<input type="date" id="ed-s-${t.id}" value="${iso(t.start)}" data-chg="eStart" data-id="${t.id}"></label><label class="f sm">Fin<input type="date" id="ed-f-${t.id}" value="${iso(t.end)}" data-chg="eFin" data-id="${t.id}"></label><label class="f sm">Días hábiles<input type="number" inputmode="numeric" id="ed-d-${t.id}" min="1" max="400" value="${Math.max(1,Math.round(t.weeks*5))}" data-chg="eDias" data-id="${t.id}"></label><button class="edel" data-act="edel" data-id="${t.id}" aria-label="Quitar ${esc(t.name)}">✕</button></div>`};
+function aplicarFiltro(){const sh=document.querySelector('.sheet');if(!sh)return;const sel=S.edSel||'all',q=(S.edQ||'').trim().toLowerCase(),qt=tok(q);
+  sh.querySelectorAll('.edsec').forEach(sec=>{let vis;if(q){let n=0;sec.querySelectorAll('.erow2').forEach(r=>{const ok=r.dataset.q.includes(q)||(qt.length&&qt.every(w=>r.dataset.q.includes(w)));r.style.display=ok?'':'none';if(ok)n++});vis=n>0;if(vis)sec.open=true}
+    else{sec.querySelectorAll('.erow2').forEach(r=>r.style.display='');vis=sel==='all'||sel==='f'+sec.dataset.fase||sel==='e:'+sec.dataset.k;if(sel==='e:'+sec.dataset.k)sec.open=true}
+    sec.style.display=vis?'':'none'});
+  sh.querySelectorAll('.edfase-h').forEach(h=>{const f=h.dataset.fase;h.style.display=[...sh.querySelectorAll(`.edsec[data-fase="${f}"]`)].some(x=>x.style.display!=='none')?'':'none'});
+  const nv=document.getElementById('ed-nada');if(nv)nv.style.display=[...sh.querySelectorAll('.edsec')].some(x=>x.style.display!=='none')?'none':''}
+const _se=sheetEditor;
+sheetEditor=window.sheetEditor=function(){if(EMODO!=='base')return _se.apply(this,arguments);const o=findO(EOID);if(!o)return;
+  S.edOpen=S.edOpen||{};if(!S.edSel||S.edObra!==o.id){S.edSel=selDef(o);S.edObra=o.id;S.edQ=''}
+  const SEC=secciones(o),FS=FASES();let curF=0,html='';
+  SEC.forEach(sc=>{if(sc.fase!==curF){curF=sc.fase;html+=`<div class="edfase-h" data-fase="${curF}">${esc((FS.find(f=>f[0]===curF)||[0,'Fase '+curF])[1])}</div>`}
+    const ini=Math.min(...sc.L.map(t=>t.start)),fin=Math.max(...sc.L.map(t=>t.end)),ab=S.edOpen[o.id+'|'+sc.k];
+    html+=`<details class="edsec" data-k="${esc(sc.k)}" data-fase="${sc.fase}" ${ab?'open':''}><summary><span class="eds-n">${esc(sc.nom)}</span><span class="eds-d">${sc.L.length} ${sc.L.length===1?'tarea':'tareas'} · ${fmt(ini)} → ${fmt(fin)}</span></summary>
+    ${sc.L.map(t=>fila(o,t)).join('')}
+    <div class="edadd"><button type="button" class="btn sm" data-act="edAddT" data-k="${esc(sc.k)}">＋ Agregar tarea en ${esc(sc.nom)}</button></div><div class="edaddf" id="edaf-${esc(sc.k)}" hidden></div></details>`});
+  const opts=`<option value="all">Todas las fases</option>${FS.filter(f=>SEC.some(s=>s.fase===f[0])).map(f=>`<option value="f${f[0]}">${esc(f[1])}</option>`).join('')}<optgroup label="Por etapa o rubro">${SEC.map(s=>`<option value="e:${esc(s.k)}">${esc(s.nom)}</option>`).join('')}</optgroup>`;
+  const nm=nextWork(lunesDe(TODAY)+7*DAY);
+  openSheet(`<span class="eyebrow">${esc(o.nombre)} · Dirección</span><h2>Editar la base</h2>
+  <p class="muted small">La base es la referencia contra la que se mide la obra. Elegí la fase o la etapa, abrí el rubro y cambiá inicio, fin o días hábiles. Cada tarea tiene sus fechas: cambiar una no mueve a las demás.</p>
+  <p class="diff" id="ed-diff"></p>
+  <label class="chk2"><input type="checkbox" id="ed-sync" data-chg="edSync" ${S.edSync===false?'':'checked'}> Corregir también el conforme a obra (solo en tareas sin avance cargado)</label>
+  <div class="edtools"><label class="f">Fase o etapa<select id="ed-sel" data-chg="edSel">${opts}</select></label><label class="f">Buscar tarea<input id="ed-q" type="search" placeholder="Ej: mampostería PB" value="${esc(S.edQ||'')}" autocomplete="off"></label></div>
+  <div class="edlist">${html}<p class="muted small" id="ed-nada" style="display:none">No hay tareas que coincidan.</p></div>
+  <form class="sec boxed" data-submit="ebadd"><span class="eyebrow">Agregar un rubro nuevo a la base</span><label class="f">Nombre<input id="eb-name" placeholder="Ej: Parquización" maxlength="80"></label><div class="row2"><label class="f">Inicio<input id="eb-ini" type="date" value="${iso(nm)}"></label><label class="f">Semanas<input id="eb-w" type="number" min="1" max="40" value="2"></label></div><button class="btn gold" type="submit">Agregar a la base</button></form>
+  <button class="btn gold full" data-act="close">Listo</button>`,'Editar la base');
+  const se=document.getElementById('ed-sel');if(se)se.value=S.edSel;
+  document.querySelectorAll('.sheet .edsec').forEach(d=>d.addEventListener('toggle',()=>{S.edOpen[o.id+'|'+d.dataset.k]=d.open}));
+  aplicarFiltro();try{refreshEditor()}catch(e){}};
+CHG.edSel=v=>{S.edSel=v;S.edQ='';const q=document.getElementById('ed-q');if(q)q.value='';aplicarFiltro()};
+document.addEventListener('input',e=>{if(e.target&&e.target.id==='ed-q'){S.edQ=e.target.value;aplicarFiltro()}});
+/* refresco: también el aviso de superposición */
+{const rf=refreshEditor;refreshEditor=window.refreshEditor=function(){rf.apply(this,arguments);try{if(EMODO!=='base')return;const o=findO(EOID);if(!o)return;o.base.forEach(t=>{const x=document.getElementById('ed-x-'+t.id);if(!x)return;const sp=superpuestas(o,t);x.textContent=sp.length?`⚠ Se superpone con «${sp[0].name}» del modelo`:''})}catch(e){}}}
+/* agregar una tarea dentro de un rubro */
+A.edAddT=ds=>{const o=findO(EOID);if(!o)return;const box=document.getElementById('edaf-'+ds.k);if(!box)return;const sc=secciones(o).find(s=>s.k===ds.k);if(!sc)return;
+  const last=sc.L.slice().sort((a,b)=>b.end-a.end)[0],ini=last?nextWork(fEnd(last.end)+DAY):nextWork(TODAY),nivs=[...new Set(sc.L.map(t=>t.nivel).filter(Boolean))];
+  box.hidden=false;box.innerHTML=`<label class="f">Nombre de la tarea<input id="edn-n" maxlength="80" placeholder="Ej: Mampostería de carga PB"></label>${nivs.length?`<label class="f">Nivel<select id="edn-l"><option value="">Sin nivel</option>${nivs.map(n=>`<option>${esc(n)}</option>`).join('')}</select></label>`:''}<div class="row2"><label class="f">Inicio<input id="edn-s" type="date" value="${iso(ini)}"></label><label class="f">Días hábiles<input id="edn-d" type="number" inputmode="numeric" min="1" max="400" value="5"></label></div><div class="row2"><button type="button" class="btn gold" data-act="edAddOk" data-k="${esc(ds.k)}">Agregar a ${esc(sc.nom)}</button><button type="button" class="btn ghost" data-act="edAddNo" data-k="${esc(ds.k)}">Cancelar</button></div>`;
+  setTimeout(()=>{const i=document.getElementById('edn-n');if(i)i.focus()},40)};
+A.edAddNo=ds=>{const b=document.getElementById('edaf-'+ds.k);if(b){b.hidden=true;b.innerHTML=''}};
+A.edAddOk=ds=>{const o=findO(EOID);if(!o||EMODO!=='base')return;const sc=secciones(o).find(s=>s.k===ds.k);if(!sc)return;
+  const name=(val('edn-n')||'').trim(),dd=clamp(Math.round(+val('edn-d')||1),1,400),ini=okFecha(val('edn-s')),nv=document.getElementById('edn-l')?val('edn-l'):'';
+  if(!name){toast('Poné el nombre de la tarea');return}if(!ini){toast('Elegí una fecha de inicio válida');return}
+  const p=sc.L[0]||{},n={id:'b'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name,start:ini,end:addWork(ini,dd-1),weeks:dd/5,rubro:p.rubro||'prelim',fase:p.fase||sc.fase||1,etapaCod:p.etapaCod,etapa:p.etapa,nivel:nv||'',manual:true,equipo:'Dirección'};
+  const D=duplicados(o,n);if(D.length&&!confirm(msgDup(D)))return;
+  o.base.push(n);o.base.sort((a,b)=>a.start-b.start);try{baseSync(o)}catch(e){}S.edOpen[o.id+'|'+sc.k]=true;toast(`Se agregó ${name} a ${sc.nom}`);draw();sheetEditor();
+  setTimeout(()=>{const r=document.querySelector(`.sheet .erow2[data-id="${n.id}"]`);if(r){r.scrollIntoView({block:'center'});r.classList.add('cv-foco')}},80)};
+/* el formulario de "rubro nuevo" también avisa si ya existe */
+{const f=SUBMIT.ebadd;SUBMIT.ebadd=function(){const o=findO(EOID);if(o&&EMODO==='base'){const name=(val('eb-name')||'').trim();if(name){const D=duplicados(o,{name,start:okFecha(val('eb-ini'))||TODAY,end:okFecha(val('eb-ini'))||TODAY});if(D.length&&!confirm(msgDup(D)))return}}return f.apply(this,arguments)}}
+
+/* ---------- 1 · renombrar: aviso de duplicado ---------- */
+{const f=CHG.eName;CHG.eName=function(v,el){const o=findO(EOID);const id=el&&el.dataset&&el.dataset.id;const b=o&&EMODO==='base'?o.base.find(x=>x.id===id):null;const ant=b?b.name:null;const r=f.apply(this,arguments);
+  try{if(b&&b.name!==ant){const D=duplicados(o,b,b.id);if(D.length)nxConfirm(msgDup(D,'usar este nombre'),{titulo:'¿Tarea repetida?',si:'Sí, dejarlo',no:'Volver al nombre anterior',peligro:false}).then(si=>{if(si)return;b.name=ant;const t=o.tasks.find(x=>x.id===b.id);if(t)t.name=ant;const i=document.getElementById('ed-n-'+b.id);if(i)i.value=ant;try{baseSync(o)}catch(e){}draw();refreshEditor()})}}catch(e){}return r}}
+
+/* ---------- 2 · correlatividad y duración al cambiar fechas o días ---------- */
+['eStart','eFin','eDias'].forEach(k=>{const f=CHG[k];if(!f)return;CHG[k]=function(v,el){const o=findO(EOID);const id=el&&el.dataset&&el.dataset.id;
+  if(!o||EMODO!=='base')return f.apply(this,arguments);const b=o.base.find(x=>x.id===id);if(!b)return f.apply(this,arguments);
+  const t0=o.tasks.find(x=>x.id===id),snapB={start:b.start,end:b.end,weeks:b.weeks,manual:b.manual},snapT=t0?{start:t0.start,end:t0.end,weeks:t0.weeks,manual:t0.manual,_b:t0._b?t0._b.slice():undefined,real:t0.real?JSON.parse(JSON.stringify(t0.real)):t0.real}:null;
+  const antes=new Set(relaciones(o,b).map(x=>x.k)),md=diasModelo(o,b.id),dAnt=Math.round(b.weeks*5);
+  const r=f.apply(this,arguments);
+  try{const nuevas=relaciones(o,b).filter(x=>!antes.has(x.k)),dNue=Math.round(b.weeks*5),msgs=nuevas.map(x=>x.txt);
+    if(md&&dNue<md*.5&&!(dAnt<md*.5))msgs.push(`${b.name} queda con ${dNue} ${dNue===1?'día hábil':'días hábiles'}: menos de la mitad de lo que da el modelo para esta obra (${md} días).`);
+    if(msgs.length)nxConfirm(msgs.join('\n')+'\n¿Confirmás?',{titulo:'Revisá el cambio',si:'Sí, confirmo',no:'Deshacer el cambio',peligro:false}).then(si=>{if(si)return;
+      Object.assign(b,snapB);const t=o.tasks.find(x=>x.id===id);if(t&&snapT){Object.assign(t,snapT);if(snapT._b===undefined)delete t._b}o.base.sort((p,q)=>p.start-q.start);o.tasks.sort((p,q)=>p.start-q.start);draw();refreshEditor();toast('Cambio deshecho')})}catch(e){}
+  return r}});
+
+/* ---------- 2 · al guardar el modelo: inicio a más de 6 meses ---------- */
+{const f=SUBMIT.modelo2;if(f)SUBMIT.modelo2=function(form,ev){try{if(typeof tm2Read==='function')tm2Read();const M=TM&&TM.M;if(M&&M.inicio){const ini=d(M.inicio);if(Math.abs(ini-TODAY)>183*DAY){const txt=new Date(ini).toLocaleDateString('es-AR',{timeZone:'UTC'});
+  if(!confirm(`La fecha de inicio del modelo es el ${txt}: queda a más de 6 meses de hoy. ¿Es correcta?`))return}}}catch(e){}return f.apply(this,arguments)}}
+})();
+</script>
+
 </body></html>
