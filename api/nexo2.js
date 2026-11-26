@@ -1033,6 +1033,22 @@ export default async function handler(req, res) {
         await escribir(H, clave, { items });
         res.status(200).json({ ok: true, rec: it }); return;
       }
+      if (b.op === "ct_escalar") {
+        // la jefatura pasa el reclamo del contratista a la Dirección (el estudio no responde); la Dirección o la jefatura lo cierran
+        if (quien === "ct") { res.status(403).json({ error: "Solo la jefatura o la Dirección" }); return; }
+        const id = idOk(b.id); const v = await leer(H, clave); const items = ((v && v.items) || []); const it = items.find((x) => x.id === id);
+        if (!it) { res.status(404).json({ error: "No existe ese reclamo" }); return; }
+        const t = Date.now(); const nom = quien === "dir" ? "Dirección" : "Jefatura de obra";
+        if (b.cerrar) { if (it.esc) it.esc = { ...it.esc, ok: t, okPor: quien }; it.hist = (Array.isArray(it.hist) ? it.hist : []).concat([{ t, por: quien, nom, tx: "Pedido a la Dirección cerrado (destrabado)" }]).slice(-100); }
+        else {
+          const m = ["doc", "def", "mat", "otro"].includes(b.m) ? b.m : "otro"; const tx = str(b.txt, 1500).trim(); const por = str(b.por, 60).trim() || nom;
+          it.esc = { t, m, txt: tx, por, quien };
+          if (!it.primeraResp) { it.primeraResp = t; it.primeraPor = quien; }
+          if (it.estado === "abierto") it.estado = "gestion";
+          it.hist = (Array.isArray(it.hist) ? it.hist : []).concat([{ t, por: quien, nom: por, tx: "Pasado a la Dirección para destrabar con el estudio" + (tx ? ": " + tx : ""), estado: it.estado }]).slice(-100);
+        }
+        it.editado = t; await escribir(H, clave, { items }); res.status(200).json({ ok: true, rec: it }); return;
+      }
       if (b.op === "ct_enc_set") {
         // personas encargadas (nombre + WhatsApp) a las que la Dirección les asigna reclamos
         if (quien !== "dir") { res.status(403).json({ error: "Solo Dirección" }); return; }
