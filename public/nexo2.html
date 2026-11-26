@@ -5107,7 +5107,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261126-012154';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261126-013346';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -6426,16 +6426,16 @@ const _ntf=notify;window.notify=notify=function(to,o,txt,act,extra){if(SISTEMA.t
 const ESC_MOT=[['doc','Falta documentación / planos del estudio'],['def','Falta una definición del estudio'],['mat','Falta material'],['otro','Otro motivo']];
 const escAbierto=c=>!!(c&&c.esc&&!c.esc.ok&&!cDone(c));
 const jefeDe=o=>(o&&o.jefe)||'la jefatura';
-function dirItems(){const obras=misObras(),A1=[],A2=[],A3=[];
+function dirItems(){const obras=misObras(),IDS=new Set(obras.map(o=>o.id)),A1=[],A2=[],A3=[];
   /* 1 · adicionales para aprobar (los que manda el contratista y los que carga la jefatura) */
-  try{adicPend().forEach(a=>{const rs=(a.cert&&a.cert.resolucion)||'';if(/Rechaz/i.test(rs))return;const ct=!!(a.cert&&a.cert.ctRec);
+  try{adicPend().filter(a=>a.obra&&IDS.has(a.obra.id)).forEach(a=>{const rs=(a.cert&&a.cert.resolucion)||'';if(/Rechaz/i.test(rs))return;const ct=!!(a.cert&&a.cert.ctRec);
     A1.push({u:/^APROBADO|^Aprobado/.test(rs)?3:1,f:TODAY,tags:[tag(/^APROBADO|^Aprobado/.test(rs)?'APROBADO · FALTAN REQUISITOS':'PARA APROBAR','tg-pide'),...(ct?[tag('DEL CONTRATISTA','tg-ct')]:[])],t:`Adicional N° ${a.n}: ${String(a.txt||'').split('\n')[0].slice(0,80)}`,d:`${a.obra.nombre} · ${a.total?money(a.total):'sin cotizar'} · ${adicEstado(a)[0]}`,a:{act:'adic',id:a.id}})})}catch(e){}
   /* 2 · reclamos de los contratistas a la jefatura: cómo los está atendiendo */
-  try{if(!CTALL.t||Date.now()-CTALL.t>15000)ctLoadAll();
-    OBRAS.forEach(o=>((CTR[o.id]||{}).items||[]).filter(x=>ctAbierto(x)&&!x.enAud&&x.tipo!=='adicional'&&(x.tipo!=='auditoria'||!x.primeraResp||(x.aud&&x.aud.clase==='def'))).forEach(x=>{const sr=!x.primeraResp,h=Date.now()-(x.creado||Date.now());
+  try{if(ROLE()==='direccion'){if(!CTALL.t||Date.now()-CTALL.t>15000)ctLoadAll()}else obras.forEach(o=>{try{ctLoad(o)}catch(e){}});
+    obras.forEach(o=>((CTR[o.id]||{}).items||[]).filter(x=>ctAbierto(x)&&!x.enAud&&x.tipo!=='adicional'&&(x.tipo!=='auditoria'||!x.primeraResp||(x.aud&&x.aud.clase==='def'))).forEach(x=>{const sr=!x.primeraResp,h=Date.now()-(x.creado||Date.now());
       A2.push({u:sr?(h>48*36e5?0:1):2,f:x.creado||TODAY,tags:[sr?tag('SIN RESPUESTA · HACE '+ctDur(h).toUpperCase(),h>48*36e5?'tg-venc':'tg-vence'):tag('EN GESTIÓN','tg-mat'),tag(String(CT_TIPO[x.tipo]||'Aviso').toUpperCase(),'tg-ct')],t:`${x.ctNombre||'Contratista'}: ${x.titulo||'aviso'}`,d:`${o.nombre}${x.num?' · N° '+x.num:''} · ${sr?'la jefatura ('+jefeDe(o)+') todavía no contestó':'contestó la jefatura'}`,a:{act:'ctVer',o:o.id,id:x.id}})}))}catch(e){}
   /* 3 · jefatura: pedidos para destrabar (el estudio no entrega) y tarjetas vencidas sin aviso */
-  try{OBRAS.forEach(o=>((CTR[o.id]||{}).items||[]).filter(x=>x.esc&&!x.esc.ok&&x.estado!=='cerrado').forEach(x=>{const m=(ESC_MOT.find(z=>z[0]===x.esc.m)||ESC_MOT[3])[1];
+  try{obras.forEach(o=>((CTR[o.id]||{}).items||[]).filter(x=>x.esc&&!x.esc.ok&&x.estado!=='cerrado').forEach(x=>{const m=(ESC_MOT.find(z=>z[0]===x.esc.m)||ESC_MOT[3])[1];
     A3.push({u:0,f:x.esc.t||TODAY,tags:[tag('PIDE DESTRABAR','tg-venc'),tag('PEDIDO DE CONTRATISTA','tg-ct')],t:`${x.ctNombre||'Contratista'}: ${x.titulo||'aviso'}`,d:`${o.nombre}${x.num?' · N° '+x.num:''} · ${x.esc.por||jefeDe(o)} avisó el ${dm(x.esc.t)} · ${m}${x.esc.txt?' · '+String(x.esc.txt).slice(0,80):''}`,a:{act:'ctVer',o:o.id,id:x.id}})}))}catch(e){}
   try{const vistas=new Set();cardsDe(obras).filter(c=>!cDone(c)).forEach(c=>{const o=c.obra,ven=color(c)==='rojo',k=timing(c);
     if(escAbierto(c)){vistas.add(c.obra.id+'|'+c.task.id);const m=(ESC_MOT.find(z=>z[0]===c.esc.m)||ESC_MOT[3])[1];
@@ -6447,13 +6447,15 @@ function dirItems(){const obras=misObras(),A1=[],A2=[],A3=[];
   return [A1.sort(so),A2.sort(so),A3.sort(so)]}
 window.dirItems=dirItems;
 const DIRP=[['ADICIONALES','para aprobar','adicional','adicionales','No hay adicionales esperando aprobación.'],['RECLAMOS DE CONTRATISTAS','a la jefatura de obra','reclamo abierto','reclamos abiertos','Los contratistas no tienen reclamos abiertos.'],['RECLAMOS DE LA JEFATURA','para destrabar con el estudio','ítem','ítems','La jefatura no pidió ayuda y no hay tarjetas vencidas.']];
-function dirPanel(k,L){const[ti,sub,s1,s2,vac]=DIRP[k],n=L.length,ver=L.slice(0,3),sr=k===1?L.filter(x=>x.u<=1).length:k===2?L.filter(x=>x.u===0).length:0;
+function dirPanel(k,L){let[ti,sub,s1,s2,vac]=DIRP[k];if(ROLE()==='jefe'){if(k===0)sub='de tus obras';if(k===1)sub='a tu jefatura';}const n=L.length,ver=L.slice(0,3),sr=k===1?L.filter(x=>x.u<=1).length:k===2?L.filter(x=>x.u===0).length:0;
   const cuenta=n?`${n} ${n===1?s1:s2}${k===1&&sr?' · '+sr+' sin respuesta':''}${k===2&&sr?' · '+sr+' '+(sr===1?'pedido':'pedidos')+' de la jefatura':''}`:'Nada pendiente';
   return `<section class="b3-bar" aria-label="${ti}"><div class="b3-bh"><div class="b3-ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${B3SVG.bell}</svg>${L.some(x=>x.u<=1)?'<span class="b3-dot" aria-hidden="true"></span>':''}</div><div class="b3-bt"><span class="r">${ti} · ${sub.toUpperCase()}</span><span class="h">${cuenta}</span></div></div>
   <div class="b3-list">${n?ver.map(x=>`<button class="b3-it ${x.cls||''}" ${at(x.a)}>${b3ObH(x)}<span class="b3-tags">${x.tags.join('')}</span><span class="b3-t">${esc(x.t)}</span>${b3DH(x)?`<span class="b3-d">${esc(b3DH(x))}</span>`:''}</button>`).join(''):`<p class="muted small" style="margin:0">${vac}</p>`}${n>ver.length?`<button class="b3-mas" data-act="dirTodo" data-k="${k}">Ver los ${n}</button>`:''}</div></section>`}
 A.dirTodo=ds=>{const k=+ds.k,L=dirItems()[k],[ti,sub]=DIRP[k];openSheet(`<span class="eyebrow">${ti.charAt(0)+ti.slice(1).toLowerCase()} · ${sub}</span><h2>${L.length} ${L.length===1?DIRP[k][2]:DIRP[k][3]}</h2><div class="b3-list">${L.map(x=>`<button class="b3-it ${x.cls||''}" ${at(x.a)}>${b3ObH(x)}<span class="b3-tags">${x.tags.join('')}</span><span class="b3-t">${esc(x.t)}</span>${b3DH(x)?`<span class="b3-d">${esc(b3DH(x))}</span>`:''}</button>`).join('')}</div>`,ti)};
 const _viDir=vInicio;window.vInicio=vInicio=function(){if(ROLE()!=='direccion')return _viDir();const obras=misObras(),P=dirItems();let extra='';try{extra=econPanel(obras)}catch(e){}
-  return `${carrusel(obras)}${P.map((L,k)=>dirPanel(k,L)).join('')}${extra}`};
+  return `${carrusel(obras)}${[1,2,0].map(k=>dirPanel(k,P[k])).join('')}${extra}`};
+/* jefatura: primero los reclamos de los contratistas, después sus tarjetas y pedidos para destrabar, al final los adicionales */
+const _b3BarJ=b3Bar;b3Bar=function(L,cuenta){if(ROLE()!=='jefe')return _b3BarJ(L,cuenta);let P=[[],[],[]];try{P=dirItems()}catch(e){}const LL=(L||[]).filter(x=>!(x.tags||[]).some(t=>/tg-ct/.test(t)));return dirPanel(1,P[1])+_b3BarJ(LL,cuenta)+dirPanel(0,P[0])};
 /* la jefatura avisa a la Dirección que el estudio no entrega (o falta material) para que lo destrabe */
 window.escBox=function(c){if(!c)return'';const o=c.obra,own=puedePedir(o),dir=ROLE()==='direccion';
   if(escAbierto(c)){const m=(ESC_MOT.find(z=>z[0]===c.esc.m)||ESC_MOT[3])[1];return `<div class="infobox alert" style="display:flex;flex-direction:column;gap:6px"><b>🚨 Pedido a la Dirección para destrabar</b><span class="small">${esc(m)} · avisó ${esc(c.esc.por||jefeDe(o))} el ${fmt(c.esc.t)}${c.esc.txt?'<br>'+esc(c.esc.txt):''}</span>${dir||own?`<button class="btn sm" data-act="escCerrar" data-c="${c.id}" style="align-self:flex-start">${dir?'Marcar destrabado':'Ya se destrabó · quitar pedido'}</button>`:''}</div>`}
