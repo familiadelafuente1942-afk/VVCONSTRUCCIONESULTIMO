@@ -1,0 +1,23 @@
+name: nx-cfgtest
+on:
+  workflow_dispatch:
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Prueba del reparto en filas con los datos reales (solo lectura, sin montos)
+        run: |
+          curl -s 'https://nexoentorno.vercel.app/api/nexo2' -o c.json
+          cat > t.mjs <<'JS'
+          import fs from 'fs';import * as X from './api/_cfg.js';
+          const j=JSON.parse(fs.readFileSync('c.json','utf8'));const c=j.cfg;console.log('GET claves',Object.keys(j),'t',c.t,'movido',c.movido||'-');
+          if(typeof c.v!=='string'){console.log('sin v');process.exit(0)}
+          const C=JSON.parse(c.v),P=X.partir(C),v2=X.armar({orden:P.orden,g:P.g,idsMod:P.idsMod,idsNue:P.idsNue,sueltas:P.sueltas},Object.fromEntries(Object.entries(P.filas)));
+          console.log('IDENTICO',v2===c.v,'largo',c.v.length,'sueltas',P.sueltas.length);
+          const tm=Object.entries(P.filas).map(([id,f])=>[id,Buffer.byteLength(f.s)]).sort((a,b)=>b[1]-a[1]);console.log('FILAS',JSON.stringify(tm),'general',Buffer.byteLength(JSON.stringify(P.g)));
+          const rec=[];for(const [id,e] of [...Object.entries(C.mod||{}),...(C.nuevas||[]).map(e=>[e.id,e])])if(e&&e.tpl&&e.mod2&&e.cg&&e.sinCrono===true&&!e.baseOv)rec.push(id+' '+(e.nombre||''));console.log('A_RECUPERAR',rec.join(' | '));
+          JS
+          node t.mjs
