@@ -1,0 +1,45 @@
+name: nx-migra
+on:
+  workflow_dispatch:
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Prueba de la migración en una copia (solo lectura, no guarda nada, sin montos)
+        run: |
+          npm i playwright@1.47.2 >/dev/null 2>&1 && npx playwright install --with-deps chromium >/dev/null 2>&1
+          (cd public && python3 -m http.server 8765 >/dev/null 2>&1 &)
+          cat > t.js <<'JS'
+          const {chromium}=require('playwright');
+          const STATS=()=>{const out={};['o7688','o4541'].forEach(id=>{const o=OBRAS.find(x=>x.id===id);if(!o){out[id]=null;return}
+            const S=x=>{const its=[];x.cards.forEach(c=>c.items.forEach(i=>its.push({t:c.task.id,k:ikey(i),txt:i.txt,e:i.estado,r:!!i.respuesta,toda:!!i.toda,tipo:c.tipo})));
+              const dup=[];x.tasks.forEach(t=>{const by={};x.cards.filter(c=>c.task===t&&!c.prev&&!c.custom).forEach(c=>{by[c.tipo]=(by[c.tipo]||0)+1});Object.entries(by).forEach(([k,v])=>{if(v>1)dup.push((t.cod||t.id)+':'+k+'x'+v)})});
+              return{nT:x.tasks.length,nC:x.cards.length,its,dup,sin:x.tasks.filter(t=>!x.cards.some(c=>c.task===t)).map(t=>t.name),plant:(x.mod2&&x.mod2.plantilla)||'base',calef:x.mod2&&x.mod2.calef,
+                tpre:x.tasks.filter(t=>t.real&&t.real.pre).length,real:x.tasks.filter(t=>t.real).map(t=>t.id+':'+(t.real.av||0)),cal:x.tasks.filter(t=>/^(SAN06|CAL0)/.test(t.cod||'')).sort((a,b)=>a.start-b.start).map(t=>t.name+' '+new Date(t.start).toISOString().slice(0,10)+(t.real?' · avance '+(t.real.av||0):''))}};
+            const r={actual:S(o)};if(window.nxPlanMigracion){const pl=nxPlanMigracion(o);r.ren=pl.ren;r.nuevas=pl.nuevas;r.conservadas=pl.conservadas;r.migrada=S(nxSimular(o,pl))}out[id]=r});return out};
+          async function abrir(b,url){const p=await b.newPage({viewport:{width:1180,height:820}});const er=[];p.on('pageerror',e=>er.push(e.message));
+            await p.route('**/api/**',async r=>{if(r.request().method()!=='POST'){const u=new URL(r.request().url());const res=await r.fetch({url:'https://nexoentorno.vercel.app'+u.pathname+u.search});return r.fulfill({response:res})}return r.fulfill({json:{ok:false,error:'solo lectura'}})});
+            await p.goto(url,{waitUntil:'domcontentloaded',timeout:90000});await p.waitForTimeout(20000);await p.reload({waitUntil:'domcontentloaded'});await p.waitForTimeout(20000);
+            const s=await p.evaluate(STATS);return{s,er}}
+          (async()=>{const b=await chromium.launch();
+            const A=await abrir(b,'https://nexoentorno.vercel.app/nexo2.html'),B=await abrir(b,'http://localhost:8765/nexo2.html');
+            console.log('ERRORES nueva',B.er.slice(0,5));
+            ['o7688','o4541'].forEach(id=>{const a=A.s[id]&&A.s[id].actual,bb=B.s[id];if(!a||!bb){console.log('NO_OBRA',id);return}
+              const fases={hoy:a,al_cargar:bb.actual,migrada:bb.migrada};
+              console.log('==== '+id+' plantilla '+a.plant+' calef '+a.calef+' · ren '+JSON.stringify(bb.ren)+' · tareas nuevas: '+(bb.nuevas||[]).join(' | ')+' · conservadas '+bb.conservadas);
+              Object.entries(fases).forEach(([f,x])=>{const c=e=>x.its.filter(i=>i.e===e).length;console.log(f.padEnd(10),'tareas',x.nT,'tarjetas',x.nC,'items',x.its.length,'pre',c('pre'),'ok',c('ok'),'na',c('na'),'recibido',c('recibido'),'pedido',c('pedido'),'con respuesta',x.its.filter(i=>i.r).length,'falta',c('falta'),'tareas pre',x.tpre,'tareas con avance',x.real.length,'repetidas',x.dup.length,'sin tarjeta',x.sin.length)});
+              const ren=bb.ren||{},rt=t=>ren[t]||t;
+              ['al_cargar','migrada'].forEach(f=>{const x=fases[f];const idx=new Map(x.its.map(i=>[i.t+'|'+i.k,i]));const perd=[],camb=[];
+                a.its.filter(i=>i.e!=='falta'||i.r).forEach(i=>{const j=idx.get(rt(i.t)+'|'+i.k);if(!j)perd.push(i.t+' · '+i.txt+' ('+i.e+')');else if(j.e!==i.e||j.r!==i.r)camb.push(i.t+' · '+i.txt+' '+i.e+'→'+j.e)});
+                console.log('  '+f+': cargados que no aparecen '+perd.length+' · que cambiaron de estado '+camb.length);perd.slice(0,30).forEach(l=>console.log('    FALTA '+l));camb.slice(0,30).forEach(l=>console.log('    CAMBIO '+l));
+                const ra=new Set(a.real),rb=new Set(x.real.map(s=>s));a.real.forEach(s=>{const [t,v]=s.split(':');if(!rb.has(rt(t)+':'+v))console.log('    AVANCE_DISTINTO '+s)})});
+              console.log('  abiertos hoy:');a.its.filter(i=>i.e==='falta').forEach(i=>console.log('    A '+i.t+' · '+i.txt));
+              console.log('  abiertos migrada:');bb.migrada.its.filter(i=>i.e==='falta').forEach(i=>console.log('    M '+i.t+' · '+i.tipo+(i.toda?' · toda':'')+' · '+i.txt));
+              bb.migrada.dup.forEach(l=>console.log('  DUP '+l));bb.migrada.sin.forEach(l=>console.log('  SIN '+l));
+              console.log('  secuencia migrada:');bb.migrada.cal.forEach(l=>console.log('    '+l));
+            });await b.close()})();
+          JS
+          node t.js
