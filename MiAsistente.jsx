@@ -838,6 +838,9 @@ ${pg}
 GASTOS DIARIOS (generales) — hoy $${totDia.toLocaleString("es-AR")}, este mes $${totMes.toLocaleString("es-AR")}:
 ${gs}
 
+RESULTADOS MENSUALES (solapa Más → Resultados; tenés estos datos completos, NO digas que no podés entrar a esa sección). Ganancia del mes = cobrado − pagos al personal; se reparte entre Valeria, Valentina, Sebastián, Terralagos (inversión) y Gastos. Si te pide sumar varios meses, sumá vos estas cifras y decí qué meses sumaste:
+${(() => { try { return mesesResultados(cobros, pagos, gastos).slice(-12).map(mk => { const ce = (cierres || {})[mk]; const en = ce || calcularResultadoMes(mk, cobros, pagos, gastos); const $ = n => "$" + Math.round(n || 0).toLocaleString("es-AR"); const R = repartoGanancia(en).map(r => `${r.n} ${$(r.m)} (${r.p}%)`).join(" · "); const [m2, y2] = mk.split("/").map(Number); return `· ${MESES_LARGOS[(m2 || 1) - 1] || mk} ${y2 < 100 ? 2000 + y2 : y2}${ce ? " (cerrado)" : " (en curso)"}: cobrado ${$(en.cobrado)} · pagos al personal ${$(en.pagosPersonal)} · GANANCIA ${$(gananciaMes(en))} · reparto: ${R}`; }).join("\n") || "(sin movimientos todavía)"; } catch (e) { return "(no se pudo calcular)"; } })()}
+
 SUPLEMENTACIÓN (info general, no indicación médica — si pregunta, recordale consultar a su médico antes de empezar cualquiera):
 ${(() => {
       const nombresPorId = { d3: "Vitamina D3", magnesio: "Magnesio", omega3: "Omega 3", colageno: "Colágeno + Vitamina C", proteina: "Proteína", creatina: "Creatina" };
