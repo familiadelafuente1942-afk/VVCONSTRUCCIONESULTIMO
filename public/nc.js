@@ -41,53 +41,44 @@
   async function pdf(it, opt) {
     opt = opt || {};
     if (!window.jspdf) await cargarJs('/vendor/jspdf/jspdf.umd.min.js');
+    if (!window.PK) await cargarJs('/pdfkit.js');
     const { jsPDF } = window.jspdf, d = new jsPDF({ unit: 'mm', format: 'a4' }), W = 210, M = 16, CW = W - 2 * M, nc = it.nc || {};
-    let y = 18;
+    const L = { d, y: 18, M, W, top: 18, bot: 282 };
     const sup = (t) => String(t == null ? '' : t).replace(/²/g, '2').replace(/³/g, '3').replace(/−/g, '-');
-    const nueva = (h) => { if (y + h > 284) { d.addPage(); y = 18 } };
-    const lin = (t, sz, b, col, ind) => { d.setFont('helvetica', b ? 'bold' : 'normal'); d.setFontSize(sz); d.setTextColor(...(col || [30, 30, 30])); d.splitTextToSize(sup(t), CW - (ind || 0)).forEach((l) => { nueva(sz * 0.45); d.text(l, M + (ind || 0), y); y += sz * 0.45 }) };
-    const fila = (k, v) => { d.setFont('helvetica', 'bold'); d.setFontSize(10); d.setTextColor(110, 105, 95); const L = d.splitTextToSize(sup(v || '—'), CW - 48); nueva(5 * L.length); d.text(k, M, y); d.setFont('helvetica', 'normal'); d.setTextColor(30, 30, 30); L.forEach((l, k2) => d.text(l, M + 48, y + k2 * 4.6)); y += Math.max(6, L.length * 4.6 + 1.4) };
-    const H = (t) => { y += 3; nueva(12); d.setFont('helvetica', 'bold'); d.setFontSize(12); d.setTextColor(30, 30, 30); d.text(t, M, y); d.setDrawColor(184, 145, 90); d.setLineWidth(0.4); d.line(M, y + 1.6, W - M, y + 1.6); y += 7 };
+    const nueva = (h) => { if (L.y + h > L.bot) PK.nueva(L) };
+    const lin = (t, sz, b, col, ind) => { d.setFont('helvetica', b ? 'bold' : 'normal'); d.setFontSize(sz); d.setTextColor(...(col || [30, 30, 30])); d.splitTextToSize(sup(t), CW - (ind || 0)).forEach((l) => { nueva(sz * 0.45); d.text(l, M + (ind || 0), L.y); L.y += sz * 0.45 }) };
+    const fila = (k, v) => { d.setFont('helvetica', 'bold'); d.setFontSize(10); const K = d.splitTextToSize(k, 44); d.setFont('helvetica', 'normal'); const V = d.splitTextToSize(sup(v || '—'), CW - 48); const n = Math.max(K.length, V.length); nueva(4.6 * n + 1.5);
+      d.setFont('helvetica', 'bold'); d.setTextColor(110, 105, 95); K.forEach((l, j) => d.text(l, M, L.y + j * 4.6)); d.setFont('helvetica', 'normal'); d.setTextColor(30, 30, 30); V.forEach((l, j) => d.text(l, M + 48, L.y + j * 4.6)); L.y += Math.max(6, n * 4.6 + 1.4) };
+    /* el título nunca queda solo al pie: pasa de hoja con al menos minCont mm de contenido */
+    const H = (t, minCont) => PK.titulo(L, t, minCont == null ? 14 : minCont, () => { L.y += 3; d.setFont('helvetica', 'bold'); d.setFontSize(12); d.setTextColor(30, 30, 30); d.text(t, M, L.y); d.setDrawColor(184, 145, 90); d.setLineWidth(0.4); d.line(M, L.y + 1.6, W - M, L.y + 1.6); L.y += 7 });
     d.setFillColor(23, 24, 28); d.rect(0, 0, W, 30, 'F'); d.setTextColor(184, 145, 90); d.setFont('helvetica', 'bold'); d.setFontSize(10);
     d.text('CONSTANCIA DE TAREA NO CONVENCIONAL N° ' + (it.num || '—'), M, 12);
-    d.setTextColor(255, 255, 255); d.setFontSize(16); d.text(sup(String(it.obraNombre || opt.obra || '')).slice(0, 60), M, 22); y = 40;
+    d.setTextColor(255, 255, 255); d.setFontSize(16); d.text(sup(String(it.obraNombre || opt.obra || '')).slice(0, 60), M, 22); L.y = 40;
     fila('Contratista', (it.ctNombre || '') + (it.rubro ? ' (' + it.rubro + ')' : ''));
     fila('Rubro', it.rubro || '—');
     fila('Cargada', fh(it.creado));
     fila('Estado', estado(it) + (nc.estadoT ? ' · tarea ' + (EST_T[nc.estadoT] || nc.estadoT).toLowerCase() : ''));
-    H('Tarea');
+    H('Tarea', 20);
     fila('Tarea del cronograma', nc.tareaNom || it.tarea || '—');
     if (nc.ubic) fila('Ubicación en obra', nc.ubic);
     fila('Motivos', motTxt(nc).join(' · '));
-    lin(nc.desc || it.desc || '', 10, 0, [50, 50, 50]); y += 2;
+    lin(nc.desc || it.desc || '', 10, 0, [50, 50, 50]); L.y += 2;
     if (nc.adic) fila('Adicional vinculado', 'N° ' + (nc.adic.num || '') + ' (el reconocimiento económico va por el adicional)');
     else if (nc.pideEcon) fila('Reconocimiento económico', 'Pedido: va por un Adicional aparte');
-    H('Tiempos');
-    const cols = ['Tiempo habitual', 'Tiempo real', 'Diferencia', 'Personas', 'H-h extra'], w = [0.24, 0.24, 0.18, 0.14, 0.2];
-    const tabla = (rows) => { const X = []; let x = M; w.forEach((p) => { X.push(x); x += p * CW });
-      nueva(9); d.setFillColor(15, 27, 45); d.rect(M, y - 4.6, CW, 7, 'F'); d.setFont('helvetica', 'bold'); d.setFontSize(8.5); d.setTextColor(255, 255, 255); cols.forEach((c, k) => d.text(c, X[k] + 2, y)); y += 6;
-      rows.forEach((r, ri) => { const L = r.cells.map((c, k) => d.splitTextToSize(sup(c), w[k] * CW - 4)); const h = Math.max(...L.map((l) => l.length)) * 4.4 + 2; nueva(h + 2); if (r.lbl) { d.setFont('helvetica', 'bold'); d.setFontSize(7.5); d.setTextColor(110, 105, 95); d.text(r.lbl, M + 2, y); y += 3.6 } if (ri % 2 === 0) { d.setFillColor(245, 242, 236); d.rect(M, y - 3.8, CW, h, 'F') } d.setFont('helvetica', r.b ? 'bold' : 'normal'); d.setFontSize(9); d.setTextColor(30, 30, 30); L.forEach((l, k) => l.forEach((z, j) => d.text(z, X[k] + 2, y + j * 4.4))); y += h + 1 }) };
-    const fil = (lbl, hab, real) => { const c = calc(hab, real); return { lbl, cells: [tTxt(hab), tTxt(real), c.txt.split(' · ')[0], String(Math.max(1, num(real && real.p) || 1)), (c.hhx > 0 ? '+' : '') + fmtN(c.hhx) + ' h-h'] } };
-    const rows = [fil('DECLARADO POR EL CONTRATISTA', nc.hab, nc.real)];
-    if (nc.res && nc.res.acc === 'otro' && nc.res.acep) rows.push({ ...fil('ACEPTADO POR ' + String(nc.res.nom || nc.res.porNom || 'LA OBRA').toUpperCase(), nc.hab, nc.res.acep), b: 1 });
-    tabla(rows);
-    const F = (it.fotos || []).slice(0, 12);
-    if (F.length) {
-      H('Fotos');
-      const cw = (CW - 6) / 2;
-      for (let k = 0; k < F.length; k += 2) {
-        const par = await Promise.all(F.slice(k, k + 2).map(imgData)); let hmax = 0;
-        const hs = par.map((im) => (im ? Math.min(90, cw * im.h / im.w) : 0)); hmax = Math.max(...hs, 0);
-        nueva(hmax + 8);
-        par.forEach((im, j) => { if (!im) return; const x = M + j * (cw + 6); try { d.addImage(im.d, 'JPEG', x, y, cw, hs[j]) } catch (e) {} });
-        y += hmax + 2; d.setFont('helvetica', 'normal'); d.setFontSize(7.5); d.setTextColor(110, 105, 95); d.text('Cargada el ' + fh(it.creado), M, y + 2); y += 6;
-      }
-    }
+    /* tabla de tiempos: el origen es una columna propia, nada se encima */
+    H('Tiempos', 26);
+    const fil = (origen, hab, real, b) => { const c = calc(hab, real); return { b, cells: [origen, tTxt(hab), tTxt(real), c.txt.split(' · ')[0], String(Math.max(1, num(real && real.p) || 1)), (c.hhx > 0 ? '+' : '') + fmtN(c.hhx) + ' h-h'] } };
+    const rows = [fil('Declarado por el contratista', nc.hab, nc.real)];
+    if (nc.res && nc.res.acc === 'otro' && nc.res.acep) rows.push(fil('Aceptado por la obra' + (nc.res.nom ? ' (' + nc.res.nom + ')' : ''), nc.hab, nc.res.acep, 1));
+    PK.tabla(L, { cols: ['Origen', 'Tiempo habitual', 'Tiempo real', 'Diferencia', 'Personas', 'H-h extra'], w: [0.23, 0.19, 0.19, 0.13, 0.11, 0.15], rows, fs: 8.5, boldCol: 0 });
+    L.y += 2;
+    const F = (it.fotos || []).filter(Boolean);
+    if (F.length) { H('Fotos', 46); await PK.fotos(L, F.map((u) => ({ u, fecha: 'Cargada el ' + fh(it.creado) }))) }
     const A = it.archivos || [];
-    if (A.length) { H('Adjuntos'); A.forEach((a) => { lin('• ' + (a.n || 'archivo'), 9.5, 1, [30, 30, 30]); if (a.u) { d.setFont('helvetica', 'normal'); d.setFontSize(8); d.setTextColor(40, 90, 160); d.splitTextToSize(a.u, CW - 4).forEach((l) => { nueva(4); d.textWithLink ? d.textWithLink(l, M + 4, y, { url: a.u }) : d.text(l, M + 4, y); y += 3.8 }) } }) }
-    H('Historial');
-    (it.hist || []).forEach((h) => { lin(fh(h.t) + ' · ' + (h.nom || h.por || ''), 9, 1, [70, 72, 80]); if (h.tx) lin(h.tx, 9.5, 0, [40, 40, 40], 3); y += 1 });
-    y += 4; nueva(16); d.setDrawColor(184, 145, 90); d.setLineWidth(0.5); d.line(M, y, W - M, y); y += 7;
+    if (A.length) { H('Adjuntos', 14); A.forEach((a) => { lin('• ' + (a.n || 'archivo'), 9.5, 1, [30, 30, 30]); if (a.u) { d.setFont('helvetica', 'normal'); d.setFontSize(8); d.setTextColor(40, 90, 160); d.splitTextToSize(a.u, CW - 4).forEach((l) => { nueva(4); d.textWithLink ? d.textWithLink(l, M + 4, L.y, { url: a.u }) : d.text(l, M + 4, L.y); L.y += 3.8 }) } }) }
+    H('Historial', 14);
+    (it.hist || []).forEach((h) => { lin(fh(h.t) + ' · ' + (h.nom || h.por || ''), 9, 1, [70, 72, 80]); if (h.tx) lin(h.tx, 9.5, 0, [40, 40, 40], 3); L.y += 1 });
+    L.y += 4; nueva(16); d.setDrawColor(184, 145, 90); d.setLineWidth(0.5); d.line(M, L.y, W - M, L.y); L.y += 7;
     const r = nc.res;
     lin('Estado final: ' + estado(it), 11, 1);
     if (r && (r.acc === 'conf' || r.acc === 'otro')) lin('Conformado por: ' + (r.nom || '') + ' · ' + fh(r.t) + (r.cmt ? ' — ' + r.cmt : ''), 10, 0, [31, 120, 70]);

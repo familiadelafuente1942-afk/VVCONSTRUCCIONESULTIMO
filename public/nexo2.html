@@ -1871,11 +1871,13 @@ async function docPDF(doc){
       s.tabla.rows.forEach(row=>{const cells=row.map((v,i)=>wrapTxt(v,8.5,false,w[i]*CW-12));const hh=Math.max(...cells.map(c=>c.length))*11.5+10;if(P.y+hh>bottom){P.newPage();hdr()}cells.forEach((c,i)=>c.forEach((ln,n)=>{const b=/^(Descripción|Posible solución|Recomendación)/.test(ln);P.text(xs[i]+6,P.y+5+n*11.5,ln,8.5,b)}));P.y+=hh;P.line(L,P.y,R,P.y,LINE)});P.y+=8}
     if(s.lista){head(s.h);const tx=s.lista.map((it,n)=>(n+1)+'. '+it).join('   ');const ls=wrapTxt(tx,8.5,false,CW-10);ls.forEach(ln=>{ensure(11.5);P.text(L+8,P.y,ln,8.5,false,GREY);P.y+=11.5});P.y+=4}
     if(s.texto!=null){head(s.h);wrapTxt(s.texto||'—',9.5,false,CW).forEach(ln=>{ensure(13);P.text(L,P.y,ln,9.5);P.y+=13});P.y+=6}
-    if(s.fotos){const ims=s.fotos.map(()=>imgs[ii++]).filter(Boolean),N=s.fotos.length,tall=ims.some(im=>im.h>im.w*1.2);
+    if(s.fotos){const ims=s.fotos.map(()=>imgs[ii++]),N=s.fotos.length,tall=ims.some(im=>im&&im.h>im.w*1.2);
       let cols=N<=2?2:N<=4?4:N<=6?3:4,gap=8,cw=(CW-gap*(cols-1))/cols,ph=cols>=4?cw*.98:cols===3?cw*.8:cw*.66;
       if(tall){cols=N===1?1:N===2?2:3;cw=(CW-gap*(cols-1))/cols;if(N===1)cw=Math.min(cw,300);ph=Math.min(cw*1.4,N===1?430:330)}
-      ensure(ph+50);head(s.h);
-      ims.forEach((im,n)=>{const c=n%cols;if(c===0)ensure(ph+8);if(tall)P.imageFit(im,L+c*(cw+gap),P.y,cw,ph);else P.imageCover(im,L+c*(cw+gap),P.y,cw,ph);if(c===cols-1||n===ims.length-1)P.y+=ph+gap});
+      /* PDF-02: el título va con al menos una fila (achicada hasta 50 %); cada fila se achica si no entra en lo que queda de la hoja */
+      ensure(ph*.5+50);head(s.h);
+      for(let r0=0;r0<ims.length;r0+=cols){let k=1;const lib=bottom-P.y;if(ph+gap>lib){const k2=(lib-gap)/ph;if(k2>=.5)k=k2;else P.newPage()}const w=cw*k,h=ph*k;
+        ims.slice(r0,r0+cols).forEach((im,c)=>{const x=L+c*(cw+gap)+(cw-w)/2;if(!im){P.rect(x,P.y,w,h,'#f4f0e8',LINE);P.text(x+8,P.y+10,'Foto '+(r0+c+1)+': no se pudo leer',8,false,GREY);return}if(tall)P.imageFit(im,x,P.y,w,h);else P.imageCover(im,x,P.y,w,h)});P.y+=h+gap}
       if(!ims.length){P.text(L,P.y,'Sin fotos adjuntas.',9,false,GREY);P.y+=14}else P.y+=2}
   }
   if(doc.resultado){ensure(30);P.y+=6;P.text(L,P.y,'RESULTADO: ',10,true,INK);P.text(L+tw('RESULTADO: ',10,true),P.y,doc.resultado.toUpperCase(),10,true,doc.resultado==='Conforme'?'var(--verde)':doc.resultado==='No conforme'?'#b5372d':'#a0611f');P.y+=18}
@@ -2850,9 +2852,11 @@ async function audPDF(a){
   if(S.interf.length){head('Interferencias detectadas',30);S.interf.forEach((t,n)=>{const ls=wrapTxt(audParas(t).join(' '),FS,false,CW-26);ensure(ls.length*LH+4);P.text(L+8,P.y,(n+1)+'.',FS,false,GREY);ls.forEach(ln=>{P.text(L+26,P.y,ln,FS);P.y+=LH});P.y+=3})}
   /* fotos de obra: grilla pareja */
   const fi=await Promise.all(S.fotos.map(id=>toJpeg(FILES[id].url)));const ims=fi.filter(Boolean);
-  {const N0=ims.length,cc0=N0<=2?2:N0===3?3:N0===4?4:N0<=6?3:4,pw0=(CW-8*(cc0-1))/cc0;head('Fotos',N0?pw0*.75+8:30)}
+  {const N0=ims.length,cc0=N0<=2?2:N0===3?3:N0===4?4:N0<=6?3:4,pw0=(CW-8*(cc0-1))/cc0;head('Fotos',N0?pw0*.75*.5+8:30)}
   if(!ims.length){P.text(L,P.y,'Sin fotos adjuntas.',FS,false,GREY);P.y+=LH+4}
-  else{const N=ims.length,cc=N<=2?2:N===3?3:N===4?4:N<=6?3:4,g=8,pw=(CW-g*(cc-1))/cc,ph=pw*.75;ims.forEach((im,n)=>{const c=n%cc;if(c===0)ensure(ph+g);P.imageCover(im,L+c*(pw+g),P.y,pw,ph);if(c===cc-1||n===N-1)P.y+=ph+g});P.y+=2}
+  else{const N=ims.length,cc=N<=2?2:N===3?3:N===4?4:N<=6?3:4,g=8,pw=(CW-g*(cc-1))/cc,ph=pw*.75;
+    /* PDF-02: la fila se achica (hasta 50 %) para aprovechar lo que queda de la hoja */
+    for(let r0=0;r0<N;r0+=cc){let k=1;const lib=BOT-P.y;if(ph+g>lib){const k2=(lib-g)/ph;if(k2>=.5)k=k2;else P.newPage()}const w=pw*k,h=ph*k;ims.slice(r0,r0+cc).forEach((im,c)=>P.imageCover(im,L+c*(pw+g)+(pw-w)/2,P.y,w,h));P.y+=h+g}P.y+=2}
   /* archivos adjuntos: material técnico, grandes */
   if(S.adj.length){
     const vis=[],otros=[];
@@ -5143,7 +5147,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261127-191620';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261127-202327';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -7129,6 +7133,7 @@ A.migrarPlantOk=async()=>{if(!esDir())return;const ids=[...document.querySelecto
 setInterval(()=>{try{const c=window.__nxCap;if(!c||!esDir()||window.__nxCapVisto===c.fila+c.pct)return;window.__nxCapVisto=c.fila+c.pct;toast(`Aviso interno: los datos de ${c.fila==='general'?'la configuración general':(findO(c.fila)||{}).nombre||c.fila} ocupan el ${c.pct} % del tope por registro. Conviene limpiar respaldos viejos.`)}catch(e){}},20000);
 </script>
 <script src="/pdfnombre.js"></script>
+<script src="/pdfkit.js"></script>
 <script src="/nc.js"></script>
 <script id="nx-noconv">
 /* CON-01 · constancias de tarea no convencional en NEXO 2: Jefatura y Dirección responden, Auditoría lee, el propietario ve las que Dirección compartió */
