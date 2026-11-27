@@ -1,0 +1,20 @@
+name: nx-dl
+on:
+  workflow_dispatch:
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prueba del nombre de descarga del almacenamiento (solo lectura, no imprime links)
+        run: |
+          curl -s 'https://nexoentorno.vercel.app/api/nexo2' -o c.json
+          python3 - <<'PY'
+          import json,re,urllib.parse,subprocess
+          t=open('c.json').read().replace('\\/','/')
+          L=[u for u in re.findall(r'https://[a-z0-9]+\.supabase\.co/storage/v1/object/public/[^"\\\\?]+\.pdf',t)]
+          print('PDFS_ENCONTRADOS',len(L))
+          if L:
+            u=L[0];n='Constancia tarea no convencional N° 0033 - Saenz Peña 011 - Revoques (PB y 1° piso) sobre… - 2026-11-27.pdf'
+            h=subprocess.run(['curl','-sI',u+'?download='+urllib.parse.quote(n)],capture_output=True,text=True).stdout
+            print('\n'.join(l for l in h.splitlines() if re.match(r'(?i)(HTTP|content-disposition|content-type)',l)))
+          PY
