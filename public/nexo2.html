@@ -7096,6 +7096,8 @@ window.nxPlanMigracion=function(o){
   const ov=JSON.parse(JSON.stringify(o.ov||{}));
   ['c','r','t','k'].forEach(g=>{if(ov[g]){const n={};Object.entries(ov[g]).forEach(([k,v])=>{if(g==='c'&&v&&v.tk)v.tk=rk(v.tk);n[rk(k)]=v});ov[g]=n}});
   ['xc','xr','xt','xk'].forEach(g=>{if(ov[g])ov[g]=ov[g].map(rk)});
+  /* las fechas movidas a mano de las tareas que cambiaron de secuencia (calefacción, contrapisos y pruebas) se recalculan, salvo que tengan avance */
+  const SEQ=/^(SAN06|CAL0\d)(_|$)/;if(ov.t){Object.keys(ov.t).forEach(k=>{if(SEQ.test(k)&&!(ov.r&&ov.r[k]))delete ov.t[k]});if(!Object.keys(ov.t).length)delete ov.t}
   /* solo las tareas con avance real conservan sus fechas; lo demás toma la secuencia nueva */
   const av=new Set();o.tasks.forEach(t=>{if(t.real)av.add(ren[t.id]||t.id)});
   Object.keys(ov.r||{}).forEach(k=>av.add(k));
