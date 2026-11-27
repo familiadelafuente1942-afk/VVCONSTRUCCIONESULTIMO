@@ -5143,7 +5143,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261127-152613';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261127-153035';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -7226,5 +7226,15 @@ const ncBoxInf=(o,a,b)=>{const L=ncSemana(o,a,b);if(!L.length)return null;const 
 /* NEXO IA: ve las constancias de cada obra */
 try{const g=window.iaDatosObra;if(typeof g==='function')window.iaDatosObra=function(o){const r=g.apply(this,arguments);try{const L=ncDe(o);if(L.length&&r&&typeof r==='object')r.constancias_tarea_no_convencional=L.map(x=>{const nc=x.nc||{};return{numero:x.num,contratista:x.ctNombre,tarea:nc.tareaNom,ubicacion:nc.ubic,motivos:NC.motTxt(nc),tiempo_extra:NC.calc(nc.hab,nc.real).txt,estado:NC.estado(x),dias_aceptados:NC.diasAceptados(nc),cargada:fAR(x.creado)}})}catch(e){}return r}}catch(e){}
 }catch(e){console.error('nx-noconv',e)}})();
+</script>
+<script id="nx-scroll-fijo">
+/* al tocar algo del cronograma (abrir o cerrar una etapa, una fase…) la pantalla se queda donde estabas:
+   se guarda el desplazamiento del cronograma y de la página antes de redibujar y se vuelve a poner */
+(function(){const sc=()=>(getComputedStyle(document.body).overflowY!=='visible'&&document.body.scrollHeight>document.body.clientHeight+2)?document.body:document.scrollingElement;
+  const _d=draw;draw=window.draw=function(){const key=S.tab+'|'+S.obra+'|'+S.otab+'|'+(S.gfull?1:0),w=document.getElementById('gwrap'),cf=document.getElementById('crono-full'),pe=sc();
+    const g=w?{t:w.scrollTop,l:w.scrollLeft}:null,f=cf?cf.scrollTop:null,py=pe?pe.scrollTop:0;
+    const r=_d.apply(this,arguments);
+    try{if(window.__nxScrollKey===key){const pon=()=>{const n=document.getElementById('gwrap');if(n&&g){n.scrollTop=g.t;n.scrollLeft=g.l}const c2=document.getElementById('crono-full');if(c2&&f!=null)c2.scrollTop=f;const p2=sc();if(p2&&Math.abs(p2.scrollTop-py)>2&&!document.querySelector('.sheet'))p2.scrollTop=py};pon();requestAnimationFrame(pon)}window.__nxScrollKey=key}catch(e){}
+    return r}})();
 </script>
 </body></html>
