@@ -40,10 +40,6 @@ jobs:
               console.log('  abiertos migrada:');bb.migrada.its.filter(i=>i.e==='falta').forEach(i=>console.log('    M '+i.t+' · '+i.tipo+(i.toda?' · toda':'')+' · '+i.txt));
               bb.migrada.dup.forEach(l=>console.log('  DUP '+l));bb.migrada.sin.forEach(l=>console.log('  SIN '+l));
               console.log('  secuencia migrada:');bb.migrada.cal.forEach(l=>console.log('    '+l));
-<<<<<<< HEAD
-            });await b.close()})();
-=======
             });await b.close().catch(()=>{});process.exit(0)})();
->>>>>>> plantilla2
           JS
           node t.cjs
