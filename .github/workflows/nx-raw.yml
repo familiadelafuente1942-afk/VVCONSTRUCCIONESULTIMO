@@ -5,41 +5,17 @@ jobs:
   d:
     runs-on: ubuntu-latest
     steps:
-      - name: Conteo de estados guardados en la nube (solo lectura, sin montos)
+      - name: Estado del registro cfg (solo lectura, sin montos)
         run: |
           curl -s 'https://nexoentorno.vercel.app/api/nexo2' -o c.json
           python3 - <<'PY'
-          import json,collections
-          j=json.load(open('c.json'));c0=j.get('cfg')
-          if isinstance(c0,dict):print('cfg claves',list(c0.keys()));c0=c0.get('v',c0)
-          if isinstance(c0,str):c0=json.loads(c0)
-          j=c0;print('claves',list(j.keys())[:20] if isinstance(j,dict) else type(j))
-          def walk(x):
-            if isinstance(x,dict):
-              for k,v in x.items():
-                if k in('o7688','o4541') or (isinstance(v,dict) and v.get('id') in('o7688','o4541')):yield k,v
-                yield from walk(v)
-            elif isinstance(x,list):
-              for v in x:
-                if isinstance(v,dict) and v.get('id') in('o7688','o4541'):yield 'lista',v
-                yield from walk(v)
-          vistos=0
-          for k,v in walk(j):
-            if not isinstance(v,dict):continue
-            vistos+=1;ov=v.get('ov') or {};c=ov.get('c') or {}
-            est=collections.Counter()
-            for kk,cv in c.items():
-              for ik,a in (cv.get('i') or {}).items():est[a[0]]+=1
-            print('OBRA',k,v.get('id'),v.get('nombre'),'ovt',v.get('ovt'),'enCurso',v.get('enCurso'),'cg',v.get('cg'),'cgu',v.get('cgu'),'cards_ov',len(c),'estados',dict(est),'r',len(ov.get('r') or {}))
-            for r in v.get('resp') or []:
-              o2=r.get('ov') or {};e2=collections.Counter(a[0] for cv in (o2.get('c') or {}).values() for a in (cv.get('i') or {}).values())
-              print('   RESP',r.get('t'),r.get('m'),dict(e2))
-          print('vistos',vistos)
-          print('NUEVAS',[(x.get('id'),x.get('nombre'),sorted(x.keys())[:40]) for x in j.get('nuevas',[]) if isinstance(x,dict)])
-          print('MOD',{k:sorted(v.keys()) for k,v in (j.get('mod') or {}).items()})
-          for x in j.get('nuevas',[]):
-            if isinstance(x,dict) and x.get('id')=='o7688':
-              ov=x.get('ov') or {};print('O7688 ov claves',list(ov.keys()),'enCurso',x.get('enCurso'),'ovt',x.get('ovt'))
-              est=collections.Counter(a[0] for cv in (ov.get('c') or {}).values() for a in (cv.get('i') or {}).values());print('O7688 estados',dict(est))
-              for r in x.get('resp') or []:print('   R7688',r.get('t'),r.get('m'),dict(collections.Counter(a[0] for cv in ((r.get('ov') or {}).get('c') or {}).values() for a in (cv.get('i') or {}).values())))
+          import json
+          j=json.load(open('c.json'));print('CLAVES_GET',list(j.keys()))
+          c=j['cfg'];v=c['v'];print('CFG t',c['t'],'largo v',len(v),'bytes utf8',len(v.encode()))
+          C=json.loads(v);print('TOP',[(k,len(json.dumps(C[k],ensure_ascii=False,separators=(',',':')).encode())) for k in C])
+          def info(id,e):
+            sz=lambda x:len(json.dumps(x,ensure_ascii=False,separators=(',',':')).encode())
+            print('OBRA',id,e.get('nombre',''),'total',sz(e),'resp',sz(e.get('resp',[])),'n_resp',len(e.get('resp',[]) or []),'baseOv',sz(e['baseOv']) if 'baseOv' in e else '-','ov',sz(e.get('ov',{})),'ov.r',len((e.get('ov') or {}).get('r') or {}),'tpl',e.get('tpl'),'sinCrono',e.get('sinCrono','(no)'),'cg',e.get('cg'),'cgu',e.get('cgu'),'mod2',bool(e.get('mod2')),'plantilla',(e.get('mod2') or {}).get('plantilla'))
+          for id,e in (C.get('mod') or {}).items():info(id,e)
+          for e in C.get('nuevas') or []:info(e.get('id'),e)
           PY
