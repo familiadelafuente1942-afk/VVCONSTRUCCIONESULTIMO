@@ -7,7 +7,7 @@ jobs:
     steps:
       - name: Conteo de estados guardados en la nube (solo lectura, sin montos)
         run: |
-          curl -s 'https://nexoentorno.vercel.app/api/nexo2?t=1' -o c.json
+          curl -s 'https://nexoentorno.vercel.app/api/nexo2' -o c.json
           python3 - <<'PY'
           import json,collections
           j=json.load(open('c.json'));print('claves',list(j.keys())[:20])
