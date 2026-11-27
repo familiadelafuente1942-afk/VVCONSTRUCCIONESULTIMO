@@ -7096,12 +7096,16 @@ window.nxPlanMigracion=function(o){
   const ov=JSON.parse(JSON.stringify(o.ov||{}));
   ['c','r','t','k'].forEach(g=>{if(ov[g]){const n={};Object.entries(ov[g]).forEach(([k,v])=>{if(g==='c'&&v&&v.tk)v.tk=rk(v.tk);n[rk(k)]=v});ov[g]=n}});
   ['xc','xr','xt','xk'].forEach(g=>{if(ov[g])ov[g]=ov[g].map(rk)});
-  const av=new Set();o.tasks.forEach(t=>{if(t.real||o.cards.some(c=>c.task===t&&c.items.some(i=>i.estado!=='falta'||i.respuesta)))av.add(ren[t.id]||t.id)});
+  /* solo las tareas con avance real conservan sus fechas; lo demás toma la secuencia nueva */
+  const av=new Set();o.tasks.forEach(t=>{if(t.real)av.add(ren[t.id]||t.id)});
   Object.keys(ov.r||{}).forEach(k=>av.add(k));
   const old=new Map(o.base.map(b=>[ren[b.id]||b.id,b]));
   const nb=gen.map(g=>{const b=old.get(g.id);return b&&(av.has(g.id)||b.manual)?{...g,start:b.start,end:b.end,weeks:b.weeks,manual:!!b.manual}:g});
   const extra=o.base.filter(b=>!gid.has(ren[b.id]||b.id)).map(b=>({...b,manual:true}));
-  return{base:[...nb,...extra].sort((a,b)=>a.start-b.start),ov:Object.keys(ov).length?ov:null,ren,nuevas:gen.filter(g=>!old.has(g.id)).map(g=>g.name),conservadas:nb.filter(b=>av.has(b.id)).length}};
+  /* las tareas sin código (agregadas a mano o de antes) mantienen su orden: así lo cargado en ellas se sigue encontrando */
+  const fin=[...nb,...extra].sort((a,b)=>a.start-b.start),sc=fin.map((b,i)=>b.cod?-1:i).filter(i=>i>=0),orig=o.base.filter(b=>!b.cod).map(b=>fin.find(x=>x.id===b.id)).filter(Boolean);
+  if(orig.length===sc.length)sc.forEach((pos,n)=>{fin[pos]=orig[n]});
+  return{base:fin,ov:Object.keys(ov).length?ov:null,ren,nuevas:gen.filter(g=>!old.has(g.id)).map(g=>g.name),conservadas:nb.filter(b=>av.has(b.id)).length}};
 /* cómo queda la obra al volver a abrirla con la base nueva (lo mismo que hace la app al cargar) */
 window.nxSimular=function(o,pl){const sc={...o,tasks:[],cards:[],planos:[],cert:[],base:pl.base,mod2:o.mod2,sup:[],ov:pl.ov};tplResync(sc);if(pl.ov)ovAplicar(sc,pl.ov);return sc};
 window.nxMigrarObra=function(o){if(!nxNecesitaMigrar(o))return null;try{ovFlush()}catch(e){}
