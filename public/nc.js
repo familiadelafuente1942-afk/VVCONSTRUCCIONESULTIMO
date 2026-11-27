@@ -95,6 +95,6 @@
     const n = d.getNumberOfPages(); for (let p = 1; p <= n; p++) { d.setPage(p); d.setFont('helvetica', 'normal'); d.setFontSize(7.5); d.setTextColor(150, 145, 135); d.text('Constancia N° ' + (it.num || '') + ' · página ' + p + ' de ' + n, W - M, 292, { align: 'right' }) }
     return d.output('blob');
   }
-  const nombreArchivo = (it) => ('Constancia tarea no convencional N ' + (it.num || '') + ' - ' + (it.obraNombre || '') + ' - ' + (it.ctNombre || '')).replace(/[\\/:*?"<>|]+/g, '-').trim() + '.pdf';
+  const nombreArchivo = (it) => window.nombrePdf ? window.nombrePdf(window.docAvisoPdf({ ...it, tipo: 'noconv' }, it.obraNombre)) : ('Constancia tarea no convencional N ' + (it.num || '') + ' - ' + (it.obraNombre || '') + ' - ' + (it.ctNombre || '')).replace(/[\\/:*?"<>|]+/g, '-').trim() + '.pdf';
   window.NC = { MOT, EST_T, calc, vigente, diasAceptados, estado, motTxt, tTxt, pdf, nombreArchivo, num };
 })();
