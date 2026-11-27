@@ -20,7 +20,9 @@ jobs:
                 if k in('o7688','o4541') or (isinstance(v,dict) and v.get('id') in('o7688','o4541')):yield k,v
                 yield from walk(v)
             elif isinstance(x,list):
-              for v in x:yield from walk(v)
+              for v in x:
+                if isinstance(v,dict) and v.get('id') in('o7688','o4541'):yield 'lista',v
+                yield from walk(v)
           vistos=0
           for k,v in walk(j):
             if not isinstance(v,dict):continue
