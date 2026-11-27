@@ -12,6 +12,7 @@
 // La clave sale del código de Dirección + un número de versión (se guarda solo el número, no la clave).
 
 import crypto from "crypto";
+import { leerCfg, cfgDeFilas } from "./_cfg.js";
 import zlib from "zlib";
 import PDFDocument from "pdfkit";
 
@@ -227,13 +228,13 @@ export default async function handler(req, res) {
     if (q.nx === "obras") {
       // diagnóstico (solo lectura): qué obras de NEXO 2 hay en la nube, en las fotos de cada obra y en las copias diarias
       const L = []; const res1 = (v, tag) => { try { const C = JSON.parse(v.v); L.push(`${tag} · t=${v.t ? new Date(Number(v.t) - 108e5).toISOString().slice(0, 16).replace("T", " ") : "?"}`); L.push("  mod: " + Object.entries(C.mod || {}).map(([id, m]) => id + (m.nombre ? "=" + m.nombre : "") + (m.cero ? "(cero)" : "")).join(", ")); L.push("  nuevas: " + (C.nuevas || []).map((x) => x.id + "=" + (x.nombre || "?") + "[" + (x.constructora || "") + "]").join(", ")); L.push("  del: " + JSON.stringify(C.del || [])); } catch (e) { L.push(tag + " · ilegible"); } };
-      const cfg = await leer(H, "cfg"); if (cfg) res1(cfg, "NUBE ACTUAL");
+      const cfg = await leerCfg({ leer, H, URL_BASE }); if (cfg) res1(cfg, "NUBE ACTUAL");
       const rs = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave,valor&clave=like.snap_*`, { headers: H });
       if (rs.ok) { L.push("", "FOTOS DE OBRA (snap_):"); for (const x of await rs.json()) L.push("  " + String(x.clave).slice(5) + " = " + ((x.valor && x.valor.nombre) || "?") + " · " + (x.valor && x.valor.t ? fechaLarga(Number(x.valor.t)) : "")); }
       const lb = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave&clave=like.bk_*&order=clave.desc`, { headers: H });
       if (lb.ok) for (const x of (await lb.json()).slice(0, 10)) {
         const r = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=valor&clave=eq.${x.clave}`, { headers: H }); const j = r.ok ? await r.json() : [];
-        const f = ((j[0] && j[0].valor && j[0].valor.filas) || []).find((y) => y.clave === "cfg"); L.push(""); if (f && f.valor) res1(f.valor, "COPIA " + x.clave); else L.push("COPIA " + x.clave + " · sin cfg");
+        const f = { valor: cfgDeFilas((j[0] && j[0].valor && j[0].valor.filas) || []) }; L.push(""); if (f && f.valor) res1(f.valor, "COPIA " + x.clave); else L.push("COPIA " + x.clave + " · sin cfg");
       }
       res.setHeader("Content-Type", "text/plain; charset=utf-8"); res.status(200).send(L.join("\n")); return;
     }

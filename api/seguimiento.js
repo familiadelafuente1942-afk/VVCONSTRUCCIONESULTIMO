@@ -4,6 +4,7 @@
 // recordado con un token propio (se guarda solo su huella en el servidor).
 
 import crypto from "crypto";
+import { leerCfg, cfgDeFilas } from "./_cfg.js";
 
 const URL_BASE = process.env.SUPABASE_URL || "https://qaubkwiwtszebdgfrizr.supabase.co";
 const norm = (t) => String(t || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -169,7 +170,7 @@ export default async function handler(req, res) {
       try {
         const fl = (await leer(H, "seg_flags")) || {};
         const ya = Array.isArray(fl.nexoAdd) ? fl.nexoAdd : [];
-        const c = await leer(H, "cfg");
+        const c = await leerCfg({ leer, H, URL_BASE });
         const O = (c && typeof c.v === "string" && JSON.parse(c.v)) || {};
         const fuera = new Set([...(Array.isArray(O.del) ? O.del : []), ...(Array.isArray(O.delN) ? O.delN : [])]);
         const nrm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "").replace(/(^|[^0-9])0+(?=[0-9])/g, "$1");
@@ -188,7 +189,7 @@ export default async function handler(req, res) {
       // la lista de obras sigue a NEXO 2: si la obra se borró en NEXO 2 no se muestra (su historia queda guardada y vuelve si la obra se restaura)
       let obrasVer = obras;
       try {
-        const c = await leer(H, "cfg");
+        const c = await leerCfg({ leer, H, URL_BASE });
         const O = (c && typeof c.v === "string" && JSON.parse(c.v)) || {};
         const fuera = new Set([...(Array.isArray(O.del) ? O.del : []), ...(Array.isArray(O.delN) ? O.delN : [])]);
         if (fuera.size) {
@@ -230,7 +231,7 @@ export default async function handler(req, res) {
       // configuración de obras de NEXO 2 (nombres y renders subidos): se lee directo, sin esperar a que Dirección abra NEXO 2
       const cfgFotos = {};
       try {
-        const c = await leer(H, "cfg");
+        const c = await leerCfg({ leer, H, URL_BASE });
         const O = (c && typeof c.v === "string" && JSON.parse(c.v)) || {};
         const https = (u) => typeof u === "string" && /^https:\/\//.test(u) && u.length < 600;
         for (const n of Array.isArray(O.nuevas) ? O.nuevas : []) {

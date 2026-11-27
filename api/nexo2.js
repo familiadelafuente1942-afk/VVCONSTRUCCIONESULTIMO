@@ -7,6 +7,7 @@
 // Los códigos viven SOLO acá: nunca se devuelven salvo a quien presenta el código de Dirección.
 
 import crypto from "crypto";
+import { leerCfg, escribirCfg, horaCfg, cfgDeFilas, tamanos } from "./_cfg.js";
 
 const URL_BASE = process.env.SUPABASE_URL || "https://qaubkwiwtszebdgfrizr.supabase.co";
 const OLD_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co"; // app anterior (fotos de avance ya cargadas)
@@ -245,6 +246,7 @@ export default async function handler(req, res) {
   const sk = process.env.SUPABASE_SERVICE_KEY;
   if (!sk) { res.status(500).json({ error: "Falta SUPABASE_SERVICE_KEY en Vercel." }); return; }
   const H = headers(sk);
+  const CX = { leer, escribir, H, URL_BASE };
   res.setHeader("Cache-Control", "no-store");
   try {
     if (req.method === "GET" && req.query && req.query.stats) {
@@ -262,7 +264,7 @@ export default async function handler(req, res) {
         I.forEach((x) => { out.informes++; const t = Number(x.editado) || Number(x.fecha) || 0; if (t >= ini) out.informesHoy++; if (t >= ahora - 7 * DIA) out.informes7++; if (t > out.ultima) out.ultima = t; });
         A.forEach((x) => { out.avances++; out.fotos += (x.fotos || []).length; const t = Number(x.creado) || Number(x.fecha) || 0; if (t >= ini) out.avancesHoy++; if (t >= ahora - 7 * DIA) out.avances7++; });
       }
-      const cfg = await leer(H, "cfg"); if (cfg && Number(cfg.t) > out.ultima) out.ultima = Number(cfg.t);
+      const cfgT = await horaCfg(CX); if (cfgT > out.ultima) out.ultima = cfgT;
       res.status(200).json(out);
       return;
     }
@@ -288,13 +290,15 @@ export default async function handler(req, res) {
     }
     if (req.method === "GET" && req.query && req.query.t) {
       // consulta liviana: solo la versión (para enterarse de cambios en segundos sin bajar todo)
-      const v = await leer(H, "cfg");
-      res.status(200).json({ t: v ? Number(v.t) || 0 : 0 });
+      res.status(200).json({ t: await horaCfg(CX) });
       return;
     }
     if (req.method === "GET") {
-      const v = await leer(H, "cfg");
-      res.status(200).json(v ? { cfg: v } : {});
+      const v = await leerCfg(CX);
+      if (!v || typeof v.v !== "string") { res.status(200).json({}); return; }
+      // aviso interno: alguna fila pasó el 70 % del tope
+      const tm = tamanos(v);
+      res.status(200).json({ cfg: { t: v.t, v: v.v }, ...(tm && tm.pct >= 70 ? { cap: tm } : {}) });
       return;
     }
     if (req.method !== "POST") { res.status(405).json({ error: "Método no permitido" }); return; }
@@ -467,11 +471,11 @@ export default async function handler(req, res) {
 
     // configuración de obras (no secreta)
     if (!b.op) {
-      if (b.key !== "cfg" || typeof b.v !== "string" || b.v.length > 2_000_000 || typeof b.t !== "number") {
+      if (b.key !== "cfg" || typeof b.v !== "string" || b.v.length > 4_000_000 || typeof b.t !== "number") {
         res.status(400).json({ error: "Datos inválidos" }); return;
       }
       // la hora de versión la pone el servidor (siempre creciente): los relojes de cada aparato pueden estar desfasados
-      let prev = null; try { prev = await leer(H, "cfg"); } catch { prev = null; }
+      let prev = null; try { prev = await leerCfg(CX); } catch { prev = null; }
       // protección: no se puede guardar un "primer cronograma" sobre una obra que ya tiene uno en la nube
       if (Array.isArray(b.nuevos) && b.nuevos.length && prev && typeof prev.v === "string") {
         try {
@@ -497,12 +501,14 @@ export default async function handler(req, res) {
             if (add) { L.sort((x, y) => (Number(x.t || 0) - Number(y.t || 0)) || String(x.id).localeCompare(String(y.id))); const L2 = L.slice(-40); if (L2.map((z) => z.id).join() !== (N.avisos || []).map((z) => z && z.id).join()) { N.avisos = L2; ch = true; } }
           }
           // cronograma borrado por Dirección (sinCrono): un aparato con una versión vieja de la app no lo puede deshacer sin querer
-          for (const [id, ch0] of Object.entries(P.mod || {})) if (ch0 && ch0.sinCrono === true) { N.mod = N.mod || {}; const e = N.mod[id] || {}; if (e.sinCrono === undefined) { N.mod[id] = { ...e, sinCrono: true }; ch = true; } }
-          for (const x of (P.nuevas || [])) if (x && x.sinCrono === true) { const y = N.nuevas.find((z) => z && z.id === x.id); if (y && y.sinCrono === undefined) { y.sinCrono = true; ch = true; } }
-          if (ch) { vOut = JSON.stringify(N); await escribir(H, "cfg_prev", prev); }
+          for (const [id, ch0] of Object.entries(P.mod || {})) if (ch0 && ch0.sinCrono === true) { N.mod = N.mod || {}; const e = N.mod[id] || {}; if (e.sinCrono === undefined && !(Number(e.cg) > Number(ch0.cg || 0))) { N.mod[id] = { ...e, sinCrono: true }; ch = true; } }
+          for (const x of (P.nuevas || [])) if (x && x.sinCrono === true) { const y = N.nuevas.find((z) => z && z.id === x.id); if (y && y.sinCrono === undefined && !(Number(y.cg) > Number(x.cg || 0))) { y.sinCrono = true; ch = true; } }
+          if (ch) vOut = JSON.stringify(N);
         }
       } catch { /* si no se puede leer, se guarda como vino */ }
-      await escribir(H, "cfg", { t, v: vOut });
+      const w = await escribirCfg(CX, prev, vOut, t, typeof b.bt === "number" ? b.bt : null);
+      if (w.error === "conflicto") { res.status(409).json({ error: "conflicto", ids: w.ids, t: prev ? Number(prev.t) || 0 : 0 }); return; }
+      if (w.error === "grande") { res.status(413).json({ error: "grande", ids: w.ids }); return; }
       // si la nube tenía obras que este aparato no traía, se le devuelve lo que quedó guardado para que se ponga al día
       res.status(200).json(vOut !== b.v ? { ok: true, t, v: vOut } : { ok: true, t });
       return;
@@ -570,14 +576,14 @@ export default async function handler(req, res) {
     if (b.op === "obras_recuperables" || b.op === "obras_restaurar") {
       // obras que estaban en la nube (copias diarias o fotos de obra) y ya no aparecen; Dirección elige cuáles volver a traer
       if (!dirOk(b.dir)) { await pausa(600); res.status(403).json({ error: "No autorizado" }); return; }
-      const cur = await leer(H, "cfg"); let C = {}; try { C = cur && cur.v ? JSON.parse(cur.v) : {}; } catch { C = {}; }
+      const cur = await leerCfg(CX); let C = {}; try { C = cur && cur.v ? JSON.parse(cur.v) : {}; } catch { C = {}; }
       C.mod = C.mod || {}; C.nuevas = Array.isArray(C.nuevas) ? C.nuevas : []; C.del = Array.isArray(C.del) ? C.del : []; C.delN = Array.isArray(C.delN) ? C.delN : [];
       const ya = new Set(C.nuevas.map((x) => x && x.id)), cand = new Map();
       const lb = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave&clave=like.bk_*&order=clave.desc`, { headers: H });
       const bks = lb.ok ? (await lb.json()).map((x) => x.clave).filter((k) => /^bk_\d{8}$/.test(k)).slice(0, 30) : [];
       for (const k of bks) {
         const r = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=valor&clave=eq.${k}`, { headers: H }); const j = r.ok ? await r.json() : [];
-        const f = ((j[0] && j[0].valor && j[0].valor.filas) || []).find((y) => y.clave === "cfg"); if (!f || !f.valor || !f.valor.v) continue;
+        const f = { valor: cfgDeFilas((j[0] && j[0].valor && j[0].valor.filas) || []) }; if (!f.valor || !f.valor.v) continue;
         let B; try { B = JSON.parse(f.valor.v); } catch { continue; }
         const dia = k.slice(3, 7) + "-" + k.slice(7, 9) + "-" + k.slice(9, 11);
         for (const x of (B.nuevas || [])) if (x && x.id && !ya.has(x.id) && !cand.has(x.id)) cand.set(x.id, { id: x.id, nombre: x.nombre || x.id, tipo: "nueva", dia, cfg: x });
@@ -594,7 +600,7 @@ export default async function handler(req, res) {
         else if (c.tipo === "solo_nombre" && b.min && typeof b.min === "object") { C.nuevas.push({ ...b.min, id, nombre: c.nombre, recuperada: Date.now() }); n++; }
         C.delN = C.delN.filter((x) => x !== id);
       }
-      if (n) { if (cur) await escribir(H, "cfg_prev", cur); const t = Math.max(Date.now(), (cur && Number(cur.t) || 0) + 1); await escribir(H, "cfg", { t, v: JSON.stringify(C) }); }
+      if (n) { const t = Math.max(Date.now(), (cur && Number(cur.t) || 0) + 1); const w = await escribirCfg(CX, cur, JSON.stringify(C), t, null); if (!w.ok) { res.status(500).json({ error: "No se pudo guardar" }); return; } }
       res.status(200).json({ ok: true, n }); return;
     }
     if (b.op === "cods_get") {

@@ -3904,7 +3904,8 @@ function tplEquiv(lt,dest){const SP=TPL_SPEC[lt.rubro];if(SP)return dest.filter(
   const n=lt.name||'',niv=/\bPB\b/.test(n)?'PB':/\bPA\b|1° piso/.test(n)?'1° piso':/2° piso/.test(n)?'2° piso':null;
   let L=dest.filter(t=>t.rubro===lt.rubro&&!t.legacy);if(niv&&L.some(t=>t.nivel))L=L.filter(t=>!t.nivel||t.nivel===niv);return L}
 function tplAplicar(o,M,modo){
-  if(o.sinCrono)delete o.sinCrono;
+  /* false explícito (no borrar la marca): así la nube sabe que el cronograma se volvió a generar */
+  if(o.sinCrono)o.sinCrono=false;
   const wasTpl=!!o.tpl,oldBase=o.base.slice(),oldTasks=o.tasks.slice(),oldCards=o.cards.slice(),oldCert=(o.cert||[]).slice();
   const conAv=t=>!!(t.real&&t.real.av>0)||oldCards.some(c=>c.task===t&&c.items.some(i=>i.estado!=='falta'||i.respuesta));
   const keep=new Set();
@@ -5043,7 +5044,7 @@ function estado(tipo){return;/* un solo aviso: el chico de arriba (Actualizando�
   else if(tipo==='pend'){e.style.background='#b3542a';e.style.color='#fff';e.innerHTML='<span>Pendiente de sincronizar</span><button type="button" style="background:#fff;color:#b3542a;border:0;border-radius:999px;padding:4px 12px;font:700 13px var(--f-cond,sans-serif)">Reintentar</button>';e.style.display='flex';e.style.pointerEvents='auto';e.querySelector('button').onclick=()=>window.nexoSubirYa&&window.nexoSubirYa()}
   else e.style.display='none'}catch(x){}}
 function indSync(){try{const S=window.__sync,off=!navigator.onLine||S.est==='error'||S.fallo,pend=sucio.size>0||S.ocupado>0;let tx,c;
-  if(off){tx=navigator.onLine?'No se pudo guardar en la nube · tocá para reintentar':'Sin conexión · pendiente de sincronizar';c='#e0894f'}else if(pend&&!S.ocupado&&S.est!=='cargando'){tx='Guardando…';c='#c9a24a'}
+  if(off){tx=navigator.onLine?'No se guardó en la nube · tocá para reintentar':'Sin conexión · pendiente de sincronizar';c=navigator.onLine?'#e05a4f':'#e0894f'}else if(pend&&!S.ocupado&&S.est!=='cargando'){tx='Guardando…';c='#c9a24a'}
   else if(S.ocupado>0||S.est==='cargando'){tx='Actualizando…';c='#c9a24a'}
   else{const s=Math.max(0,Math.round((Date.now()-(S.ok||Date.now()))/1000));tx='Actualizado hace '+(s<60?s+' s':Math.floor(s/60)+' min');c='#4fa86f'}
   if(window.__nxRec&&window.__nxRec.pend&&!off&&!pend){tx=window.__nxRec.ver&&!window.__nxRec.datos?'Versión nueva · tocá para actualizar':'Hay cambios nuevos · tocá para verlos';c='#c9a24a'}
@@ -5055,17 +5056,19 @@ async function subir(k){
   /* freno: si se suben más de 25 veces en 1 minuto algo está en bucle; se frena 30 s y queda pendiente (no se pierde nada) */
   {const ahora=Date.now();while(POSTS_T.length&&ahora-POSTS_T[0]>60000)POSTS_T.shift();if(POSTS_T.length>=25){console.warn('nexo2: demasiadas subidas, se frena 30 s');clearTimeout(tim[k]);tim[k]=setTimeout(()=>subir(k),30000);return false}POSTS_T.push(ahora)}
   estado('guardando');
-  let recargar=false;
-  try{const g=await fetch(API,{cache:'no-store'});if(g.ok){const d=(await g.json())[MAP[k]];
+  let recargar=false;let bt=+lget('nexo2_sync_t_'+k)||0;
+  try{const g=await fetch(API,{cache:'no-store'});if(g.ok){const gj=await g.json();const d=gj[MAP[k]];try{if(gj.cap)window.__nxCap=gj.cap}catch(e){}if(d&&d.v)bt=Math.max(bt,+d.t||0);
     if(d&&d.v&&(+d.t||0)>(+lget('nexo2_sync_t_'+k)||0)&&d.v!==v){
       /* otro usuario guardó algo desde la última vez: se junta con lo mío en vez de pisarlo */
       const m=merge3(lget(BASE_K+k),v,d.v)||fusion(v,d.v);
       if(m&&m!==v){nxGuardarLocal(k,m);v=m;recargar=true}}}}catch(e){}
   const t=Date.now();const nuevos=(window.__nuevoCron||[]).slice();
   window.__sync.ocupado++;
-  try{const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:MAP[k],t,v,nuevos})});
+  try{const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:MAP[k],t,v,nuevos,bt})});
     window.__sync.ocupado--;
+    if(r.status===413){window.__sync.fallo=true;estado('pend');try{toast('No se pudo guardar en la nube: los datos de una obra son demasiado grandes. El cambio quedó en este aparato.')}catch(e){}return false}
     if(r.status===409){let j={};try{j=await r.json()}catch(e){}
+      if(j.error==='conflicto'){/* otro aparato guardó esa obra recién: se baja, se junta con lo mío y se vuelve a subir */estado('pend');marcar(k);clearTimeout(tim[k]);tim[k]=setTimeout(()=>subir(k),400+Math.random()*800);return false}
       /* la obra ya tiene un cronograma en la nube: gana el que ya existe y se avisa */
       try{const g=await fetch(API,{cache:'no-store'}),d=(await g.json())[MAP[k]];const R=JSON.parse(d.v),M=JSON.parse(merge3(lget(BASE_K+k),v,d.v)||v);
         (j.ids||[]).forEach(id=>{M.mod=M.mod||{};if(R.mod&&R.mod[id])M.mod[id]=R.mod[id];else delete M.mod[id]});
@@ -5078,8 +5081,12 @@ async function subir(k){
       lset('nexo2_sync_t_'+k,String(+j.t||t));lset(BASE_K+k,v);if(lget(k)===v)limpio(k);else marcar(k);falloAviso=false;window.__sync.fallo=false;window.__sync.ok=Date.now();estado('ok');if(recargar)recargarCuando();return true}else throw new Error('http')}catch(e){if(window.__sync.ocupado>0)window.__sync.ocupado--;window.__sync.fallo=true;estado('pend');if(!falloAviso){falloAviso=true;try{toast('No se pudo guardar en la nube. El cambio quedó en este aparato y se sube solo al volver la conexión.')}catch(x){}}return false}
 }
 let falloAviso=false;
+const MEMB={};Object.keys(MAP).forEach(k=>{MEMB[k]=lget(k)});
 Storage.prototype.setItem=function(k,v){
-  if(this===localStorage&&MAP[k]){const antes=lget(k);v=fusion(antes,v);nxGuardarLocal(k,v);if(lget(k)!==v){try{toast('No se pudo guardar en este aparato (memoria llena). El cambio puede perderse al cerrar.')}catch(e){}}if(antes!==v){marcar(k);if(listo){clearTimeout(tim[k]);tim[k]=setTimeout(()=>subir(k),700)}}return}
+  if(this===localStorage&&MAP[k]){const antes=lget(k);
+    /* lo que está en pantalla puede ser más viejo que lo que ya bajó de la nube (la app no se recarga mientras se trabaja):
+       se junta en 3 vías contra lo último que se cargó en pantalla, así no se pisa lo que cambió otro aparato */
+    {const mb=MEMB[k],enPantalla=v;let m3v=null;if(mb!=null&&antes!=null&&antes!==mb&&v!==antes)m3v=merge3(mb,v,antes);v=m3v||fusion(antes,v);MEMB[k]=enPantalla}nxGuardarLocal(k,v);if(lget(k)!==v){try{toast('No se pudo guardar en este aparato (memoria llena). El cambio puede perderse al cerrar.')}catch(e){}}if(antes!==v){marcar(k);if(listo){clearTimeout(tim[k]);tim[k]=setTimeout(()=>subir(k),700)}}return}
   return rawSet.call(this,k,v);
 };
 async function bajar(){
@@ -5126,7 +5133,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261127-121147';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261127-133021';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -7084,7 +7091,7 @@ try{const g=window.iaDatosObra;if(typeof g==='function')window.iaDatosObra=funct
 /* ===== D · pasar una obra a la plantilla nueva ===== */
 const PV=String(PLANTILLA_BASE.version);
 if(!CFG_KEYS.includes('plantV'))CFG_KEYS.push('plantV');
-window.nxNecesitaMigrar=o=>!!(o&&o.tpl&&o.base&&o.base.length&&o.plantV!==PV&&((o.mod2&&o.mod2.plantilla)||'base')==='base');
+window.nxNecesitaMigrar=o=>!!(o&&o.tpl&&o.base&&o.base.length&&o.plantV!==PV&&Array.isArray(BASE_OV[o.id])&&BASE_OV[o.id].length&&((o.mod2&&o.mod2.plantilla)||'base')==='base');
 let MIG=false;{const _f=ovFlush;ovFlush=window.ovFlush=function(){if(MIG)return;return _f.apply(this,arguments)}}
 /* arma la base nueva y el registro de lo cargado con las claves nuevas; no toca la obra (sirve para probar en una copia) */
 window.nxPlanMigracion=function(o){
@@ -7128,5 +7135,9 @@ A.migrarPlantOk=async()=>{if(!esDir())return;const ids=[...document.querySelecto
   if(sub){toast('Listo ✓ '+res.join(' · ')+'. Se vuelve a abrir la app.');setTimeout(()=>location.reload(),2500)}
   else toast('No se pudo guardar en la nube. Quedó en este aparato; tocá Reintentar abajo antes de cerrar la app.')};
 }catch(e){console.error('nx-plantilla2',e)}})();
+</script>
+<script id="nx-cap">
+/* aviso interno (solo Dirección): alguna fila de la nube pasó el 70 % de su tope */
+setInterval(()=>{try{const c=window.__nxCap;if(!c||!esDir()||window.__nxCapVisto===c.fila+c.pct)return;window.__nxCapVisto=c.fila+c.pct;toast(`Aviso interno: los datos de ${c.fila==='general'?'la configuración general':(findO(c.fila)||{}).nombre||c.fila} ocupan el ${c.pct} % del tope por registro. Conviene limpiar respaldos viejos.`)}catch(e){}},20000);
 </script>
 </body></html>

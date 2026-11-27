@@ -3,6 +3,7 @@
 // actas de auditoría, reclamos y auditorías de contratistas. Misma base que NEXO 2 (nexo2_estado).
 // Acceso: el link lleva una clave; acá solo se guarda su huella (SHA-256).
 import crypto from "crypto";
+import { leerCfg, cfgDeFilas } from "./_cfg.js";
 
 const URL_BASE = process.env.SUPABASE_URL || "https://qaubkwiwtszebdgfrizr.supabase.co";
 const HUELLA = "e5439f25f1470ae7e33198c50defe7f5a8a083aed06d552cda053d18f890bf18";
@@ -10,7 +11,7 @@ const nrm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[̀-�
 const pesos = (n) => "$ " + Math.round(Number(n) || 0).toLocaleString("es-AR");
 const fl = (t) => { if (!t) return ""; if (typeof t === "string" && /^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(8, 10) + "/" + t.slice(5, 7) + "/" + t.slice(0, 4); const d = new Date(Number(t) - 3 * 3600e3); return isNaN(d) ? String(t) : String(d.getUTCDate()).padStart(2, "0") + "/" + String(d.getUTCMonth() + 1).padStart(2, "0") + "/" + d.getUTCFullYear(); };
 const ts = (v) => { if (!v) return 0; if (typeof v === "number") return v; const p = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(v) ? v + "T12:00:00-03:00" : v); return isNaN(p) ? 0 : p; };
-const PROHIBIDO = /^(codigos|cfg|cfg_prev|asist_cfg|seg_cfg|seg_flags|fotodesc|ctcods)$|^audfot_|^audtrash_|^bk_|token|hash|sesion|pin/i;
+const PROHIBIDO = /^(codigos|cfg|cfgx|cfg_prev|asist_cfg|seg_cfg|seg_flags|fotodesc|ctcods)$|^cfgo_|^audfot_|^audtrash_|^bk_|token|hash|sesion|pin/i;
 const TIPO_ACTA = { sup: "Acta de supervisión", rev: "Revisión de documentación", cert: "Certificado de etapa" };
 const EST = { avanza: "se puede avanzar", material: "falta material", definicion: "falta definición", otro: "otro motivo", terminado: "terminado" };
 
@@ -22,7 +23,7 @@ async function leer(H, clave) { const x = await filas(H, "clave=eq." + encodeURI
 
 // obras activas de la cartera (las 4 de base menos las eliminadas, más las nuevas) con su último estado
 async function cartera(H) {
-  const [cfgR, snaps] = await Promise.all([leer(H, "cfg"), filas(H, "clave=like.snap_*")]);
+  const [cfgR, snaps] = await Promise.all([leerCfg({ leer, H, URL_BASE }), filas(H, "clave=like.snap_*")]);
   let C = {}; try { C = cfgR && cfgR.v ? JSON.parse(cfgR.v) : {}; } catch { }
   const del = new Set(C.del || []), dn = new Set(C.delN || []);
   const S = {}; snaps.forEach((s) => (S[String(s.clave).slice(5)] = s.valor || {}));
