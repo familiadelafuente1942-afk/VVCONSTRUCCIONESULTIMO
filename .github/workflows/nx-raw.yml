@@ -10,7 +10,10 @@ jobs:
           curl -s 'https://nexoentorno.vercel.app/api/nexo2' -o c.json
           python3 - <<'PY'
           import json,collections
-          j=json.load(open('c.json'));print('claves',list(j.keys())[:20])
+          j=json.load(open('c.json'));c0=j.get('cfg')
+          if isinstance(c0,dict):print('cfg claves',list(c0.keys()));c0=c0.get('v',c0)
+          if isinstance(c0,str):c0=json.loads(c0)
+          j=c0;print('claves',list(j.keys())[:20] if isinstance(j,dict) else type(j))
           def walk(x):
             if isinstance(x,dict):
               for k,v in x.items():
