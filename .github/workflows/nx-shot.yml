@@ -24,4 +24,4 @@ jobs:
           console.log('ERRORES',er.slice(0,5));await b.close()})();
           JS
           node t.cjs
-          echo "PNGB64_INI"; gzip -c golf293_jefatura.png | base64 -w 0; echo; echo "PNGB64_FIN"
+          echo "PNGB64_INI"; gzip -c golf293_jefatura.png | base64 -w 2000; echo; echo "PNGB64_FIN"
