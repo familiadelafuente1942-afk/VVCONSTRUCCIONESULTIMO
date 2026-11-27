@@ -24,5 +24,4 @@ jobs:
           console.log('ERRORES',er.slice(0,5));await b.close()})();
           JS
           node t.cjs
-      - uses: actions/upload-artifact@v4
-        with: { name: captura, path: golf293_jefatura.png, retention-days: 1 }
+          echo "PNGB64_INI"; gzip -c golf293_jefatura.png | base64 -w 0; echo; echo "PNGB64_FIN"
