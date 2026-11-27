@@ -8,6 +8,7 @@ jobs:
       - name: Estado del registro cfg (solo lectura, sin montos)
         run: |
           curl -s 'https://nexoentorno.vercel.app/api/nexo2' -o c.json; sleep 3; curl -s 'https://nexoentorno.vercel.app/api/nexo2' -o c.json; curl -s 'https://nexoentorno.vercel.app/api/nexo2?t=1'; echo
+          curl -s -X POST 'https://nexoentorno.vercel.app/api/nexo2' -H 'content-type: application/json' -d '{"op":"crono_get","obras":["o7688","o3","o4541","o7269","o1","o2","o4"]}' | python3 -c "import json,sys;d=json.load(sys.stdin);print('CRONO',{k:(len(v.get('tareas',[])),v.get('t')) for k,v in (d.get('crono') or {}).items()})"
           python3 - <<'PY'
           import json
           j=json.load(open('c.json'));print('CLAVES_GET',list(j.keys()),'CAP',j.get('cap'))
