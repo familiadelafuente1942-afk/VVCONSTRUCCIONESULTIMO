@@ -3124,8 +3124,8 @@ const A={
   editarObra:ds=>{const o=findO(ds.o);if(!o||!esDir())return;const js=[...new Set(['Matías','Lucía','Facundo','Ignacio',o.jefe].filter(Boolean))];
     openSheet(`<span class="eyebrow">Dirección</span><h2>Editar ${esc(o.nombre)}</h2><form class="sec" data-submit="editarObra" data-o="${o.id}"><label class="f">Nombre<input id="eo-nom" value="${esc(o.nombre)}"></label><label class="f">Ubicación<input id="eo-ubi" value="${esc(o.ubic||'')}"></label><div class="row2"><label class="f">Jefatura de obra<select id="eo-jefe">${js.map(j=>`<option ${o.jefe===j?'selected':''}>${esc(j)}</option>`).join('')}</select></label><label class="f">Estudio<input id="eo-est" value="${esc(o.estudio||'')}"></label></div><span class="eyebrow">Render de la obra</span><div class="infph">${rendersItems(o).map(x=>`<div class="ph1"><span><img src="${esc(x.u)}" alt="Render"><button type="button" data-act="quitarRender" data-o="${o.id}" data-k="${esc(x.k)}" aria-label="Quitar este render">✕</button></span></div>`).join('')||'<span class="muted small">Todavía no hay renders: se ve el logo.</span>'}</div><div><label class="btn sm" for="eo-img" style="cursor:pointer">Cargar otro render</label><input id="eo-img" type="file" accept="image/*" multiple data-chg="eoImg" data-o="${o.id}" hidden></div><p class="muted small">Para cambiar plantas, superficie, terminación o fecha de inicio usá "Cambiar modelo".</p><button class="btn gold" type="submit">Guardar cambios</button><button class="btn" type="button" data-act="close">Cancelar</button><button class="btn ghost" type="button" data-act="eliminarObra" data-o="${o.id}" style="color:#c0392b">Eliminar esta obra</button><span class="eyebrow">Empezar de cero</span><p class="muted small">Borra el avance cargado (informes, avances, fotos, pedidos, planos subidos) y deja la obra lista para cargar desde hoy. Descarga un respaldo antes.</p>${MODO_PRUEBAS?'<p class="muted small">Modo pruebas: “Dejar en cero” está oculto para que no se borre nada.</p>':`<button class="btn ghost" type="button" data-act="ceroObra" data-o="${o.id}" style="color:#c0392b">Dejar esta obra en cero</button><button class="btn ghost" type="button" data-act="ceroObra" data-o="todas" style="color:#c0392b">Dejar todas las obras en cero</button>`}</form>`,'Editar obra')},
   cronoBorrar:ds=>{const o=findO(ds.o);if(!o||!esDir())return;if(!confirm(`¿Borrar el cronograma de ${o.nombre}? Se quitan sus tareas, tarjetas, pedidos y planos de la app en todos los aparatos. La obra sigue en la cartera y el Seguimiento no se toca. Lo podés volver a generar desde acá.`))return;
-    o.sinCrono=true;try{ovFlush()}catch(e){}cfgGuardar();closeSheet();toast('Cronograma borrado. Actualizando…');setTimeout(async()=>{try{await window.nexoSubirYa()}catch(e){}location.reload()},300)},
-  cronoVolver:ds=>{const o=findO(ds.o);if(!o||!esDir())return;if(!confirm(`¿Volver a generar el cronograma de ${o.nombre} con su modelo?`))return;o.sinCrono=false;cfgGuardar();closeSheet();toast('Generando el cronograma…');setTimeout(async()=>{try{await window.nexoSubirYa()}catch(e){}location.reload()},300)},
+    nxCrit(o,'borrar');o.sinCrono=true;try{ovFlush()}catch(e){}cfgGuardar();closeSheet();toast('Cronograma borrado. Actualizando…');setTimeout(async()=>{try{await window.nexoSubirYa()}catch(e){}location.reload()},300)},
+  cronoVolver:ds=>{const o=findO(ds.o);if(!o||!esDir())return;if(!confirm(`¿Volver a generar el cronograma de ${o.nombre} con su modelo?`))return;nxCrit(o,'volver');o.sinCrono=false;cfgGuardar();closeSheet();toast('Generando el cronograma…');setTimeout(async()=>{try{await window.nexoSubirYa()}catch(e){}location.reload()},300)},
   codFaltan:()=>{OBRAS.forEach(codInit);codGuardarLS();toast('Códigos generados');draw()},
   agregarObraEst:()=>openSheet(`<span class="eyebrow">Estudio</span><h2>Agregar obra</h2><p class="muted">Poné el código que te dio la constructora para la nueva obra.</p><form class="frm" data-submit="agregarObraEst"><label class="f">Código de la obra<input id="ae-cod" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Ej.: E-LP132-0000" style="letter-spacing:.08em;text-transform:uppercase"></label><button class="btn gold" type="submit">Agregar</button><button class="btn" type="button" data-act="close">Cancelar</button></form>`,'Agregar obra'),
   brillo:()=>openSheet(`<span class="eyebrow">Aspecto</span><h2>Del blanco al negro</h2><p class="muted small">Deslizá el cursor.</p>${nivelSlider()}<button class="btn" type="button" data-act="close">Listo</button>`,'Brillo'),
@@ -3853,7 +3853,7 @@ function respaldoObra(o,motivo){const r={t:Date.now(),m:motivo,tpl:!!o.tpl,mod2:
 A.dvSel=ds=>{DVSEL[ds.o]=ds.c;draw()};
 A.respaldoNube=async()=>{if(!esDir())return;toast('Respaldando…');try{const r=await fetch('/api/nexo2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'respaldo_manual',nombre:'antes_migracion',cred:{rol:'dir',codigo:dirAuthGet()}})});const j=await r.json();toast(j.ok?`Respaldo hecho: ${j.filas} registros · ${j.copia}`:(j.error||'No se pudo respaldar'))}catch(e){toast('No se pudo respaldar. Revisá la conexión.')}};
 A.respRest=ds=>{const o=findO(ds.o),r=(o.resp||[])[+ds.i];if(!o||!r||!esDir())return;if(!confirm('¿Restaurar el respaldo del '+fmtLargo(r.t)+'? Vuelve el cronograma, el modelo y el avance de ese momento.'))return;
-  Object.assign(o,r.f);o.edits=r.ed;if(r.tpl){o.tpl=true;o.mod2=r.mod2}else{delete o.tpl;delete o.mod2}o.cg=Date.now();o.base=JSON.parse(JSON.stringify(r.base));if(r.ov)o.ov=r.ov;else delete o.ov;o.resp=o.resp.filter((x,i)=>i!==+ds.i);
+  nxCrit(o,'restaurar');Object.assign(o,r.f);o.edits=r.ed;if(r.tpl){o.tpl=true;o.mod2=r.mod2}else{delete o.tpl;delete o.mod2}o.cg=Date.now();o.base=JSON.parse(JSON.stringify(r.base));if(r.ov)o.ov=r.ov;else delete o.ov;o.resp=o.resp.filter((x,i)=>i!==+ds.i);
   cfgGuardar();toast('Respaldo restaurado. Recargando…');setTimeout(()=>location.reload(),700)};
 function bannerPlantilla(o){return `<div class="infobox"><b>Esta obra usa el cronograma anterior.</b> Aplicá la plantilla «Vivienda unifamiliar» para tener fases, etapas, tareas por nivel, vistas y el semáforo de restricciones. Ves una vista previa y se hace un respaldo antes: no se pierden avances, fotos, informes ni tarjetas.<br><button class="btn sm gold" data-act="aplicarPlantilla" data-o="${o.id}" style="margin-top:8px">Aplicar plantilla base</button></div>`}
 
@@ -3919,6 +3919,7 @@ function tplEquiv(lt,dest){const SP=TPL_SPEC[lt.rubro];if(SP)return dest.filter(
   let L=dest.filter(t=>t.rubro===lt.rubro&&!t.legacy);if(niv&&L.some(t=>t.nivel))L=L.filter(t=>!t.nivel||t.nivel===niv);return L}
 function tplAplicar(o,M,modo){
   /* false explícito (no borrar la marca): así la nube sabe que el cronograma se volvió a generar */
+  try{nxCrit(o,'generar')}catch(e){}
   if(o.sinCrono)o.sinCrono=false;
   const wasTpl=!!o.tpl,oldBase=o.base.slice(),oldTasks=o.tasks.slice(),oldCards=o.cards.slice(),oldCert=(o.cert||[]).slice();
   const conAv=t=>!!(t.real&&t.real.av>0)||oldCards.some(c=>c.task===t&&c.items.some(i=>i.estado!=='falta'||i.respuesta));
@@ -5065,42 +5066,80 @@ function indSync(){try{const S=window.__sync,off=!navigator.onLine||S.est==='err
   document.querySelectorAll('.brand .mono').forEach(e=>{let i=e.querySelector('.nxi');if(!i){i=document.createElement('span');i.className='nxi';i.style.cssText='display:block;font-size:11px;font-weight:600;cursor:pointer';i.onclick=ev=>{ev.stopPropagation();if(sucio.size)window.nexoSubirYa&&window.nexoSubirYa();else if(window.__nxRec&&window.__nxRec.pend)nxRecargarYa()};e.appendChild(i)}if(i.textContent!==tx)i.textContent=tx;i.style.color=c})}catch(x){}}
 setInterval(indSync,1000);window.addEventListener('online',indSync);window.addEventListener('offline',indSync);
 const POSTS_T=[];
+/* ===================== FIX-01 · guardado por cambios =====================
+   Se sube SOLO lo que el usuario cambió en esta pantalla (no la obra entera), con la hora de cada cambio.
+   Así un aparato abierto desde hace horas, con datos viejos en pantalla, nunca pisa lo que otro guardó después.
+   Las operaciones quedan anotadas en el aparato (nexo2_ops) hasta que la nube las confirma: si la app se recarga, no se pierden. */
+const OPS_K='nexo2_ops';
+const opsLeer=()=>{try{return JSON.parse(rawGet.call(localStorage,OPS_K)||'[]')||[]}catch(e){return[]}};
+const opsGuardar=L=>{try{nxGuardarLocal(OPS_K,JSON.stringify(L))}catch(e){}};
+const CRIT_K=['sinCrono','cg','tpl','mod2'],CRIT={};
+/* acción explícita de la Dirección sobre el cronograma: solo así viajan sinCrono, cg, tpl y mod2 */
+window.nxCrit=(o,a)=>{if(o&&o.id)CRIT[o.id]=a};
+const esO=x=>x&&typeof x==='object'&&!Array.isArray(x);
+const limRuta=r=>r[0]!=='ov'?1:r[1]==='c'?(r[3]==='i'?5:4):3;
+function diffOps(prevStr,curStr,t){
+  let A,B;try{A=JSON.parse(prevStr||'null');B=JSON.parse(curStr||'null')}catch(e){return[]}if(!A||!B)return[];
+  const out=[],usados=new Set();
+  const rec=(pre,id,r,x,y)=>{if(jeq(x,y))return;if(r.length>=limRuta(r)||!esO(x)||!esO(y)){const p=[...pre,id,...r],op={p,t};if(y===undefined)op.del=1;else op.v=y;if(r.length===1&&CRIT_K.includes(r[0])&&CRIT[id]){op.x=CRIT[id];usados.add(id)}out.push(op);return}
+    new Set([...Object.keys(x),...Object.keys(y)]).forEach(k=>rec(pre,id,[...r,k],x[k],y[k]))};
+  const ent=(kind,id,a,b)=>{if(jeq(a,b))return;if(a===undefined&&b!==undefined){out.push({p:[kind,id],v:b,t,x:'nueva'});return}if(b===undefined){if(kind==='m')out.push({p:[kind,id],del:1,t});return}rec([kind],id,[],a,b)};
+  const mA=A.mod||{},mB=B.mod||{};new Set([...Object.keys(mA),...Object.keys(mB)]).forEach(id=>ent('m',id,mA[id],mB[id]));
+  const nA=porId(A.nuevas),nB=porId(B.nuevas);Object.keys(nB).forEach(id=>ent('n',id,nA[id],nB[id]));
+  ['plant','fu','del','delN','avisos'].forEach(k=>{if(!jeq(A[k],B[k]))out.push(B[k]===undefined?{p:['g',k],del:1,t}:{p:['g',k],v:B[k],t})});
+  usados.forEach(id=>{delete CRIT[id]});
+  return out}
+/* comparación sin importar el orden de las claves (la nube puede devolver lo mismo en otro orden) */
+const canon=x=>Array.isArray(x)?'['+x.map(canon).join(',')+']':esO(x)?'{'+Object.keys(x).sort().map(k=>JSON.stringify(k)+':'+canon(x[k])).join(',')+'}':JSON.stringify(x);
+const sinVacios=x=>{if(!esO(x))return x;const r={};Object.keys(x).forEach(k=>{const v=x[k];if(v===undefined||(Array.isArray(v)&&!v.length)||(esO(v)&&!Object.keys(v).length))return;r[k]=v});return r};
+const mismoCont=(a,b)=>{try{return canon(sinVacios(JSON.parse(a)))===canon(sinVacios(JSON.parse(b)))}catch(e){return a===b}};
+function nxMeta(){let cod='';try{cod=(typeof dirAuthGet==='function'&&dirAuthGet())||'';if(!cod){const c=JSON.parse(localStorage.getItem('nexo2_cred')||'{}');const v=Object.values(c.jefe||c.aud||{})[0];cod=v||''}}catch(e){}
+  return{rol:(typeof ROLE==='function'&&ROLE())||'',nom:(typeof S!=='undefined'&&S&&S.u&&S.u.name)||'',cod:cod?'…'+String(cod).slice(-2):'',panel:(typeof S!=='undefined'&&S)?[S.tab,S.otab].filter(Boolean).join('/'):''}}
+/* versión nueva publicada: este aparato no puede guardar con la vieja. Se recarga apenas no hay nada a medio escribir (lo guardado queda anotado y se sube con la versión nueva) */
+function nxVersionVieja(aviso){if(window.__nxVieja)return;window.__nxVieja=true;try{toast('Hay una versión nueva, se actualiza la app')}catch(e){}
+  const ya=()=>{const esc=document.querySelector('.sheet input:focus,.sheet textarea:focus,.sheet select:focus,input:focus,textarea:focus');if(esc&&!aviso)return false;try{sessionStorage.setItem('nexo2_ver_int','')}catch(e){}location.reload();return true};
+  setTimeout(()=>{if(!ya()){const iv=setInterval(()=>{if(ya())clearInterval(iv)},3000)}},aviso?1500:2500)}
+const BUILD_ACT=()=>window.NEXO_BUILD_V||'';
 async function subir(k){
-  let v=lget(k);if(v==null||v===VACIO)return true;
-  /* freno: si se suben más de 25 veces en 1 minuto algo está en bucle; se frena 30 s y queda pendiente (no se pierde nada) */
-  {const ahora=Date.now();while(POSTS_T.length&&ahora-POSTS_T[0]>60000)POSTS_T.shift();if(POSTS_T.length>=25){console.warn('nexo2: demasiadas subidas, se frena 30 s');clearTimeout(tim[k]);tim[k]=setTimeout(()=>subir(k),30000);return false}POSTS_T.push(ahora)}
-  estado('guardando');
-  let recargar=false;let bt=+lget('nexo2_sync_t_'+k)||0;
-  try{const g=await fetch(API,{cache:'no-store'});if(g.ok){const gj=await g.json();const d=gj[MAP[k]];try{if(gj.cap)window.__nxCap=gj.cap}catch(e){}if(d&&d.v)bt=Math.max(bt,+d.t||0);
-    if(d&&d.v&&(+d.t||0)>(+lget('nexo2_sync_t_'+k)||0)&&d.v!==v){
-      /* otro usuario guardó algo desde la última vez: se junta con lo mío en vez de pisarlo */
-      const m=merge3(lget(BASE_K+k),v,d.v)||fusion(v,d.v);
-      if(m&&m!==v){nxGuardarLocal(k,m);v=m;recargar=true}}}}catch(e){}
-  const t=Date.now();const nuevos=(window.__nuevoCron||[]).slice();
+  let L=opsLeer();
+  if(!L.length){limpio(k);return true}
+  {const ahora=Date.now();while(POSTS_T.length&&ahora-POSTS_T[0]>60000)POSTS_T.shift();if(POSTS_T.length>=25){clearTimeout(tim[k]);tim[k]=setTimeout(()=>subir(k),30000);return false}POSTS_T.push(ahora)}
+  const env=L.slice(0,4000),nuevos=(window.__nuevoCron||[]).slice();
   window.__sync.ocupado++;
-  try{const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:MAP[k],t,v,nuevos,bt})});
+  try{const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'cfg_ops',build:BUILD_ACT(),now:Date.now(),bt:+lget('nexo2_sync_t_'+k)||0,ops:env,nuevos,meta:nxMeta()})});
     window.__sync.ocupado--;
-    if(r.status===413){window.__sync.fallo=true;estado('pend');try{toast('No se pudo guardar en la nube: los datos de una obra son demasiado grandes. El cambio quedó en este aparato.')}catch(e){}return false}
+    if(r.status===426){window.__sync.fallo=false;nxVersionVieja(true);return false}
+    if(r.status===413){window.__sync.fallo=true;try{toast('No se pudo guardar en la nube: los datos de una obra son demasiado grandes. El cambio quedó en este aparato.')}catch(e){}return false}
     if(r.status===409){let j={};try{j=await r.json()}catch(e){}
-      if(j.error==='conflicto'){/* otro aparato guardó esa obra recién: se baja, se junta con lo mío y se vuelve a subir */estado('pend');marcar(k);clearTimeout(tim[k]);tim[k]=setTimeout(()=>subir(k),400+Math.random()*800);return false}
-      /* la obra ya tiene un cronograma en la nube: gana el que ya existe y se avisa */
-      try{const g=await fetch(API,{cache:'no-store'}),d=(await g.json())[MAP[k]];const R=JSON.parse(d.v),M=JSON.parse(merge3(lget(BASE_K+k),v,d.v)||v);
-        (j.ids||[]).forEach(id=>{M.mod=M.mod||{};if(R.mod&&R.mod[id])M.mod[id]=R.mod[id];else delete M.mod[id]});
-        nxGuardarLocal(k,JSON.stringify(M));lset('nexo2_sync_t_'+k,String(d.t));lset(BASE_K+k,d.v);window.__nuevoCron=(window.__nuevoCron||[]).filter(x=>!nuevos.includes(x));marcar(k)}catch(e){/* no se pudo leer la nube: se conserva la marca de 'primer cronograma' y se reintenta (el servidor lo vuelve a rechazar) */}
-      estado('');try{toast('Esta obra ya tenía un cronograma generado: se cargó el existente y NO se guardó el tuyo. Nada se perdió.')}catch(e){}
-      setTimeout(()=>recargarCuando(),1500);return false}
-    if(r.ok){let j={};try{j=await r.json()}catch(e){}
-      window.__nuevoCron=(window.__nuevoCron||[]).filter(x=>!nuevos.includes(x));
-      if(typeof j.v==='string'&&j.v!==v){/* la nube conservó obras que este aparato no tenía: se bajan */const loc=lget(k);const f=loc===v?j.v:(merge3(v,loc,j.v)||fusion(loc,j.v));nxGuardarLocal(k,f);v=j.v;recargar=true}
-      lset('nexo2_sync_t_'+k,String(+j.t||t));lset(BASE_K+k,v);if(lget(k)===v)limpio(k);else marcar(k);falloAviso=false;window.__sync.fallo=false;window.__sync.ok=Date.now();estado('ok');if(recargar)recargarCuando();return true}else throw new Error('http')}catch(e){if(window.__sync.ocupado>0)window.__sync.ocupado--;window.__sync.fallo=true;estado('pend');if(!falloAviso){falloAviso=true;try{toast('No se pudo guardar en la nube. El cambio quedó en este aparato y se sube solo al volver la conexión.')}catch(x){}}return false}
+      /* la obra ya tiene un cronograma en la nube: gana el que ya existe; lo de este aparato sobre esa obra no se sube */
+      const ids=j.ids||[];opsGuardar(opsLeer().filter(op=>!ids.includes(op.p[1])));window.__nuevoCron=(window.__nuevoCron||[]).filter(x=>!nuevos.includes(x));
+      try{toast('Esta obra ya tenía un cronograma generado: se cargó el existente y NO se guardó el tuyo. Nada se perdió.')}catch(e){}
+      await nxRefrescar(k);setTimeout(()=>recargarCuando(),1500);return false}
+    if(!r.ok)throw new Error('http');
+    const j=await r.json();
+    /* lo enviado ya está en la nube (o la nube tenía algo más nuevo, que gana): se saca de lo pendiente */
+    const resto=opsLeer().slice(env.length);opsGuardar(resto);window.__nuevoCron=(window.__nuevoCron||[]).filter(x=>!nuevos.includes(x));
+    if((j.rech||[]).length)console.warn('nexo2: la nube tenía cambios más nuevos en',j.rech.map(x=>x.p.join('.')));
+    if((j.ign||[]).length)console.warn('nexo2: marcas críticas ignoradas',j.ign.map(x=>x.p.join('.')));
+    await nxRefrescar(k);
+    falloAviso=false;window.__sync.fallo=false;window.__sync.ok=Date.now();
+    if(resto.length){clearTimeout(tim[k]);tim[k]=setTimeout(()=>subir(k),300)}else limpio(k);
+    return true}
+  catch(e){if(window.__sync.ocupado>0)window.__sync.ocupado--;window.__sync.fallo=true;estado('pend');if(!falloAviso){falloAviso=true;try{toast('No se guardó en la nube · tocá el aviso de arriba para reintentar. El cambio quedó en este aparato.')}catch(x){}}return false}
 }
+/* después de guardar: se baja la nube y se deja en el aparato junto con lo que todavía no subió */
+async function nxRefrescar(k){try{const g=await fetch(API,{cache:'no-store'});if(!g.ok)return;const rows=await g.json();if(rows.build&&rows.build>BUILD_ACT())nxVersionVieja(false);const d=rows[MAP[k]];if(!d||!d.v)return;
+  const loc=lget(k),pend=opsLeer().length;let f=d.v;if(pend&&lget(BASE_K+k))f=merge3(lget(BASE_K+k),loc,d.v)||loc;
+  const cambio=!mismoCont(MEMB[k]||loc,d.v);nxGuardarLocal(k,f);lset('nexo2_sync_t_'+k,String(d.t));lset(BASE_K+k,d.v);if(cambio&&!pend)recargarCuando()}catch(e){}}
 let falloAviso=false;
-const MEMB={};Object.keys(MAP).forEach(k=>{MEMB[k]=lget(k)});
+const MEMB={};Object.keys(MAP).forEach(k=>{MEMB[k]=lget(k)});window.__nxMemb=()=>MEMB;
+/* FIX-01: lo que un aparato con la versión anterior dejó sin subir no se manda entero (podría pisar datos más nuevos); queda una copia en el aparato */
+try{if(rawGet.call(localStorage,'nexo2_fix01')!=='1'){Object.keys(MAP).forEach(k=>{if(rawGet.call(localStorage,PEND+k))rawSet.call(localStorage,'nexo2_cfg_pend_viejo',JSON.stringify({t:Date.now(),v:lget(k)}))});rawSet.call(localStorage,'nexo2_fix01','1')}}catch(e){}
 Storage.prototype.setItem=function(k,v){
   if(this===localStorage&&MAP[k]){const antes=lget(k);
     /* lo que está en pantalla puede ser más viejo que lo que ya bajó de la nube (la app no se recarga mientras se trabaja):
        se junta en 3 vías contra lo último que se cargó en pantalla, así no se pisa lo que cambió otro aparato */
-    {const mb=MEMB[k],enPantalla=v;let m3v=null;if(mb!=null&&antes!=null&&antes!==mb&&v!==antes)m3v=merge3(mb,v,antes);v=m3v||fusion(antes,v);MEMB[k]=enPantalla}nxGuardarLocal(k,v);if(lget(k)!==v){try{toast('No se pudo guardar en este aparato (memoria llena). El cambio puede perderse al cerrar.')}catch(e){}}if(antes!==v){marcar(k);if(listo){clearTimeout(tim[k]);tim[k]=setTimeout(()=>subir(k),700)}}return}
+    let hayOps=false;{const mb=MEMB[k],enPantalla=v;try{if(mb!=null&&mb!==v){const nv=diffOps(mb,v,Date.now());if(nv.length){opsGuardar(opsLeer().concat(nv));hayOps=true}}}catch(e){}let m3v=null;if(mb!=null&&antes!=null&&antes!==mb&&v!==antes)m3v=merge3(mb,v,antes);v=m3v||fusion(antes,v);MEMB[k]=enPantalla}nxGuardarLocal(k,v);if(lget(k)!==v){try{toast('No se pudo guardar en este aparato (memoria llena). El cambio puede perderse al cerrar.')}catch(e){}}if(antes!==v||hayOps){marcar(k);if(listo){clearTimeout(tim[k]);tim[k]=setTimeout(()=>subir(k),700)}}return}
   return rawSet.call(this,k,v);
 };
 async function bajar(){
@@ -5109,6 +5148,7 @@ async function bajar(){
     const r=await fetch(API,{cache:'no-store'});
     if(r.ok){okNube=true;
       const rows=await r.json();
+      try{if(rows.build&&rows.build>(window.NEXO_BUILD_V||''))nxVersionVieja(false)}catch(e){}
       for(const k of Object.keys(MAP)){
         const d=rows[MAP[k]];
         try{const L=JSON.parse(lget(k)||'{}')||{},C=d?JSON.parse(d.v)||{}:{};if(((L.fu&&L.fu.t)||0)>((C.fu&&C.fu.t)||0))marcar(k)}catch(e){}
@@ -5116,7 +5156,7 @@ async function bajar(){
         const lt=+lget('nexo2_sync_t_'+k)||0;
         /* aparato que quedó desfasado: cree estar al día pero en la nube hay obras que no tiene */
         /* aparato desfasado: cree estar al día pero lo que tiene guardado no es lo de la nube (por ej. no entraba en la memoria) */
-        const desfase=d.t===lt&&lget(k)!==d.v&&(!sucio.has(k)||lget(BASE_K+k)!==d.v);
+        const desfase=d.t===lt&&lget(k)!==d.v&&!mismoCont(lget(k),d.v)&&(!sucio.has(k)||lget(BASE_K+k)!==d.v);
         if(desfase){const loc=lget(k),b0=lget(BASE_K+k);let f=null;if(!sucio.has(k))f=d.v;else if(b0&&b0!==d.v)f=merge3(b0,loc,d.v);if(!f)f=fusion(loc,d.v);
           if(f!==loc){nxGuardarLocal(k,f);cambio=true}lset(BASE_K+k,d.v);if(f!==d.v)marcar(k);else limpio(k);continue}
         if(d.t===lt){try{const L=JSON.parse(lget(k)||'{}')||{},R=JSON.parse(d.v)||{},dn=new Set([...(L.delN||[]),...(R.delN||[])]),ya=new Set((L.nuevas||[]).map(x=>x&&x.id));
@@ -5125,7 +5165,7 @@ async function bajar(){
           const loc=lget(k);let f=null;
           if(sucio.has(k)&&lget(BASE_K+k))f=merge3(lget(BASE_K+k),loc,d.v);
           if(!f)f=fusion(loc,d.v);
-          if(f!==loc){nxGuardarLocal(k,f);cambio=true}
+          if(f!==loc&&!mismoCont(f,loc)){nxGuardarLocal(k,f);cambio=true}else if(f!==loc)nxGuardarLocal(k,f);
           lset('nexo2_sync_t_'+k,String(d.t));lset(BASE_K+k,d.v);if(f!==d.v)marcar(k);else limpio(k);
         }
       }
@@ -5147,7 +5187,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261127-202327';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261127-231256';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -7255,5 +7295,26 @@ window.__nombreDeUrl=u=>{const igual=x=>x&&String(x).split('?')[0]===u;
   /* cualquier otro adjunto guardado con su nombre original */
   let n='';const vistos=new Set();const mira=(v,d)=>{if(n||!v||typeof v!=='object'||vistos.has(v)||d>7)return;vistos.add(v);if(!Array.isArray(v)){const k=['u','url','pdf','src'].find(k=>igual(v[k]));if(k){const nm=v.n||v.name||v.nombre||v.fileName;if(nm){n=nombreAdjunto(nm,u);return}}}for(const k in v){if(k==='task'||k==='obra')continue;mira(v[k],d+1)}};
   try{mira(typeof ADIC!=='undefined'?ADIC:null,0);OBRAS.forEach(o=>mira({cert:o.cert,informes:o.informes,adic:o.adic,docs:o.docs},0))}catch(e){}return n};
+</script>
+<script id="nx-registro">
+/* FIX-01 · Registros → "Cambios guardados": quién guardó qué en esta obra (90 días). Solo Dirección. */
+(function(){try{
+const REGL=window.__REGL={};
+async function regCargar(o,dias){const x=REGL[o.id]=REGL[o.id]||{items:null,c:false,dias:dias||30};if(x.c)return;x.c=true;x.dias=dias||x.dias;
+  try{const r=await codApi({op:'reg_list',obra:o.id,dias:x.dias,cred:{rol:'dir',codigo:dirAuthGet()}});x.items=r&&r.ok?r.items:[];x.err=r&&r.ok?'':((r&&r.error)||'No se pudo leer')}catch(e){x.items=x.items||[];x.err='No se pudo leer el registro'}x.c=false;x.t=Date.now();if(S.otab==='gestion'&&!document.querySelector('input:focus,textarea:focus'))draw()}
+const RES={ok:['Guardado','#3fa66b'],conflicto:['Dos aparatos · quedó el más reciente','#c9a24a'],rechazado:['No se aplicó · en la nube había algo más nuevo','#e0894f'],ignorado:['Ignorado · marca crítica sin su botón','#d9605a']};
+const aparato=ua=>{ua=String(ua||'');const so=/iPhone/.test(ua)?'iPhone':/iPad/.test(ua)?'iPad':/Android/.test(ua)?'Android':/Mac OS X/.test(ua)?'Mac':/Windows/.test(ua)?'Windows':'';const nav=/CriOS|Chrome/.test(ua)&&!/Edg/.test(ua)?'Chrome':/Edg/.test(ua)?'Edge':/Safari/.test(ua)?'Safari':/Firefox/.test(ua)?'Firefox':'';return [so,nav].filter(Boolean).join(' · ')||'—'};
+function regHTML(o){const x=REGL[o.id];if(!x||!x.items||(Date.now()-(x.t||0)>60000&&!x.c))regCargar(o);
+  const L=(x&&x.items)||[];const f=S.regCF||'';const V=f?L.filter(r=>f==='crit'?(r.antes!==undefined||r.res!=='ok'):r.res===f):L;
+  return `<section class="sec" id="reg-cambios"><span class="eyebrow">Cambios guardados · últimos ${x?x.dias:30} días</span>
+  <p class="muted small">Cada guardado en la nube: quién, desde qué panel y aparato, con qué versión de la app, qué cambió y si se aplicó. Para el cronograma, la base y los borrados se ve el valor anterior y el nuevo.</p>
+  <div class="chips" style="margin:6px 0">${[['','Todos'],['crit','Cronograma, base y borrados'],['conflicto','Conflictos'],['rechazado','No aplicados'],['ignorado','Ignorados']].map(([k,l])=>`<button class="chip${f===k?' on':''}" data-act="regCF" data-f="${k}">${l}</button>`).join('')}<button class="chip" data-act="regMas" data-o="${o.id}">${x&&x.dias>=90?'90 días':'Ver 90 días'}</button></div>
+  ${x&&x.err?`<p class="muted small">${esc(x.err)}</p>`:''}${!x||x.items==null?'<p class="muted small">Cargando…</p>':V.length?`<div style="overflow-x:auto"><table class="tbl small"><tr><th>Fecha y hora</th><th>Quién</th><th>Panel</th><th>Qué cambió</th><th>Resultado</th><th>Antes → después</th><th>Versión · aparato</th></tr>${V.slice(0,400).map(r=>{const R=RES[r.res]||[r.res,'#999'];return `<tr><td>${fAR(r.t)} ${hAR(r.t)}</td><td>${esc(r.nom||'')}${r.rol?' · '+esc(r.rol):''}${r.cod?' · cód. '+esc(r.cod):''}</td><td>${esc(r.panel||'')}</td><td>${esc((r.campos||[]).join(', '))}${r.accion?' · <b>'+esc(r.accion)+'</b>':''}${r.tipo==='alta'?' · alta de la obra':''}</td><td style="color:${R[1]}">${esc(R[0])}${r.motivo?'<br><span class="muted">'+esc(r.motivo)+'</span>':''}</td><td>${r.antes!==undefined?esc(String(r.antes))+' → '+esc(String(r.despues)):''}</td><td>${esc(r.build||'')}<br><span class="muted">${esc(aparato(r.ua))}</span></td></tr>`}).join('')}</table></div>${V.length>400?`<p class="muted small">Se muestran los últimos 400 de ${V.length}.</p>`:''}`:'<p class="muted small">Sin cambios en este período.</p>'}</section>`}
+A.regCF=ds=>{S.regCF=ds.f||'';draw()};
+A.regMas=ds=>{const o=findO(ds.o);const x=REGL[o.id]=REGL[o.id]||{};x.t=0;x.c=false;regCargar(o,90)};
+{const f=tabGestion;tabGestion=window.tabGestion=function(o){const h=f.apply(this,arguments);try{if(ROLE()!=='direccion')return h;return h+regHTML(o)}catch(e){return h}}}
+/* NEXO IA: lo que se vio del registro */
+try{const g=window.iaDatosObra;if(typeof g==='function')window.iaDatosObra=function(o){const r=g.apply(this,arguments);try{const x=REGL[o.id];if(x&&x.items&&x.items.length&&r&&typeof r==='object')r.registro_de_cambios=x.items.slice(0,60).map(z=>({cuando:fAR(z.t)+' '+hAR(z.t),quien:(z.nom||'')+' '+(z.rol||''),panel:z.panel,campos:(z.campos||[]).join(', '),resultado:z.res,antes:z.antes,despues:z.despues,version:z.build}))}catch(e){}return r}}catch(e){}
+}catch(e){console.error('nx-registro',e)}})();
 </script>
 </body></html>

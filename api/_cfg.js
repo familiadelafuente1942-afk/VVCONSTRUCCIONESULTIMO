@@ -150,3 +150,89 @@ export function tamanos(cfg) {
   let max = ["", 0]; Object.entries(out).forEach(([k, v]) => { if (v > max[1]) max = [k, v]; });
   return { max: max[1], fila: max[0], pct: Math.round((max[1] / LIM_FILA) * 100), lim: LIM_FILA };
 }
+
+/* ===================== FIX-01 · guardado por cambios =====================
+   El aparato manda solo lo que el usuario cambió: operaciones { p: ruta, v: valor | del: 1, t: hora del cambio, x: acción }.
+   Rutas: ["m", id, ...] obras originales · ["n", id, ...] obras nuevas · ["g", clave] datos generales.
+   Cada ruta guarda cuándo se escribió (pv). Si otro aparato la cambió después de lo que vio este (b), gana el cambio más reciente y queda anotado.
+   sinCrono, cg, tpl y mod2 solo cambian con su acción explícita (Borrar / Generar / Volver a generar / Cambiar modelo / Restaurar). */
+export const CRITICAS = ["sinCrono", "cg", "tpl", "mod2"];
+const ACCIONES = ["borrar", "generar", "volver", "modelo", "restaurar", "recuperacion", "nueva"];
+const RK = (p) => p.join("\u0001");
+const esObj = (x) => x && typeof x === "object" && !Array.isArray(x);
+function ponerEn(obj, ruta, v, borrar) {
+  let o = obj; for (let i = 0; i < ruta.length - 1; i++) { const k = ruta[i]; if (!esObj(o[k])) { if (borrar) return; o[k] = {}; } o = o[k]; }
+  const k = ruta[ruta.length - 1]; if (borrar) delete o[k]; else o[k] = v;
+}
+const leerEn = (obj, ruta) => { let o = obj; for (const k of ruta) { if (!esObj(o) && !Array.isArray(o)) return undefined; o = o[k]; if (o === undefined) return undefined; } return o; };
+/* resumen corto de un valor para el registro (la base completa no entra: se anota cuántas tareas y una huella) */
+function resumen(k, v) {
+  if (v === undefined) return "(sin valor)";
+  if (k === "baseOv" || k === "base") { if (!Array.isArray(v)) return "(sin base)"; let h = 5381; const q = JSON.stringify(v); for (let i = 0; i < q.length; i++) h = ((h << 5) + h + q.charCodeAt(i)) | 0; return v.length + " tareas · huella " + (h >>> 0).toString(36); }
+  if (k === "cg" || k === "cgu") return Number(v) ? new Date(Number(v)).toISOString() : String(v);
+  const s = JSON.stringify(v); return s.length > 160 ? s.slice(0, 157) + "…" : s;
+}
+/* aplica las operaciones sobre la nube actual (prev = leerCfg) y escribe solo las filas que cambian.
+   Devuelve { ok, t, aplicadas, rech, ign, reg } — reg son las entradas para el registro. */
+export async function aplicarOps(ctx, prev, ops, opt) {
+  const { escribir, H } = ctx; opt = opt || {};
+  const now = Math.max(Date.now(), (prev && Number(prev.t) || 0) + 1);
+  const base = Number(opt.b) || 0, desfase = Number(opt.offset) || 0;
+  const ix = (prev && prev._ix) ? JSON.parse(JSON.stringify(prev._ix)) : { orden: ["mod", "nuevas"], g: {}, idsMod: [], idsNue: [], sueltas: [] };
+  if (!ix.idsMod) ix.idsMod = []; if (!ix.idsNue) ix.idsNue = []; if (!ix.orden.includes("mod")) ix.orden.unshift("mod"); if (!ix.orden.includes("nuevas")) ix.orden.splice(1, 0, "nuevas");
+  ix.pv = ix.pv || {};
+  const filas = {}; for (const [id, f] of Object.entries((prev && prev._filas) || {})) filas[id] = { ...f };
+  const entradas = {}, tocadas = new Set(), rech = [], ign = [], reg = [], aplicadas = [];
+  const entrada = (id) => { if (!(id in entradas)) { const f = filas[id]; entradas[id] = f ? JSON.parse(f.s) : undefined; } return entradas[id]; };
+  let gCambio = false;
+  for (const op of (Array.isArray(ops) ? ops : []).slice(0, 5000)) {
+    const p = Array.isArray(op && op.p) ? op.p.map(String) : null; if (!p || p.length < 2 || p.length > 8) continue;
+    const t = Math.min(now, (Number(op.t) || now) + desfase); // hora del cambio, llevada al reloj del servidor
+    const kind = p[0];
+    if (kind === "g") {
+      const k = p[1]; if (!["plant", "fu", "del", "delN", "avisos"].includes(k)) continue;
+      const cur = ix.g[k] !== undefined ? JSON.parse(ix.g[k]) : undefined;
+      let nv;
+      if (k === "avisos") { const m = new Map(); [...(cur || []), ...(Array.isArray(op.v) ? op.v : [])].forEach((x) => { if (x && x.id) m.set(x.id, x); }); nv = [...m.values()].filter((x) => now - Number(x.t || 0) < 14 * 864e5).sort((x, y) => (Number(x.t || 0) - Number(y.t || 0)) || String(x.id).localeCompare(String(y.id))).slice(-40); }
+      else if (k === "del" || k === "delN") { nv = [...new Set([...(cur || []), ...(Array.isArray(op.v) ? op.v : [])])].slice(-300); if (JSON.stringify(nv) !== JSON.stringify(cur || [])) reg.push({ obra: "general", campos: [k], antes: resumen(k, cur), despues: resumen(k, nv), res: "ok", tipo: "borrado" }); }
+      else { const pv = ix.pv[RK(p)]; if (pv && pv.s > base && pv.t > t) { rech.push({ p, motivo: "más nuevo en la nube" }); reg.push({ obra: "general", campos: [k], res: "rechazado", motivo: "en la nube hay un cambio más reciente" }); continue; } nv = op.del ? undefined : op.v; ix.pv[RK(p)] = { t, s: now }; }
+      if (Array.isArray(nv) && !nv.length && cur === undefined) nv = undefined; // una lista vacía no se crea (el aparato no la tiene)
+      const s2 = nv === undefined ? undefined : JSON.stringify(nv);
+      if (s2 !== ix.g[k]) { if (s2 === undefined) { delete ix.g[k]; ix.orden = ix.orden.filter((z) => z !== k); } else { if (!ix.orden.includes(k)) ix.orden.push(k); ix.g[k] = s2; } gCambio = true; aplicadas.push(p); }
+      continue;
+    }
+    if (kind !== "m" && kind !== "n") continue;
+    const id = p[1]; if (!/^[A-Za-z0-9_-]{1,40}$/.test(id)) continue;
+    const resto = p.slice(2), k0 = resto[0];
+    let e = entrada(id);
+    // obra que no existe en la nube: se crea entera (es una obra nueva o una obra original con su primer cambio)
+    if (e === undefined) {
+      if (op.del) continue;
+      if (resto.length) { e = entradas[id] = {}; }
+      else { entradas[id] = JSON.parse(JSON.stringify(op.v || {})); filas[id] = { t: now, k: kind, s: "{}", pv: {} }; filas[id].pv[RK(p)] = { t, s: now }; tocadas.add(id); if (kind === "m") { if (!ix.idsMod.includes(id)) ix.idsMod.push(id); } else if (!ix.idsNue.includes(id)) ix.idsNue.push(id); aplicadas.push(p); reg.push({ obra: id, campos: ["(obra completa)"], res: "ok", tipo: "alta" }); continue; }
+      filas[id] = { t: now, k: kind, s: "{}", pv: {} }; if (kind === "m") { if (!ix.idsMod.includes(id)) ix.idsMod.push(id); } else if (!ix.idsNue.includes(id)) ix.idsNue.push(id);
+    }
+    // obra entera mandada sobre una que ya existe: se toma campo por campo
+    const sub = resto.length ? [{ r: resto, v: op.v, del: op.del }] : (op.del ? Object.keys(e).map((k) => ({ r: [k], del: 1 })) : Object.keys(op.v || {}).map((k) => ({ r: [k], v: op.v[k] })));
+    for (const z of sub) {
+      const k = z.r[0], ruta = [kind, id, ...z.r], rk = RK(ruta);
+      if (CRITICAS.includes(k) && !(ACCIONES.includes(op.x))) { ign.push({ p: ruta, motivo: "solo con su botón" }); reg.push({ obra: id, campos: [z.r.join(".")], res: "ignorado", motivo: "marca crítica sin acción explícita", antes: resumen(k, e[k]), despues: resumen(k, z.del ? undefined : z.v) }); continue; }
+      const pv = filas[id].pv || (filas[id].pv = {});
+      // ¿la cambió otro aparato después de lo que vio este? (la misma ruta, una más general o una más particular)
+      let otro = null; for (const [q, w] of Object.entries(pv)) { if (w.s > base && (q === rk || rk.startsWith(q + "\u0001") || q.startsWith(rk + "\u0001")) && (!otro || w.t > otro.t)) otro = w; }
+      if (otro && otro.t > t) { rech.push({ p: ruta, motivo: "más nuevo en la nube", actual: leerEn(e, z.r) }); reg.push({ obra: id, campos: [z.r.join(".")], res: "rechazado", motivo: "otro aparato lo cambió después" }); continue; }
+      const antes = leerEn(e, z.r);
+      if (JSON.stringify(antes) === JSON.stringify(z.del ? undefined : z.v)) continue;
+      ponerEn(e, z.r, z.v === undefined ? undefined : JSON.parse(JSON.stringify(z.v)), !!z.del || z.v === undefined);
+      for (const q of Object.keys(pv)) if (q.startsWith(rk + "\u0001")) delete pv[q];
+      pv[rk] = { t, s: now }; tocadas.add(id); aplicadas.push(ruta);
+      const crit = CRITICAS.includes(k) || k === "baseOv" || z.del;
+      const casa = k === "ovt" || k === "cgu"; // sellos de hora internos: no cuentan como conflicto
+      reg.push({ obra: id, campos: [z.r.join(".")], res: otro && !casa ? "conflicto" : "ok", ...(otro && !casa ? { motivo: "dos aparatos cambiaron lo mismo: quedó el más reciente" } : {}), ...(crit ? { antes: resumen(k, antes), despues: resumen(k, z.del ? undefined : z.v), accion: op.x || "" } : {}) });
+    }
+  }
+  for (const id of tocadas) { const s = JSON.stringify(entradas[id]); if (Buffer.byteLength(s) > LIM_FILA) return { error: "grande", ids: [id] }; }
+  for (const id of tocadas) { const f = filas[id]; await escribir(H, "cfgo_" + id, { t: now, k: f.k, s: JSON.stringify(entradas[id]), pv: f.pv || {} }); }
+  if (tocadas.size || gCambio || !prev || !prev._ix) { ix.t = now; if (gCambio) ix.tg = now; await escribir(H, "cfgx", ix); }
+  return { ok: true, t: (tocadas.size || gCambio) ? now : Number(prev && prev.t) || now, aplicadas, rech, ign, reg };
+}

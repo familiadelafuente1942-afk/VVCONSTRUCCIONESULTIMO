@@ -7,7 +7,8 @@
 // Los códigos viven SOLO acá: nunca se devuelven salvo a quien presenta el código de Dirección.
 
 import crypto from "crypto";
-import { leerCfg, escribirCfg, horaCfg, cfgDeFilas, tamanos } from "./_cfg.js";
+import { leerCfg, escribirCfg, horaCfg, cfgDeFilas, tamanos, aplicarOps } from "./_cfg.js";
+import { NEXO_BUILD } from "./_build.js";
 
 const URL_BASE = process.env.SUPABASE_URL || "https://qaubkwiwtszebdgfrizr.supabase.co";
 const OLD_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co"; // app anterior (fotos de avance ya cargadas)
@@ -50,6 +51,27 @@ async function escribir(H, clave, valor) {
     body: JSON.stringify({ clave, valor, actualizado: new Date().toISOString() }),
   });
   if (!r.ok) throw new Error("db " + r.status);
+}
+/* FIX-01 · registro de cambios: una fila por obra y por día (reg_<obra>_<AAAAMMDD>), se conserva 90 días */
+async function registrar(H, reg, meta, build, req) {
+  if (!Array.isArray(reg) || !reg.length) return;
+  meta = meta || {}; const t = Date.now(), dia = new Date(t - 108e5).toISOString().slice(0, 10).replace(/-/g, "");
+  const ua = String((req && req.headers && req.headers["user-agent"]) || "").slice(0, 160);
+  const ip = String((req && req.headers && (req.headers["x-forwarded-for"] || req.headers["x-real-ip"])) || "").split(",")[0].trim().slice(0, 45);
+  const base = { t, rol: String(meta.rol || "").slice(0, 20), nom: String(meta.nom || "").slice(0, 60), cod: String(meta.cod || "").slice(0, 8), panel: String(meta.panel || "").slice(0, 60), build: String(build || "").slice(0, 20), ua, ip };
+  // un renglón por obra con los campos guardados; aparte, uno por cada cambio de cronograma/base/borrado, conflicto, rechazo o marca ignorada
+  const porObra = {}; reg.forEach((r) => { const L = (porObra[r.obra] = porObra[r.obra] || []); if (r.res === "ok" && r.antes === undefined && !r.tipo) { let j = L.find((x) => x._junto); if (!j) { j = { obra: r.obra, campos: [], res: "ok", _junto: 1, n: 0 }; L.push(j); } j.n++; if (j.campos.length < 40) j.campos.push(...r.campos); } else L.push(r); });
+  Object.values(porObra).forEach((L) => L.forEach((x) => { if (x._junto) { if (x.n > x.campos.length) x.campos.push("y " + (x.n - x.campos.length) + " más"); delete x._junto; delete x.n; } }));
+  for (const [obra, L] of Object.entries(porObra)) {
+    const k = "reg_" + String(obra).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40) + "_" + dia; const cur = (await leer(H, k)) || { items: [] };
+    cur.items = (cur.items || []).concat(L.map((r) => ({ ...base, ...r }))).slice(-3000); await escribir(H, k, cur);
+  }
+}
+async function fix2Recuperar(CX, v) {
+  const ids = ["o3", "o2", "o4", "o7269"]; const C = JSON.parse(v.v); const ops = [];
+  ids.forEach((id) => { const e = (C.mod && C.mod[id]) || (C.nuevas || []).find((x) => x && x.id === id); if (e && e.sinCrono === true) ops.push({ p: [C.mod && C.mod[id] ? "m" : "n", id, "sinCrono"], v: false, t: Date.now(), x: "recuperacion" }); });
+  if (ops.length) { const w = await aplicarOps(CX, v, ops, { b: Date.now() }); try { await registrar(CX.H, w.reg, { rol: "sistema", nom: "Recuperación FIX-01 (sin regenerar, sin tocar ov ni baseOv)" }, NEXO_BUILD, null); } catch (e) {} }
+  const v2 = await leerCfg(CX); const ix = { ...v2._ix, fix2: Date.now() }; await CX.escribir(CX.H, "cfgx", ix); return await leerCfg(CX);
 }
 /* CON-01 · constancia de tarea no convencional: limpieza y validación de los datos */
 const NC_MOT = ["detalle", "material", "redef", "gremio", "cond", "falta", "otro"];
@@ -289,11 +311,13 @@ export default async function handler(req, res) {
       // copia completa diaria de la base (todas las filas de nexo2_estado), guardada 30 días. La llama el cron de Vercel.
       const cronOk = (process.env.CRON_SECRET && req.headers.authorization === "Bearer " + process.env.CRON_SECRET) || /vercel-cron/i.test(String(req.headers["user-agent"] || ""));
       if (!cronOk) { res.status(403).json({ error: "No autorizado" }); return; }
-      const r = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave,valor&clave=not.like.bk_*&limit=5000`, { headers: H });
+      const r = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave,valor&clave=not.like.bk_*&clave=not.like.reg_*&limit=5000`, { headers: H });
       if (!r.ok) { res.status(502).json({ error: "No se pudo leer la base" }); return; }
       const filas = await r.json();
       const hoy = new Date(Date.now() - 108e5).toISOString().slice(0, 10).replace(/-/g, "");
       await escribir(H, "bk_" + hoy, { t: Date.now(), n: filas.length, filas });
+      // FIX-01 · el registro de cambios se conserva 90 días
+      try { const lim = new Date(Date.now() - 108e5 - 91 * 864e5).toISOString().slice(0, 10).replace(/-/g, ""); const rr = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave&clave=like.reg_*&limit=5000`, { headers: H }); const regs = rr.ok ? await rr.json() : []; for (const f of regs) { const m = /^reg_.+_(\d{8})$/.exec(f.clave); if (m && m[1] < lim) await fetch(`${URL_BASE}/rest/v1/nexo2_estado?clave=eq.${encodeURIComponent(f.clave)}`, { method: "DELETE", headers: H }); } } catch (e) {}
       const l = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave&clave=like.bk_*`, { headers: H });
       let borradas = 0;
       if (l.ok) {
@@ -307,15 +331,17 @@ export default async function handler(req, res) {
     }
     if (req.method === "GET" && req.query && req.query.t) {
       // consulta liviana: solo la versión (para enterarse de cambios en segundos sin bajar todo)
-      res.status(200).json({ t: await horaCfg(CX) });
+      res.status(200).json({ t: await horaCfg(CX), build: process.env.NEXO_BUILD_TEST || NEXO_BUILD, now: Date.now() });
       return;
     }
     if (req.method === "GET") {
-      const v = await leerCfg(CX);
-      if (!v || typeof v.v !== "string") { res.status(200).json({}); return; }
+      let v = await leerCfg(CX);
+      if (!v || typeof v.v !== "string") { res.status(200).json({ build: NEXO_BUILD, now: Date.now() }); return; }
+      // FIX-01 · recuperación (una sola vez): las 4 obras a las que un aparato desactualizado les volvió a poner sinCrono
+      try { if (v._ix && !v._ix.fix2) v = await fix2Recuperar(CX, v); } catch (e) {}
       // aviso interno: alguna fila pasó el 70 % del tope
       const tm = tamanos(v);
-      res.status(200).json({ cfg: { t: v.t, v: v.v }, ...(tm && tm.pct >= 70 ? { cap: tm } : {}) });
+      res.status(200).json({ cfg: { t: v.t, v: v.v }, build: process.env.NEXO_BUILD_TEST || NEXO_BUILD, now: Date.now(), ...(tm && tm.pct >= 70 ? { cap: tm } : {}) });
       return;
     }
     if (req.method !== "POST") { res.status(405).json({ error: "Método no permitido" }); return; }
@@ -486,8 +512,27 @@ export default async function handler(req, res) {
       res.status(200).json({ ok: true, up, pub: NEW_PUB + path }); return;
     }
 
-    // configuración de obras (no secreta)
-    if (!b.op) {
+    // FIX-01 · guardado por cambios (la única forma de guardar la configuración desde la app)
+    if (b.op === "cfg_ops") {
+      const BMIN = process.env.NEXO_BUILD_TEST || NEXO_BUILD;
+      if (!b.build || String(b.build) < BMIN) { res.status(426).json({ error: "version", build: BMIN }); return; }
+      if (!Array.isArray(b.ops) || JSON.stringify(b.ops).length > 4_000_000) { res.status(400).json({ error: "Datos inválidos" }); return; }
+      let prev = null; try { prev = await leerCfg(CX); } catch { prev = null; }
+      // protección: no se puede guardar un "primer cronograma" sobre una obra que ya tiene uno en la nube
+      if (Array.isArray(b.nuevos) && b.nuevos.length && prev && typeof prev.v === "string") {
+        try { const P = JSON.parse(prev.v); const tiene = (id) => !!((P.mod && P.mod[id] && P.mod[id].tpl && !P.mod[id].sinCrono) || (P.nuevas || []).some((x) => x && x.id === id && x.tpl && !x.sinCrono));
+          const choca = b.nuevos.filter((id) => typeof id === "string" && tiene(id)); if (choca.length) { res.status(409).json({ error: "ya_existe", ids: choca, t: Number(prev.t) || 0 }); return; } } catch {}
+      }
+      const offset = typeof b.now === "number" ? Date.now() - b.now : 0;
+      const w = await aplicarOps(CX, prev, b.ops, { b: Number(b.bt) || 0, offset });
+      if (w.error === "grande") { res.status(413).json({ error: "grande", ids: w.ids }); return; }
+      try { await registrar(H, w.reg, b.meta, b.build, req); } catch (e) {}
+      res.status(200).json({ ok: true, t: w.t, rech: w.rech, ign: w.ign, n: w.aplicadas.length }); return;
+    }
+
+    // configuración de obras con el formato anterior (la obra entera): ya no se acepta, para que un aparato desactualizado no pise datos más nuevos
+    if (!b.op) { res.status(426).json({ error: "version", build: NEXO_BUILD }); return; }
+    if (false) {
       if (b.key !== "cfg" || typeof b.v !== "string" || b.v.length > 4_000_000 || typeof b.t !== "number") {
         res.status(400).json({ error: "Datos inválidos" }); return;
       }
@@ -534,11 +579,19 @@ export default async function handler(req, res) {
     const cods = await leerCodigos(H);
     const dirOk = (c) => { if (MODO_PRUEBAS && norm(c) === "PRUEBAS") return true; const d = norm(dirVigente(cods)); return !!d && norm(c) === d; };
 
+    if (b.op === "reg_list") {
+      // FIX-01 · registro de cambios de una obra (Dirección)
+      const cr = b.cred || {}; if (!(cr.rol === "dir" && dirOk(cr.codigo))) { res.status(403).json({ error: "Solo Dirección" }); return; }
+      const obra = String(b.obra || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40); const dias = Math.min(90, Math.max(1, Number(b.dias) || 30));
+      const r = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave,valor&clave=like.reg_${obra}_*&limit=200`, { headers: H }); const L = r.ok ? await r.json() : [];
+      const desde = Date.now() - dias * 864e5; const items = L.flatMap((x) => (x.valor && x.valor.items) || []).filter((x) => x.t >= desde).sort((a, c) => c.t - a.t).slice(0, 1500).map(({ ip, ...x }) => x);
+      res.status(200).json({ ok: true, items }); return;
+    }
     if (b.op === "respaldo_manual") {
       // respaldo con nombre (no lo borra la limpieza de 30 días): todas las filas, incluidos cfg, auditorías, registro y obras
       const cr = b.cred || {}; if (!(cr.rol === "dir" && dirOk(cr.codigo))) { res.status(403).json({ error: "Solo Dirección" }); return; }
       const nom = "bk_" + String(b.nombre || "manual").toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 40) + "_" + new Date(Date.now() - 108e5).toISOString().slice(0, 16).replace(/[-:T]/g, "");
-      const r = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave,valor&clave=not.like.bk_*&limit=5000`, { headers: H });
+      const r = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave,valor&clave=not.like.bk_*&clave=not.like.reg_*&limit=5000`, { headers: H });
       if (!r.ok) { res.status(502).json({ error: "No se pudo leer la base" }); return; }
       const filas = await r.json();
       await escribir(H, nom, { t: Date.now(), n: filas.length, filas });
