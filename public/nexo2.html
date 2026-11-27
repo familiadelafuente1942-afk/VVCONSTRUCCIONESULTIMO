@@ -3816,7 +3816,7 @@ function ovAplicar(o,ov){
   const tp=new Map(),tt=new Map(),vias=[];
   try{(o.cards||[]).forEach(c=>{if(!c.custom)tp.set(c,c.tipo);c.items.forEach(i=>{if(i._tt)tt.set(i,i._tt)})});if(ov&&ov.c)Object.entries(ov.c).forEach(([k,v])=>{if(!o.cards.some(x=>ckey(o,x)===k)){const c=o.cards.find(x=>x.alias&&x.alias.includes(k));if(c)vias.push([c,v])}})}catch(e){}
   ovAplicar0(o,ov);
-  try{vias.forEach(([c,v])=>{if(!c.impacto&&v.im){c.impacto=v.im;c.impactoTxt=v.it||''}if(!c.esc&&v.es)c.esc=v.es});o.cards.forEach(c=>{if(tp.has(c))c.tipo=tp.get(c);if(c.tipo==='ser'&&c.rcod)c.tipo='ope';c.items.forEach(i=>{if(tt.has(i)&&i.txt===i.k)i.txt=tt.get(i)})});cardsUnir(o)}catch(e){console.error('ovAplicar+',e)}}
+  try{vias.forEach(([c,v])=>{if(!c.impacto&&v.im){c.impacto=v.im;c.impactoTxt=v.it||''}if(!c.esc&&v.es)c.esc=v.es});o.cards.forEach(c=>{if(tp.has(c))c.tipo=tp.get(c);if(c.tipo==='ser'&&c.rcod)c.tipo='ope';if(!CARD[c.tipo])c.tipo='ope';/* una tarjeta guardada sin tipo no puede romper la pantalla */c.items.forEach(i=>{if(tt.has(i)&&i.txt===i.k)i.txt=tt.get(i)})});cardsUnir(o)}catch(e){console.error('ovAplicar+',e)}}
 function ovAplicar0(o,ov){if(!ov)return;try{
   Object.entries(ov.p||{}).forEach(([k,v])=>{let s=(o.planos||[]).find(x=>skey(x)===k);if(s)s.nombre=v.n;else{s=nuevoSlot(o,v.r,v.f,v.n);if(v.m)s.manual=true;s.sk=k}if(v.rc){s.reclamos=v.rc;s.ultReclamo=v.ur||s.ultReclamo}});
   (ov.xp||[]).forEach(k=>{const s=(o.planos||[]).find(x=>skey(x)===k);if(s)ovQuitarSlot(o,s)});
@@ -5143,7 +5143,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261127-145350';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261127-151824';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};

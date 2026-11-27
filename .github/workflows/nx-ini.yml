@@ -1,0 +1,23 @@
+name: nx-ini
+on:
+  workflow_dispatch:
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Inicio de Dirección y Jefatura en la app publicada (solo lectura)
+        run: |
+          npm i playwright@1.47.2 >/dev/null 2>&1 && npx playwright install --with-deps chromium >/dev/null 2>&1
+          cat > t.cjs <<'JS'
+          const {chromium}=require('playwright');
+          (async()=>{const b=await chromium.launch();const p=await b.newPage({viewport:{width:1280,height:900}});const er=[];p.on('pageerror',e=>er.push(e.message.slice(0,200)));
+          await p.route('**/api/nexo2',async r=>{if(r.request().method()!=='POST')return r.continue();return r.fulfill({json:{ok:false,error:'solo lectura'}})});
+          await p.goto('https://nexoentorno.vercel.app/nexo2.html',{waitUntil:'domcontentloaded',timeout:90000});await p.waitForTimeout(15000);await p.reload({waitUntil:'domcontentloaded'});await p.waitForTimeout(15000);
+          console.log('BUILD',await p.evaluate(()=>window.NEXO_BUILD_V));
+          console.log('SIN_TIPO',await p.evaluate(()=>OBRAS.reduce((s,o)=>s+(o.cards||[]).filter(c=>!CARD[c.tipo]).length,0)));
+          for(const u of [{rol:'direccion',name:'D'},{rol:'jefe',name:'J'}]){const r=await p.evaluate(u=>{try{S.u=u;S.mias=OBRAS.map(o=>o.id);S.tab='inicio';draw();return 'ok '+document.body.innerText.length}catch(e){return 'ERROR '+e.message}},u);console.log('INICIO',u.rol,r)}
+          console.log('ERRORES',JSON.stringify(er.slice(0,5)));await b.close()})();
+          JS
+          node t.cjs
