@@ -51,6 +51,23 @@ async function escribir(H, clave, valor) {
   });
   if (!r.ok) throw new Error("db " + r.status);
 }
+/* CON-01 · constancia de tarea no convencional: limpieza y validación de los datos */
+const NC_MOT = ["detalle", "material", "redef", "gremio", "cond", "falta", "otro"];
+function ncTiempo(x) { x = x || {}; const n = Math.min(9999, Math.max(0, Number(String(x.n == null ? "" : x.n).replace(",", ".")) || 0)); return { n: Math.round(n * 10) / 10, u: x.u === "h" ? "h" : "d", p: Math.min(999, Math.max(1, Math.round(Number(x.p) || 1))) }; }
+function ncLimpio(x) {
+  x = x || {}; const s = (v, n) => String(v == null ? "" : v).slice(0, n).trim();
+  return { tareaId: s(x.tareaId, 60).replace(/[^A-Za-z0-9_:#-]/g, ""), tareaNom: s(x.tareaNom, 200), otra: !!x.otra, ubic: s(x.ubic, 120),
+    motivos: (Array.isArray(x.motivos) ? x.motivos : []).filter((k) => NC_MOT.includes(k)).filter((k, i, a) => a.indexOf(k) === i), otroTxt: s(x.otroTxt, 300), desc: s(x.desc, 3000),
+    hab: ncTiempo(x.hab), real: ncTiempo(x.real), estadoT: ["hacer", "ejec", "fin"].includes(x.estadoT) ? x.estadoT : "hacer", pideEcon: !!x.pideEcon };
+}
+function ncError(nc) {
+  if (!nc.tareaNom) return "Elegí la tarea del cronograma afectada";
+  if (!nc.motivos.length) return "Marcá por qué no es convencional";
+  if (nc.motivos.includes("otro") && !nc.otroTxt) return "Escribí cuál es el otro motivo";
+  if (nc.desc.length < 20) return "La descripción tiene que tener al menos 20 caracteres";
+  if (!nc.hab.n || !nc.real.n) return "Completá el tiempo habitual y el tiempo real";
+  return "";
+}
 async function leerCodigos(H) {
   let v = await leer(H, "codigos");
   if (v && typeof v.v === "string") { try { v = JSON.parse(v.v); } catch { v = null; } }
@@ -805,7 +822,7 @@ export default async function handler(req, res) {
       const str = (x, n) => String(x == null ? "" : x).slice(0, n);
       const num = (x, lo, hi) => Math.min(hi, Math.max(lo, Number(x) || 0));
       const idOk = (x) => String(x || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
-      const TIPOS = ["material", "definicion", "retraso", "adicional", "otro", "presupuesto", "materiales", "auditoria"];
+      const TIPOS = ["material", "definicion", "retraso", "adicional", "otro", "presupuesto", "materiales", "auditoria", "noconv"];
       const DOC = (t) => t === "presupuesto" || t === "materiales"; // la auditoría entra como un reclamo más (se responde y cuenta en los tiempos)
       const ESTADOS = ["abierto", "gestion", "resuelto", "rechazado", "cerrado", "recibido"];
       const reg = (await leer(H, "ctcods")) || { items: [] };
@@ -849,6 +866,9 @@ export default async function handler(req, res) {
         const vistos = new Set(); misCt = cods.flatMap(misAccesos).filter((c) => (vistos.has(c.obra) ? false : (vistos.add(c.obra), true))); ct = misCt.find((c) => c.obra === obraAll) || misCt[0] || null; if (ct) quien = "ct"; }
       else if (cr.rol === "dir" && dirOk(cr.codigo)) quien = "dir";
       else if (cr.rol === "jefe" && norm(cr.codigo) && /^[A-Za-z0-9_-]{1,40}$/.test(obraAll) && norm((cods.obras[obraAll] || {}).j) === norm(cr.codigo)) quien = "jefe";
+      // auditoría y propietario: solo leen las constancias de tarea no convencional (la auditoría todas; el propietario las que Dirección compartió)
+      else if (cr.rol === "aud" && b.op === "ct_list_obra" && norm(cr.codigo) && /^[A-Za-z0-9_-]{1,40}$/.test(obraAll) && norm((cods.obras[obraAll] || {}).a) === norm(cr.codigo)) quien = "aud";
+      else if (cr.rol === "prop" && b.op === "ct_list_obra" && norm(cr.codigo) && /^[A-Za-z0-9_-]{1,40}$/.test(obraAll) && norm((cods.obras[obraAll] || {}).clave) === norm(cr.codigo)) quien = "prop";
       if (!quien) { await pausa(600); res.status(403).json({ error: "Volvé a ingresar tu código." }); return; }
       const obra = quien === "ct" ? ct.obra : obraAll;
       if (!/^[A-Za-z0-9_-]{1,40}$/.test(obra) && b.op !== "ct_list_all") { res.status(400).json({ error: "Obra inválida" }); return; }
@@ -884,6 +904,9 @@ export default async function handler(req, res) {
         const q = b.rec || {};
         const tipo = TIPOS.includes(q.tipo) ? q.tipo : "otro";
         const esDoc = DOC(tipo);
+        // CON-01 · constancia de tarea no convencional / mayor tiempo de ejecución
+        let nc = null;
+        if (tipo === "noconv") { nc = ncLimpio(q.nc); const e = ncError(nc); if (e) { res.status(400).json({ error: e }); return; } q.titulo = "Tarea no convencional · " + nc.tareaNom; q.desc = nc.desc; q.tarea = nc.tareaNom + (nc.ubic ? " · " + nc.ubic : ""); }
         if (!esDoc && !str(q.titulo, 200).trim()) { res.status(400).json({ error: "Escribí qué pasa" }); return; }
         if (tipo === "auditoria" && !(q.aud && Array.isArray(q.aud.items) && q.aud.items.length)) { res.status(400).json({ error: "Cargá al menos una tarea en la auditoría" }); return; }
         if (esDoc && tipo !== "auditoria" && !str(q.desc, 3000).trim() && !arch(q.archivos).length && !num(q.monto, 0, 1e12)) { res.status(400).json({ error: "Adjuntá el archivo o escribí el detalle" }); return; }
@@ -892,15 +915,16 @@ export default async function handler(req, res) {
           id: "r" + t.toString(36) + Math.random().toString(36).slice(2, 5), obra, ctId: ct.id, ctNombre: ct.nombre, rubro: ct.rubro,
           tipo, titulo: str(q.titulo, 200).trim() || (tipo === "presupuesto" ? "Presupuesto" : tipo === "auditoria" ? "Auditoría de obra" : "Listado de materiales"), desc: str(q.desc, tipo === "auditoria" ? 8000 : 3000), tarea: str(q.tarea, 200), diasRetraso: esDoc ? 0 : num(q.diasRetraso, 0, 999),
           monto: num(q.monto, 0, 1e12), fotos: fts(q.fotos), archivos: arch(q.archivos), doc: esDoc, estado: esDoc ? "recibido" : "abierto", creado: t, editado: t,
-          hist: [{ t, por: "ct", nom: ct.nombre, tx: esDoc ? (tipo === "presupuesto" ? "Presupuesto enviado" : tipo === "auditoria" ? "Auditoría de obra enviada" : "Listado de materiales enviado") : "Reclamo cargado" }],
+          hist: [{ t, por: "ct", nom: ct.nombre, tx: esDoc ? (tipo === "presupuesto" ? "Presupuesto enviado" : tipo === "auditoria" ? "Auditoría de obra enviada" : "Listado de materiales enviado") : tipo === "noconv" ? "Constancia cargada · informada" : "Reclamo cargado" }],
         };
+        if (nc) rec.nc = nc;
         if (tipo === "adicional" && q.cert) { const cc = certLimpio(q.cert); if (cc) rec.cert = cc; }
         if (tipo === "auditoria") {
           // auditoría del estado de la obra: qué se puede avanzar y qué no (y por qué), con la gente que hay
           const a = q.aud || {};
-          const EA = ["avanza", "material", "definicion", "otro", "terminado", "parcial", "pendiente"];
+          const EA = ["avanza", "material", "definicion", "otro", "terminado", "parcial", "pendiente", "noconv"];
           rec.aud = { fecha: str(a.fecha, 10), personal: num(a.personal, 0, 999), ociosos: num(a.ociosos, 0, 999), concl: str(a.concl, 3000),
-            items: (Array.isArray(a.items) ? a.items : []).slice(0, 80).map((x, k) => ({ n: a.inf ? k + 1 : (num(x.n, 0, 999) || undefined), tarea: str(x.tarea, 300), est: EA.includes(x.est) ? x.est : "otro", parcial: x.est === "parcial" ? (num(x.pct || x.parcial, 0, 100) || 50) : undefined, falta: str(x.falta, 300), pedido: str(x.pedido, 10), gente: num(x.gente, 0, 999), fin: str(x.fin, 10), nota: str(x.nota, 600), fotos: fts(x.fotos) })),
+            items: (Array.isArray(a.items) ? a.items : []).slice(0, 80).map((x, k) => ({ n: a.inf ? k + 1 : (num(x.n, 0, 999) || undefined), tarea: str(x.tarea, 300), est: EA.includes(x.est) ? x.est : "otro", parcial: x.est === "parcial" ? (num(x.pct || x.parcial, 0, 100) || 50) : undefined, falta: str(x.falta, 300), pedido: str(x.pedido, 10), gente: num(x.gente, 0, 999), fin: str(x.fin, 10), nota: str(x.nota, 600), fotos: fts(x.fotos), nc: x.est === "noconv" && x.nc ? idOk(x.nc) : undefined, ncNum: x.est === "noconv" && x.ncNum ? str(x.ncNum, 8) : undefined })),
             reclamos: (Array.isArray(a.reclamos) ? a.reclamos : []).slice(0, 40).map((r) => ({ id: idOk(r.id), num: str(r.num, 8), titulo: str(r.titulo, 200), tipo: str(r.tipo, 40), dias: num(r.dias, 0, 9999) })),
             clase: a.clase === "def" ? "def" : undefined,
             inf: a.inf && typeof a.inf === "object" ? { semana: str(a.inf.semana, 160), resp: str(a.inf.resp, 120), obraTxt: str(a.inf.obraTxt, 120), u: pubOk(a.inf.u) ? a.inf.u : "", n: str(a.inf.n, 120), total: num(a.inf.total, 0, 999) } : undefined,
@@ -913,12 +937,15 @@ export default async function handler(req, res) {
         await escribir(H, "ctcods", { ...reg2, nro });
         const v = await leer(H, clave);
         const items = ((v && v.items) || []);
+        if (rec.aud) rec.aud.items.forEach((z) => { if (z.nc) { const c0 = items.find((y) => y.id === z.nc && y.tipo === "noconv"); if (c0) z.ncNum = c0.num; else { delete z.nc; delete z.ncNum; } } });
         if (rec.aud) {
           // los reclamos que el contratista incluyó en la auditoría quedan adentro de ella: llega un solo aviso
           const ids = new Set(rec.aud.reclamos.map((r) => r.id).filter(Boolean));
           items.forEach((x) => { if (ids.has(x.id) && x.ctId === ct.id && !x.doc) { x.enAud = rec.id; x.enAudNum = rec.num; } });
         }
         if (rec.tipo === "adicional") rec.adicId = await ctAdicSync(H, rec);
+        // adicional creado desde una constancia: quedan vinculados entre sí
+        if (rec.tipo === "adicional" && q.ncId) { const c0 = items.find((x) => x.id === idOk(q.ncId) && x.tipo === "noconv" && x.ctId === ct.id); if (c0) { rec.ncId = c0.id; rec.ncNum = c0.num; c0.nc = { ...(c0.nc || {}), adic: { id: rec.id, num: rec.num } }; c0.hist = (c0.hist || []).concat([{ t, por: "ct", nom: ct.nombre, tx: "Adicional N° " + rec.num + " cargado con estos datos" }]).slice(-100); c0.editado = t; } }
         items.push(rec);
         await escribir(H, clave, { items: items.slice(-500) });
         res.status(200).json({ ok: true, rec }); return;
@@ -999,9 +1026,10 @@ export default async function handler(req, res) {
             if (!x.cumplida) { x.cumplida = t; si.push(nom); }
           } else {
             // motivo de lo no cumplido: sigue en curso, o retraso por falta de material / definición / otro
-            const MO = ["avanza", "material", "definicion", "otro"];
+            const MO = ["avanza", "material", "definicion", "otro", "noconv"];
+            if (m.e === "no" && m.motivo === "noconv" && (idOk(m.nc) || "") !== (x.nc || "")) { const c0 = items.find((z) => z.id === idOk(m.nc) && z.tipo === "noconv"); x.nc = c0 ? c0.id : undefined; x.ncNum = c0 ? c0.num : undefined; if (x.est === "noconv") no.push(nom + (c0 ? " (constancia N° " + c0.num + ")" : "")); }
             if (m.e === "no" && typeof m.falta === "string" && m.falta.trim().slice(0, 300) !== (x.falta || "")) { x.falta = m.falta.trim().slice(0, 300); if (!no.includes(nom)) no.push(nom + (x.falta ? " (falta " + x.falta + ")" : "")); }
-            if (m.e === "no" && MO.includes(m.motivo) && x.est !== m.motivo) { x.est = m.motivo; if (x.cumplida) x.cumplida = 0; if (x.parcial) x.parcial = 0; no.push(nom + (m.motivo === "avanza" ? "" : " (retraso: " + (m.motivo === "material" ? "falta material" : m.motivo === "definicion" ? "falta definición" : "otro motivo") + ")")); }
+            if (m.e === "no" && MO.includes(m.motivo) && x.est !== m.motivo) { x.est = m.motivo; if (x.cumplida) x.cumplida = 0; if (x.parcial) x.parcial = 0; no.push(nom + (m.motivo === "avanza" ? "" : " (retraso: " + (m.motivo === "material" ? "falta material" : m.motivo === "definicion" ? "falta definición" : m.motivo === "noconv" ? "tarea no convencional / mayor tiempo" + (x.ncNum ? ", constancia N° " + x.ncNum : "") : "otro motivo") + ")")); }
             if (m.e === "no" && x.est === "pendiente") { x.est = "avanza"; if (!x.cumplida) no.push(nom); }
             if (x.cumplida) { x.cumplida = 0; no.push(nom); }
             if (x.parcial) { x.parcial = 0; if (!no.includes(nom)) no.push(nom); }
@@ -1038,6 +1066,42 @@ export default async function handler(req, res) {
         it.editado = t;
         await escribir(H, clave, { items });
         res.status(200).json({ ok: true, rec: it }); return;
+      }
+      if (b.op === "ct_nc_resp" || b.op === "ct_nc_set" || b.op === "ct_nc_share") {
+        const id = idOk(b.id); const v = await leer(H, clave); const items = (v && v.items) || []; const it = items.find((x) => x.id === id);
+        if (!it || it.tipo !== "noconv") { res.status(404).json({ error: "No existe esa constancia" }); return; }
+        const t = Date.now(); const H2 = (x) => { it.hist = (Array.isArray(it.hist) ? it.hist : []).concat([x]).slice(-100); it.editado = t; };
+        if (b.op === "ct_nc_resp") {
+          // Jefatura o Dirección: Conforme · Conforme con otro tiempo · Observado
+          if (quien !== "dir" && quien !== "jefe") { res.status(403).json({ error: "Solo la jefatura o la Dirección" }); return; }
+          const acc = ["conf", "otro", "obs"].includes(b.acc) ? b.acc : ""; if (!acc) { res.status(400).json({ error: "Elegí una respuesta" }); return; }
+          const nom = str(b.nombre, 80).trim(), cmt = str(b.cmt, 1500).trim();
+          if (acc !== "obs" && !nom) { res.status(400).json({ error: "Escribí el nombre de quien da la conformidad" }); return; }
+          if (acc === "obs" && !cmt) { res.status(400).json({ error: "Explicá qué se observa" }); return; }
+          const acep = acc === "otro" ? ncTiempo(b.acep) : null;
+          if (acc === "otro" && !acep.n) { res.status(400).json({ error: "Poné el tiempo aceptado" }); return; }
+          const porNom = quien === "dir" ? "Dirección" : "Jefatura de obra";
+          it.nc = { ...(it.nc || {}), res: { acc, nom: nom || porNom, cmt, t, por: quien, porNom, ...(acep ? { acep } : {}) } };
+          if (!it.primeraResp) { it.primeraResp = t; it.primeraPor = quien; }
+          if (acc === "obs") it.estado = "gestion"; else { it.estado = "resuelto"; it.resuelto = t; it.resueltoPor = quien; }
+          const tt = (x) => (x && x.n ? x.n + (x.u === "h" ? " h" : " días") + " · " + (x.p || 1) + " pers." : "");
+          H2({ t, por: quien, nom: nom || porNom, estado: it.estado, tx: (acc === "conf" ? "Conforme" : acc === "otro" ? "Conforme con otro tiempo: " + tt(acep) + " (declarado " + tt(it.nc.real) + ")" : "Observado") + (cmt ? ": " + cmt : "") });
+        } else if (b.op === "ct_nc_set") {
+          // el contratista corrige y reenvía (por ejemplo después de una observación)
+          if (quien !== "ct" || it.ctId !== ct.id) { res.status(403).json({ error: "No es tuya" }); return; }
+          if (it.nc && it.nc.res && it.nc.res.acc !== "obs") { res.status(400).json({ error: "Ya tiene conformidad" }); return; }
+          const nc = ncLimpio({ ...(it.nc || {}), ...(b.nc || {}) }); const e = ncError(nc); if (e) { res.status(400).json({ error: e }); return; }
+          nc.adic = (it.nc || {}).adic; nc.prop = (it.nc || {}).prop; nc.res = null;
+          it.nc = nc; it.titulo = "Tarea no convencional · " + nc.tareaNom; it.desc = nc.desc; it.tarea = nc.tareaNom + (nc.ubic ? " · " + nc.ubic : "");
+          if (Array.isArray(b.fotos)) it.fotos = fts(b.fotos); if (Array.isArray(b.archivos)) it.archivos = arch(b.archivos);
+          it.estado = "abierto"; it.resuelto = 0; it.reabierto = (it.reabierto || 0) + 1;
+          H2({ t, por: "ct", nom: ct.nombre, estado: "abierto", tx: "Constancia corregida y reenviada" + (str(b.txt, 1500).trim() ? ": " + str(b.txt, 1500).trim() : "") });
+        } else {
+          if (quien !== "dir") { res.status(403).json({ error: "Solo Dirección" }); return; }
+          it.nc = { ...(it.nc || {}), prop: !!b.v };
+          H2({ t, por: "dir", nom: "Dirección", tx: b.v ? "Compartida con el propietario" : "Dejó de compartirse con el propietario" });
+        }
+        await escribir(H, clave, { ...(v || {}), items }); res.status(200).json({ ok: true, rec: it }); return;
       }
       if (b.op === "ct_escalar") {
         // la jefatura pasa el reclamo del contratista a la Dirección (el estudio no responde); la Dirección o la jefatura lo cierran
@@ -1164,6 +1228,10 @@ export default async function handler(req, res) {
       if (b.op === "ct_list_obra") {
         if (quien === "ct") { res.status(403).json({ error: "No autorizado" }); return; }
         const v = await leer(H, clave);
+        if (quien === "aud" || quien === "prop") {
+          const L = ((v && v.items) || []).filter((x) => x.tipo === "noconv" && (quien === "aud" || (x.nc && x.nc.prop)));
+          res.status(200).json({ ok: true, items: L.map((x) => { const { ctId, asig, esc, ...r } = x; return r; }), cts: [] }); return;
+        }
         res.status(200).json({ ok: true, items: ((v && v.items) || []).filter((x) => quien === "dir" || x.tipo !== "presupuesto"), cts: lista.filter((c) => c.obra === obra).map((c) => (quien === "dir" ? c : { id: c.id, nombre: c.nombre, rubro: c.rubro })) }); return;
       }
       if (b.op === "ct_list_all") {

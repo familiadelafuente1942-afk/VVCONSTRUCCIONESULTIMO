@@ -1324,7 +1324,7 @@ const LIB={
     mat:[['','Productos de limpieza'],['','Volquete final']],
     ope:['Lista de pendientes resuelta']}
 };
-const CARD={doc:{n:'Planos y definiciones',c:'Le llega al estudio',ok:'Definido',ico:'doc'},mat:{n:'Materiales y recursos',c:'Interna de la jefatura',ok:'En obra',ico:'mat'},ope:{n:'Condiciones operativas',c:'Interna de la jefatura',ok:'Listo',ico:'ope'},ser:{n:'Servicios',c:'Interna de la jefatura',ok:'Listo',ico:'ser'}};
+const CARD={doc:{n:'Planos y definiciones',c:'Le llega al estudio',ok:'Definido',ico:'doc'},mat:{n:'Materiales y recursos',c:'Interna de la jefatura',ok:'En obra',ico:'mat'},ope:{n:'Condiciones operativas y servicios',c:'Interna de la jefatura',ok:'Listo',ico:'ope'},ser:{n:'Condiciones operativas y servicios',c:'Interna de la jefatura',ok:'Listo',ico:'ser'}};
 const CARD_ORD=['doc','mat','ope','ser'];
 const ISTATES={doc:[['falta','Falta'],['recibido','Recibido'],['ok','Definido'],['na','N/A']],mat:[['falta','Falta'],['pedido','Pedido'],['ok','En obra'],['na','N/A']],ope:[['falta','Falta'],['ok','Listo'],['na','N/A']],ser:[['falta','Falta'],['ok','Listo'],['na','N/A']]};
 const MATS={};
@@ -1428,7 +1428,7 @@ const finContractual=o=>finDe(contractual(o));
 
 /* ================= tarjetas por tarea ================= */
 /* cada tarea trae 2 a 4 tarjetas; cada tarjeta tiene su lista de ítems con estado */
-function addCard(o,task,tipo,items,extra={}){
+function addCard(o,task,tipo,items,extra={}){if(tipo==='ser'&&extra&&extra.rcod)tipo='ope';
   const L=LIB[task.rubro];const c={id:'c'+(++uid),obra:o,task,tipo,antic:tipo==='doc'?L.a:tipo==='mat'?3:2,items:[],enviada:null,impacto:null,impactoTxt:'',origen:'auto',created:null,...extra};
   items.forEach(x=>addItem(c,x));o.cards.push(c);return c}
 function addItem(c,x){const it={id:'i'+(++uid),card:c,txt:x.txt,g:x.g||'',tipo:x.tipo||(c.tipo==='mat'?'Material':c.tipo==='ope'?'Condición':c.tipo==='ser'?'Servicio':DF),resp:x.resp||(c.tipo==='doc'?E:c.tipo==='mat'?'Corralón':'Jefatura'),estado:'falta',fecha:null,respuesta:null,obs:'',origen:x.origen||'auto',slot:null};
@@ -1613,7 +1613,7 @@ function tplGenBase(o){const M=o.mod2||(o.mod2=tplModeloDef(o)),T=tplT(o),g=tplG
 function tplEquipo(o,t){return`${EQUIPO[t.rubro]||'Cuadrilla general'} ${hash(o.id+t.rubro)<.5?'A':'B'}`}
 function tplTasks(o){o.tasks=o.base.map(t=>({...t,equipo:t.equipo||tplEquipo(o,t)}))}
 /* tarjetas: las 43 restricciones de la plantilla, ancladas a su tarea */
-const TPL_TIPO={'Definición':'doc','Plano':'doc','Material':'mat','Subcontrato':'ser'};
+const TPL_TIPO={'Definición':'doc','Plano':'doc','Material':'mat','Subcontrato':'ope','Servicio':'ope','Condición':'ope'};
 /* 6 · ítems que faltaban en la plantilla: por nivel, separando lo que define el Estudio de lo que compra/gestiona la Jefatura */
 const TPL_EXTRA=[
  ['XM1',['mamp'],/mamposter/i,'doc',{txt:'Plano de replanteo de mampostería {N}',tipo:'Plano',resp:'Estudio'}],
@@ -1635,33 +1635,37 @@ function tplExtra(o,soloTareas){const ya=new Set();(o.tasks||[]).forEach(t=>{if(
 /* gestión previa: lo que hay que pedir y contratar ANTES de pisar el lote (anclado a las tareas preliminares; vence antes del inicio en obra) */
 const TPL_PREV=[
  ['GP01','PRE01','ope',{txt:'Seguro de obra, ART y alta del personal',tipo:'Condición',resp:'Jefatura'},3,1],
- ['GP02','PRE01','ser',{txt:'Cuadrilla contratada para el arranque',tipo:'Servicio',resp:'Jefatura'},3,1],
+ ['GP02','PRE01','ope',{txt:'Cuadrilla contratada para el arranque',tipo:'Servicio',resp:'Jefatura'},3,1],
  ['GP03','PRE01','doc',{txt:'Planos aprobados y documentación de obra recibidos',tipo:'Definición',resp:'Estudio'},3,1],
  ['GP04','PRE03','mat',{txt:'Materiales para el cerco de obra (postes, alambre, media sombra o chapa)',tipo:'Material',resp:'Corralón / Proveedor'},3,1.5],
- ['GP05','PRE04','ser',{txt:'Baño químico contratado',tipo:'Servicio',resp:'Jefatura'},2,1],
- ['GP06','PRE04','ser',{txt:'Obrador / contenedor contratado',tipo:'Servicio',resp:'Jefatura'},3,1.5],
- ['GP07','PRE05','ser',{txt:'Trámite de conexión provisoria de luz y agua',tipo:'Servicio',resp:'Jefatura'},4,2],
+ ['GP05','PRE04','ope',{txt:'Baño químico contratado',tipo:'Servicio',resp:'Jefatura'},2,1],
+ ['GP07','PRE05','ope',{txt:'Trámite de conexión provisoria de luz y agua',tipo:'Servicio',resp:'Jefatura'},4,2],
  ['GP08','PRE05','mat',{txt:'Tablero de obra, jabalina y materiales de conexión',tipo:'Material',resp:'Corralón / Proveedor'},3,1],
- ['GP09','PRE06','ser',{txt:'Cartel de obra encargado',tipo:'Servicio',resp:'Jefatura'},3,1.5],
+ ['GP09','PRE06','ope',{txt:'Cartel de obra encargado',tipo:'Servicio',resp:'Jefatura'},3,1.5],
  ['GP10','PRE07','mat',{txt:'Materiales para la rampa y accesos (tosca, piedra, tablones)',tipo:'Material',resp:'Corralón / Proveedor'},3,1],
- ['GP11','PRE02','ser',{txt:'Volquetes contratados',tipo:'Servicio',resp:'Jefatura'},2,1],
+ ['GP11','PRE02','ope',{txt:'Volquetes contratados',tipo:'Servicio',resp:'Jefatura'},2,1],
  ['GP12','PRE02','mat',{txt:'Herramientas y equipos para el arranque',tipo:'Material',resp:'Jefatura'},2,1],
- ['GP13','MOV01','ser',{txt:'Agrimensor para replanteo y amojonamiento',tipo:'Servicio',resp:'Jefatura'},3,1]];
+ ['GP13','MOV01','ope',{txt:'Agrimensor para replanteo y amojonamiento',tipo:'Servicio',resp:'Jefatura'},3,1]];
 function tplPrev(o,soloTareas){try{if(!(o.tasks||[]).length||inicioObraDe(o)<TODAY-7*DAY)return}catch(e){return}/* obras ya arrancadas: no se agregan pedidos previos vencidos */TPL_PREV.forEach(([id,cod,tp,it,ap,pz])=>{const t=(o.tasks||[]).filter(x=>x.cod===cod).sort((a,b)=>a.start-b.start)[0];if(!t||(soloTareas&&!soloTareas.has(t)))return;
   if(o.cards.some(c=>c.task===t&&c.rcod===id))return;addCard(o,t,tp,[{txt:it.txt,tipo:it.tipo,resp:it.resp}],{rcod:id,rtipo:it.tipo,rdesc:it.txt,apert:ap,plazo:pz,prev:true})})}
 function tplCards(o,soloTareas){
   (tplT(o).restricciones||[]).forEach(r=>{
     const L=o.tasks.filter(t=>t.cod===r.tarea_ancla).sort((a,b)=>(a.li||0)-(b.li||0));if(!L.length)return;
-    const dest=r.alcance_ancla==='N'?L:[L[0]];
+    const dest=r.alcance_ancla==='N'?L:[L[0]],toda=r.alcance_ancla!=='N'&&L.length>1&&!!L[0].nivel;
     dest.forEach(t=>{if(soloTareas&&!soloTareas.has(t))return;if(o.cards.some(c=>c.rcod===r.codigo&&c.task===t))return;
-      const tp=r.tipo,item={txt:r.descripcion,tipo:tp==='Plano'?PL:tp==='Material'?'Material':tp==='Subcontrato'?'Servicio':DF,resp:tp==='Material'||tp==='Subcontrato'?'Jefatura':E};
-      if(tp==='Plano')item.origen='manual';
-      /* 6 · ítems mixtos: lo que define el Estudio/Propietario va separado de lo que compra o contrata la Jefatura */
-      const mx1=/^proyecto y contrataci[oó]n de (.+)$/i.exec(r.descripcion||''),mx2=/^(.+?):\s*elecci[oó]n y compra$/i.exec(r.descripcion||'');
+      const tp=r.tipo,txt=String(r.descripcion||'').replace(/\s*\{N\}/g,t.nivel?' '+t.nivel:'').trim();
+      const marca=c=>{const it=c.items[c.items.length-1];if(!it)return;if(toda)it.toda=1;if(r.item_k&&t===L[0]){it.k=r.item_k;it._tt=it.txt}return c};
+      const mx1=/^proyecto y contrataci[oó]n de (.+)$/i.exec(txt),mx2=/^(.+?):\s*elecci[oó]n y compra$/i.exec(txt);
       if(mx1||mx2){const q=(mx1||mx2)[1];const ex={rtipo:tp,apert:r.apertura_semanas,plazo:r.plazo_entrega_semanas};
-        addCard(o,t,'doc',[{txt:mx1?'Proyecto de '+q:'Elección de '+q.toLowerCase(),tipo:mx1?PL:DF,resp:mx1?E:P}],{...ex,rcod:r.codigo,rdesc:r.descripcion});
-        addCard(o,t,mx1?'ser':'mat',[{txt:mx1?'Contratación de '+q:'Compra de '+q.toLowerCase(),tipo:mx1?'Servicio':'Material',resp:'Jefatura'}],{...ex,rcod:r.codigo+'b',rdesc:r.descripcion});return}
-      addCard(o,t,TPL_TIPO[tp],[item],{rcod:r.codigo,rtipo:tp,rdesc:r.descripcion,apert:r.apertura_semanas,plazo:r.plazo_entrega_semanas})})});tplExtra(o,soloTareas);try{tplPrev(o,soloTareas)}catch(e){}try{cardsUnir(o)}catch(e){console.error('cardsUnir',e)}}
+        marca(addCard(o,t,'doc',[{txt:mx1?'Proyecto de '+q:'Elección de '+q.toLowerCase(),tipo:mx1?PL:DF,resp:mx1?E:P}],{...ex,rcod:r.codigo,rdesc:txt}));
+        marca(addCard(o,t,mx1?'ope':'mat',[{txt:mx1?'Contratación de '+q:'Compra de '+q.toLowerCase(),tipo:mx1?'Servicio':'Material',resp:'Jefatura'}],{...ex,rcod:r.codigo+'b',rdesc:txt}));return}
+      const item={txt,tipo:tp==='Plano'?PL:tp==='Material'?'Material':tp==='Subcontrato'?'Servicio':tp==='Condición'?'Condición':DF,resp:tp==='Material'||tp==='Subcontrato'||tp==='Condición'?'Jefatura':E};
+      if(tp==='Plano')item.origen='manual';
+      marca(addCard(o,t,TPL_TIPO[tp]||'doc',[item],{rcod:r.codigo,rtipo:tp,rdesc:txt,apert:r.apertura_semanas,plazo:r.plazo_entrega_semanas}))})});
+  tplExtra(o,soloTareas);try{tplPrev(o,soloTareas)}catch(e){}
+  o.cards.forEach(c=>{if(c.tipo==='ser'&&c.rcod)c.tipo='ope'});
+  try{cardsUnir(o)}catch(e){console.error('cardsUnir',e)}}
+
 /* una sola tarjeta por tipo en cada tarea: planos y definiciones, materiales, condiciones, servicios.
    Las tarjetas repetidas se juntan en la primera; cada ítem recuerda de qué tarjeta venía (así lo guardado se sigue aplicando). */
 function cardsUnir(o){const vistos=new Map(),fuera=new Set();
@@ -2153,11 +2157,11 @@ function vObras(){
 function vObra(){
   const o=OBRAS.find(x=>x.id===S.obra);if(!o||!puedeVer(o)){S.tab='obras';return vObras()}
   const r=ROLE(),est=r==='estudio',aud=r==='auditor',a=actual(o),n=proxima(o);
-  const tabs=est?[['crono','Cronograma'],['sol','Tarjetas'],['docs','Planos'],['avances','Avances'],['adic','Adicionales'],['audit','Auditoría']]:aud?[['asup','Supervisiones'],['arev','Revisión de doc.'],['acert','Certificación'],['crono','Cronograma'],['docs','Planos'],['avances','Avances']]:[['crono','Cronograma'],['docs','Planos'],['informes','Informes'],['avances','Avances'],['adic','Adicionales'],['audit','Auditoría'],['equipo','Equipo'],['reclamos','Contratistas'+(ctNum(o)?' ('+ctNum(o)+')':'')],...(r==='direccion'?[['gestion','Registros']]:[])];
+  const tabs=est?[['crono','Cronograma'],['sol','Tarjetas'],['docs','Planos'],['avances','Avances'],['adic','Adicionales'],['audit','Auditoría']]:aud?[['asup','Supervisiones'],['arev','Revisión de doc.'],['acert','Certificación'],['crono','Cronograma'],['docs','Planos'],['avances','Avances'],['nconv','Constancias']]:[['crono','Cronograma'],['docs','Planos'],['informes','Informes'],['avances','Avances'],['adic','Adicionales'],['audit','Auditoría'],['equipo','Equipo'],['reclamos','Contratistas'+(ctNum(o)?' ('+ctNum(o)+')':'')],...(r==='direccion'?[['gestion','Registros']]:[])];
   if(!tabs.find(t=>t[0]===S.otab))S.otab=tabs[0][0];
   const cs=est?o.cards.filter(c=>c.tipo==='doc'):o.cards;const falt=cs.filter(c=>!cDone(c)&&color(c)!=='futuro').length,res=cs.filter(cDone).length,nuevos=o.cards.filter(cNuevos).length;
   const dv=desvioSem(o);
-  const body={crono:tabCrono,sol:tabSol,docs:tabDocs,informes:tabInformes,avances:tabAvances,adic:tabAdic,audit:tabAudit,equipo:tabEquipo,gestion:o=>tabGestion(o),check:tabCheck,reclamos:tabReclamos,asup:o=>audPanel(o,'sup'),arev:o=>audPanel(o,'rev'),acert:o=>audPanel(o,'cert')}[S.otab](o);
+  const body={crono:tabCrono,sol:tabSol,docs:tabDocs,informes:tabInformes,avances:tabAvances,adic:tabAdic,audit:tabAudit,equipo:tabEquipo,gestion:o=>tabGestion(o),check:tabCheck,reclamos:tabReclamos,asup:o=>audPanel(o,'sup'),arev:o=>audPanel(o,'rev'),acert:o=>audPanel(o,'cert'),nconv:o=>window.tabNconv?tabNconv(o):''}[S.otab](o);
   const facts=aud?'':`<div class="facts"><div class="fact"><span>Ahora</span><b>${iniciada(o)?esc(a.name):'Por iniciar'}</b></div><div class="fact"><span>Próxima tarea</span><b>${n?esc(n.name)+' · '+fmt(n.start):'Entrega'}</b></div><div class="fact"><span>${est?'Entrega contractual':'Entrega prevista'}</span><b class="${!est&&dv>0?'t-naranja':''}">${fmt(est?finContractual(o):finObra(o))}</b><small>${est?'según el cronograma presentado':dv>0?`${plural(dv,'semana','semanas')} después de la base`:'igual que la base'}</small></div><div class="fact"><span>${esDir()?'Pérdida por esperas':est?'Para entregar':'Tarjetas vencidas'}</span><b class="${esDir()?'t-rojo':''}">${esDir()?money(o.cards.reduce((s,c)=>s+costoEst(c),0)):est?falt:o.cards.filter(c=>color(c)==='rojo').length}</b></div></div>`;
   return `<div class="ohead"><button class="back" data-act="tab" data-t="obras">← Obras</button>${heroDos(o)}
   <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-end"><div><span class="eyebrow">${esc(o.ubic)}</span><h1>${esc(o.nombre)}</h1>${esDir()?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px"><button class="btn sm" data-act="editarObra" data-o="${o.id}">Editar obra</button><button class="btn sm ghost" data-act="modeloObra" data-o="${o.id}">Cambiar modelo</button></div>`:''}</div><span class="bigpct">${avance(o)}%</span></div>
@@ -3807,7 +3811,13 @@ function ovDiff(o){const cur=ovMapa(o),b=OV_B[o.id]||{r:{},c:{},p:{},dc:{},t:{},
   return Object.keys(out).length?out:null}
 function ovQuitarSlot(o,sl){slotItems(sl).forEach(i=>{const c=i.card;if(i.origen==='manual'){c.items=c.items.filter(z=>z!==i);if(!c.items.length)o.cards=o.cards.filter(z=>z!==c)}else delete i.slot});
   for(let k=DOCS.length-1;k>=0;k--)if(DOCS[k].slot===sl.id)DOCS.splice(k,1);o.planos=o.planos.filter(p=>p!==sl)}
-function ovAplicar(o,ov){if(!ov)return;try{
+function ovAplicar(o,ov){
+  /* plantilla 2.0: el tipo y el nombre nuevo de la plantilla mandan; lo de una tarjeta que se juntó con otra se sigue aplicando */
+  const tp=new Map(),tt=new Map(),vias=[];
+  try{(o.cards||[]).forEach(c=>{if(!c.custom)tp.set(c,c.tipo);c.items.forEach(i=>{if(i._tt)tt.set(i,i._tt)})});if(ov&&ov.c)Object.entries(ov.c).forEach(([k,v])=>{if(!o.cards.some(x=>ckey(o,x)===k)){const c=o.cards.find(x=>x.alias&&x.alias.includes(k));if(c)vias.push([c,v])}})}catch(e){}
+  ovAplicar0(o,ov);
+  try{vias.forEach(([c,v])=>{if(!c.impacto&&v.im){c.impacto=v.im;c.impactoTxt=v.it||''}if(!c.esc&&v.es)c.esc=v.es});o.cards.forEach(c=>{if(tp.has(c))c.tipo=tp.get(c);if(c.tipo==='ser'&&c.rcod)c.tipo='ope';c.items.forEach(i=>{if(tt.has(i)&&i.txt===i.k)i.txt=tt.get(i)})});cardsUnir(o)}catch(e){console.error('ovAplicar+',e)}}
+function ovAplicar0(o,ov){if(!ov)return;try{
   Object.entries(ov.p||{}).forEach(([k,v])=>{let s=(o.planos||[]).find(x=>skey(x)===k);if(s)s.nombre=v.n;else{s=nuevoSlot(o,v.r,v.f,v.n);if(v.m)s.manual=true;s.sk=k}if(v.rc){s.reclamos=v.rc;s.ultReclamo=v.ur||s.ultReclamo}});
   (ov.xp||[]).forEach(k=>{const s=(o.planos||[]).find(x=>skey(x)===k);if(s)ovQuitarSlot(o,s)});
   (ov.xc||[]).forEach(k=>{o.cards=o.cards.filter(c=>ckey(o,c)!==k)});
@@ -5133,7 +5143,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261127-133021';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261127-145350';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -7031,39 +7041,15 @@ CARD.ope.n='Condiciones operativas y servicios';CARD.ser.n='Condiciones operativ
 {const k=TPL_PREV.findIndex(x=>x[0]==='GP06');if(k>=0)TPL_PREV.splice(k,1)}
 TPL_PREV.forEach(x=>{if(x[2]==='ser')x[2]='ope'});
 TPL_EXTRA.forEach(x=>{if(x[3]==='ser')x[3]='ope'});
-const _ac=addCard;addCard=window.addCard=function(o,task,tipo,items,extra){return _ac.call(this,o,task,tipo==='ser'&&extra&&extra.rcod?'ope':tipo,items,extra)};
+
 const TODA='Toda la obra (todas las plantas)';
 const hecha2=t=>!!(t&&t.real&&(t.real.av>=100||t.real.fin));
 /* plantas del mismo trabajo que todavía no terminaron */
 function plantasPend(o,t){if(!o||!t||!t.cod)return[];return o.tasks.filter(x=>x.cod===t.cod&&x!==t&&!hecha2(x))}
 window.nxTodaLock=(c,i)=>!!(i&&i.toda&&c&&c.task&&plantasPend(c.obra,c.task).length);
-tplCards=window.tplCards=function(o,soloTareas){
-  (tplT(o).restricciones||[]).forEach(r=>{
-    const L=o.tasks.filter(t=>t.cod===r.tarea_ancla).sort((a,b)=>(a.li||0)-(b.li||0));if(!L.length)return;
-    const dest=r.alcance_ancla==='N'?L:[L[0]],toda=r.alcance_ancla!=='N'&&L.length>1&&!!L[0].nivel;
-    dest.forEach(t=>{if(soloTareas&&!soloTareas.has(t))return;if(o.cards.some(c=>c.rcod===r.codigo&&c.task===t))return;
-      const tp=r.tipo,txt=String(r.descripcion||'').replace(/\s*\{N\}/g,t.nivel?' '+t.nivel:'').trim();
-      const marca=c=>{const it=c.items[c.items.length-1];if(!it)return;if(toda)it.toda=1;if(r.item_k&&t===L[0]){it.k=r.item_k;it._tt=it.txt}return c};
-      const mx1=/^proyecto y contrataci[oó]n de (.+)$/i.exec(txt),mx2=/^(.+?):\s*elecci[oó]n y compra$/i.exec(txt);
-      if(mx1||mx2){const q=(mx1||mx2)[1];const ex={rtipo:tp,apert:r.apertura_semanas,plazo:r.plazo_entrega_semanas};
-        marca(addCard(o,t,'doc',[{txt:mx1?'Proyecto de '+q:'Elección de '+q.toLowerCase(),tipo:mx1?PL:DF,resp:mx1?E:P}],{...ex,rcod:r.codigo,rdesc:txt}));
-        marca(addCard(o,t,mx1?'ope':'mat',[{txt:mx1?'Contratación de '+q:'Compra de '+q.toLowerCase(),tipo:mx1?'Servicio':'Material',resp:'Jefatura'}],{...ex,rcod:r.codigo+'b',rdesc:txt}));return}
-      const item={txt,tipo:tp==='Plano'?PL:tp==='Material'?'Material':tp==='Subcontrato'?'Servicio':tp==='Condición'?'Condición':DF,resp:tp==='Material'||tp==='Subcontrato'||tp==='Condición'?'Jefatura':E};
-      if(tp==='Plano')item.origen='manual';
-      marca(addCard(o,t,TPL_TIPO[tp]||'doc',[item],{rcod:r.codigo,rtipo:tp,rdesc:txt,apert:r.apertura_semanas,plazo:r.plazo_entrega_semanas}))})});
-  tplExtra(o,soloTareas);try{tplPrev(o,soloTareas)}catch(e){}
-  o.cards.forEach(c=>{if(c.tipo==='ser'&&c.rcod)c.tipo='ope'});
-  try{cardsUnir(o)}catch(e){console.error('cardsUnir',e)}};
+/* tplCards ya viene con la plantilla 2.0 desde el principio (ver arriba) */
 /* lo guardado se aplica sobre las tarjetas nuevas: el tipo y el nombre nuevo de la plantilla mandan, y después se juntan las repetidas */
-const _ova=ovAplicar;ovAplicar=window.ovAplicar=function(o,ov){
-  const tp=new Map(),tt=new Map(),vias=[];
-  try{(o.cards||[]).forEach(c=>{if(!c.custom)tp.set(c,c.tipo);c.items.forEach(i=>{if(i._tt)tt.set(i,i._tt)})});
-    if(ov&&ov.c)Object.entries(ov.c).forEach(([k,v])=>{if(!o.cards.some(x=>ckey(o,x)===k)){const c=o.cards.find(x=>x.alias&&x.alias.includes(k));if(c)vias.push([c,v])}})}catch(e){}
-  const r=_ova.apply(this,arguments);
-  try{vias.forEach(([c,v])=>{if(!c.impacto&&v.im){c.impacto=v.im;c.impactoTxt=v.it||''}if(!c.esc&&v.es)c.esc=v.es});
-    o.cards.forEach(c=>{if(tp.has(c))c.tipo=tp.get(c);if(c.tipo==='ser'&&c.rcod)c.tipo='ope';c.items.forEach(i=>{if(tt.has(i)&&i.txt===i.k)i.txt=tt.get(i)})});
-    cardsUnir(o)}catch(e){console.error('ovAplicar+',e)}
-  return r};
+/* ovAplicar ya trae esto desde el principio (ver arriba) */
 /* B · no se cierra (N/A ni "antes de Nexo") lo que es de toda la obra mientras falte alguna planta */
 const _si=setItem;setItem=window.setItem=function(c,i,v){
   if((v==='na'||v==='pre')&&window.nxTodaLock(c,i)){const p=plantasPend(c.obra,c.task);toast(`Es de toda la obra: no se puede cerrar mientras falte ${p.length===1?p[0].nivel||'una planta':p.length+' plantas'}. Se cierra cuando se resuelve de verdad.`);return}
@@ -7139,5 +7125,104 @@ A.migrarPlantOk=async()=>{if(!esDir())return;const ids=[...document.querySelecto
 <script id="nx-cap">
 /* aviso interno (solo Dirección): alguna fila de la nube pasó el 70 % de su tope */
 setInterval(()=>{try{const c=window.__nxCap;if(!c||!esDir()||window.__nxCapVisto===c.fila+c.pct)return;window.__nxCapVisto=c.fila+c.pct;toast(`Aviso interno: los datos de ${c.fila==='general'?'la configuración general':(findO(c.fila)||{}).nombre||c.fila} ocupan el ${c.pct} % del tope por registro. Conviene limpiar respaldos viejos.`)}catch(e){}},20000);
+</script>
+<script src="/nc.js"></script>
+<script id="nx-noconv">
+/* CON-01 · constancias de tarea no convencional en NEXO 2: Jefatura y Dirección responden, Auditoría lee, el propietario ve las que Dirección compartió */
+(function(){try{
+CT_TIPO.noconv='Tarea no convencional';
+const esNC=r=>r&&r.tipo==='noconv';
+const ncDe=o=>{const a=CTR[o.id];return a&&a.items?a.items.filter(esNC):[]};
+window.ncDe=ncDe;
+const puedeResp=()=>ROLE()==='direccion'||ROLE()==='jefe'||MODO_PRUEBAS;
+function ncColor(r){const e=NC.estado(r);return e==='Observado'?'#d9605a':e==='Informado'?'#e0894f':'#3fa66b'}
+function ncBloque(o,r,soloLeer){const nc=r.nc||{},c=NC.calc(nc.hab,nc.real),re=nc.res;
+  return `<div class="infobox" style="border-color:${ncColor(r)};display:flex;flex-direction:column;gap:4px;margin:6px 0">
+  <b>⏱ ${esc(NC.estado(r))} · ${esc(c.txt)}</b>
+  <span class="small">Tarea: <b>${esc(nc.tareaNom||'')}</b>${nc.ubic?' · '+esc(nc.ubic):''} · ${esc(NC.EST_T[nc.estadoT]||'')}</span>
+  <span class="small">Motivos: ${esc(NC.motTxt(nc).join(' · '))}</span>
+  <span class="small">Habitual: ${esc(NC.tTxt(nc.hab))} · Real / estimado: ${esc(NC.tTxt(nc.real))}</span>
+  ${re&&re.acc==='otro'&&re.acep?`<span class="small" style="color:var(--verde)">Aceptado: <b>${esc(NC.tTxt(re.acep))}</b> · ${esc(NC.calc(nc.hab,re.acep).txt)}</span>`:''}
+  ${re&&re.acc!=='obs'?`<span class="small" style="color:var(--verde)">Conformado por ${esc(re.nom)} · ${fAR(re.t)} ${hAR(re.t)}${re.cmt?' — '+esc(re.cmt):''}</span>`:''}
+  ${re&&re.acc==='obs'?`<span class="small" style="color:#d9605a">Observado por ${esc(re.nom)} · ${fAR(re.t)} ${hAR(re.t)}: ${esc(re.cmt||'')}</span>`:''}
+  ${nc.adic?`<span class="small">Adicional vinculado: N° ${esc(nc.adic.num||'')}</span>`:nc.pideEcon?'<span class="small muted">El contratista pide reconocimiento económico (va por Adicional).</span>':''}
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px"><button class="btn sm ghost" type="button" data-act="ncPdf" data-o="${o.id}" data-id="${r.id}">📄 Ver PDF</button><button class="btn sm" style="background:#25D366;color:#fff;border:0" type="button" data-act="ncPdfWa" data-o="${o.id}" data-id="${r.id}">📲 Mandar el PDF por WhatsApp</button></div>
+  ${!soloLeer&&puedeResp()&&(!re||re.acc==='obs'||true)?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px"><button class="btn sm gold" data-act="ncResp" data-acc="conf" data-o="${o.id}" data-id="${r.id}">Conforme</button><button class="btn sm" data-act="ncResp" data-acc="otro" data-o="${o.id}" data-id="${r.id}">Conforme con otro tiempo</button><button class="btn sm" data-act="ncResp" data-acc="obs" data-o="${o.id}" data-id="${r.id}">Observado</button></div>`:''}
+  ${!soloLeer&&ROLE()==='direccion'?`<label class="small" style="display:flex;gap:8px;align-items:center;margin-top:4px"><input type="checkbox" data-chg="ncShare" data-o="${o.id}" data-id="${r.id}" ${nc.prop?'checked':''} style="width:auto"> Compartir con propietario</label>`:''}</div>`}
+window.ncBloque=ncBloque;
+/* la tarjeta del aviso en la pestaña Contratistas */
+const _cc=ctCard;ctCard=window.ctCard=function(o,r){let h=_cc.apply(this,arguments);if(!esNC(r))return h;try{
+  h=h.replace(`<span class="tag">${esc(CT_EST[r.estado]||r.estado)}</span>`,`<span class="tag" style="color:${ncColor(r)}">${esc(NC.estado(r))}</span>`);
+  const k=h.indexOf('</h3>');if(k>0)h=h.slice(0,k+5)+ncBloque(o,r)+h.slice(k+5);
+  h=h.replace('<p class="muted small" style="margin:4px 0 8px">El PDF todavía no está: se arma cuando el contratista abre el reclamo en su app.</p>','')}catch(e){}return h};
+/* responder: Conforme · Conforme con otro tiempo · Observado */
+A.ncResp=ds=>{const o=findO(ds.o),r=ncDe(o).find(x=>x.id===ds.id);if(!r)return;const nc=r.nc||{},acc=ds.acc,yo=(S.u&&S.u.name)||'';
+  const T=nc.real||{n:'',u:'d',p:''};
+  openSheet(`<span class="eyebrow">${esc(o.nombre)} · Constancia N° ${esc(r.num||'')}</span><h2>${acc==='conf'?'Conforme':acc==='otro'?'Conforme con otro tiempo':'Observado'}</h2><p class="muted small">${esc(nc.tareaNom||'')} · declarado: ${esc(NC.tTxt(nc.real))} (habitual ${esc(NC.tTxt(nc.hab))})</p>
+  <form class="sec" data-submit="ncResp" data-o="${o.id}" data-id="${r.id}" data-acc="${acc}">
+  ${acc!=='obs'?`<label class="f">Nombre de quien da la conformidad<input id="nc-nom" value="${esc(yo)}" required></label>`:''}
+  ${acc==='otro'?`<span class="eyebrow">Tiempo aceptado</span><div class="row2"><label class="f">Cantidad<input id="nc-an" inputmode="decimal" value="${esc(T.n)}"></label><label class="f">Unidad<select id="nc-au"><option value="d"${T.u!=='h'?' selected':''}>días hábiles</option><option value="h"${T.u==='h'?' selected':''}>horas</option></select></label><label class="f">Personas<input id="nc-ap" inputmode="numeric" value="${esc(T.p||1)}"></label></div>`:''}
+  <label class="f">${acc==='obs'?'Qué se observa (obligatorio)':'Comentario (opcional)'}<textarea id="nc-cmt" rows="3"></textarea></label>
+  <button class="btn gold full" type="submit">Guardar</button></form>`)};
+/* lo que no se pudo guardar queda pendiente y se reintenta desde el indicador rojo de arriba */
+const PEND=window.__ncPend=window.__ncPend||[];
+async function ncMandar(o,body,ok){try{const r=await codApi(body);if(!r||!r.ok)throw new Error((r&&r.error)||'error');ok(r);return true}catch(e){if(/Escrib|Poné|Explic|Elegí/.test(e.message||'')){toast(e.message);return false}
+  PEND.push(()=>ncMandar(o,body,ok));try{window.__sync.fallo=true;indSync()}catch(x){}toast('No se guardó en la nube · tocá el aviso de arriba para reintentar');return false}}
+{const sy=window.nexoSubirYa;window.nexoSubirYa=async function(){let ok=true;const L=PEND.splice(0);for(const f of L){if(!(await f()))ok=false}const r=sy?await sy.apply(this,arguments):true;if(PEND.length)try{window.__sync.fallo=true}catch(e){}return r&&ok}}
+const ncPut=(o,rec)=>{const a=CTR[o.id];if(a&&a.items){const k=a.items.findIndex(x=>x.id===rec.id);if(k>=0)a.items[k]=rec;else a.items.push(rec)}try{CTALL.t=0}catch(e){}};
+SUBMIT.ncResp=f=>{const o=findO(f.dataset.o),acc=f.dataset.acc;const body={op:'ct_nc_resp',obra:o.id,cred:credAv(o),id:f.dataset.id,acc,nombre:val('nc-nom')||'',cmt:val('nc-cmt')||''};
+  if(acc!=='obs'&&!body.nombre.trim()){toast('Escribí el nombre de quien da la conformidad');return}if(acc==='obs'&&!body.cmt.trim()){toast('Explicá qué se observa');return}
+  if(acc==='otro'){body.acep={n:val('nc-an'),u:val('nc-au'),p:val('nc-ap')};if(!NC.num(body.acep.n)){toast('Poné el tiempo aceptado');return}}
+  closeSheet();ncMandar(o,body,r=>{ncPut(o,r.rec);toast(acc==='obs'?'Observación enviada al contratista':'Conformidad registrada ✓');draw()})};
+CHG.ncShare=(v,el)=>{const o=findO(el.dataset.o);ncMandar(o,{op:'ct_nc_share',obra:o.id,cred:credAv(o),id:el.dataset.id,v:el.checked},r=>{ncPut(o,r.rec);toast(el.checked?'Ahora la ve el propietario':'El propietario ya no la ve');draw()})};
+/* PDF: se arma en este aparato con lo último (incluye la conformidad) */
+async function ncBlob(o,r){return NC.pdf({...r,obraNombre:r.obraNombre||o.nombre})}
+const ncR=ds=>{const o=findO(ds.o);return [o,(CTR[o.id]&&CTR[o.id].items||[]).find(x=>x.id===ds.id)]};
+A.ncPdf=async ds=>{const [o,r]=ncR(ds);if(!r)return;const w=window.open('','_blank');toast('Armando el PDF…');try{const b=await ncBlob(o,r),u=URL.createObjectURL(b);if(w)w.location.href=u;else location.href=u}catch(e){if(w)w.close();toast('No se pudo armar el PDF. Probá de nuevo.')}};
+A.ncPdfWa=async ds=>{const [o,r]=ncR(ds);if(!r)return;toast('Armando el PDF…');try{const b=await ncBlob(o,r),f=new File([b],NC.nombreArchivo({...r,obraNombre:o.nombre}),{type:'application/pdf'});
+  if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f]});return}
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=f.name;document.body.appendChild(a);a.click();a.remove();toast('Este equipo no deja adjuntar desde la web: se descargó el PDF para mandarlo por WhatsApp.')}catch(e){if(e&&e.name==='AbortError')return;toast('No se pudo armar el PDF. Probá de nuevo.')}};
+/* Auditoría (lectura) y propietario (las compartidas) */
+const NCX={};
+function credNc(o){if(ROLE()==='auditor'){try{return{rol:'aud',codigo:((JSON.parse(localStorage.getItem('nexo2_cred')||'{}').aud)||{})[o.id]||''}}catch(e){}}if(ROLE()==='cliente'){try{return{rol:'prop',codigo:((JSON.parse(localStorage.getItem('nexo2_cred')||'{}').prop)||{})[o.id]||''}}catch(e){}}return null}
+async function ncCargar(o){const x=NCX[o.id]=NCX[o.id]||{items:null,t:0,c:false};if(x.c||Date.now()-x.t<15000)return;const cr=credNc(o);if(!cr||!cr.codigo){x.items=x.items||[];return}x.c=true;
+  try{const r=await codApi({op:'ct_list_obra',obra:o.id,cred:cr});if(r&&r.ok){const sg=JSON.stringify((x.items||[]).map(i=>i.id+i.editado));x.items=r.items||[];const a=CTR[o.id]=CTR[o.id]||{items:null,cts:[],cargando:false,t:0,err:''};a.items=x.items;a.t=Date.now();if(sg!==JSON.stringify(x.items.map(i=>i.id+i.editado))&&!document.querySelector('.sheet form'))draw()}}catch(e){}x.c=false;x.t=Date.now()}
+window.tabNconv=function(o){if(ROLE()==='auditor'||ROLE()==='cliente')ncCargar(o);else{const a=CTR[o.id];if(!a||!a.items||Date.now()-a.t>15000)ctLoad(o)}
+  const L=ncDe(o).slice().sort((a,b)=>(b.creado||0)-(a.creado||0));
+  return `<div class="infobox">Constancias de tareas no convencionales: el contratista deja por escrito por qué una tarea lleva más tiempo de lo habitual. Acá se ven en modo lectura.</div>${L.length?L.map(r=>`<div class="card"><b>N° ${esc(r.num||'')} · ${esc(r.ctNombre||'')}${r.rubro?' ('+esc(r.rubro)+')':''}</b><p class="muted small">Cargada ${fAR(r.creado)} ${hAR(r.creado)}</p>${ncBloque(o,r,true)}${(r.fotos||[]).length?`<div class="fbtns">${r.fotos.map(u=>`<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:8px"></a>`).join('')}</div>`:''}${(r.hist||[]).map(h=>`<p class="small muted" style="margin:3px 0"><b>${esc(h.nom||h.por)}</b> · ${fAR(h.t)} ${hAR(h.t)}: ${esc(h.tx||'')}</p>`).join('')}</div>`).join(''):'<p class="muted">Todavía no hay constancias en esta obra.</p>'}`};
+/* propietario: las que Dirección compartió */
+{const _v=window.vCliente;window.vCliente=vCliente=function(){const h=_v.apply(this,arguments);try{const o=COBRA();if(!o)return h;ncCargar(o);const L=ncDe(o).filter(r=>r.nc&&r.nc.prop);if(!L.length)return h;
+  return h+`<section class="sec"><span class="eyebrow">Tareas no convencionales</span>${L.map(r=>`<div class="card"><b>Constancia N° ${esc(r.num||'')}</b>${ncBloque(o,r,true)}</div>`).join('')}</section>`}catch(e){return h}}}
+/* auditoría de cumplimiento semanal: el motivo nuevo */
+{const _ah=ctAudHtml;ctAudHtml=window.ctAudHtml=function(r){let h=_ah.apply(this,arguments);try{const I=(r.aud&&r.aud.items)||[];I.filter(x=>x.est==='noconv').forEach(x=>{const t=esc((x.n?x.n+'. ':'')+x.tarea);if(h.includes(t))h=h.replace(t,t+` <span class="tag" style="color:#cd7d3c">Tarea no convencional${x.ncNum?' · ver constancia N° '+esc(x.ncNum):''}</span>`)})}catch(e){}return h}}
+/* conforme a obra: causa "Tarea no convencional" con la constancia vinculada y la sugerencia de días */
+if(!CAUSAS.includes('Tarea no convencional'))CAUSAS.push('Tarea no convencional');
+function ncSug(o,t,id){const r=ncDe(o).find(x=>x.id===id);if(!r)return '';const n=NC.diasAceptados(r.nc);const re=r.nc&&r.nc.res;
+  if(!re||re.acc==='obs')return `<div class="infobox small">La constancia N° ${esc(r.num)} está ${esc(NC.estado(r).toLowerCase())}: cuando tenga conformidad se sugieren los días.</div>`;
+  if(t.real&&t.real.ncAp===r.id)return `<div class="infobox small">Ya se sumaron los ${n} días aceptados de la constancia N° ${esc(r.num)}.</div>`;
+  if(!n)return '';const fin=addWork(t.end,n);
+  return `<div class="infobox small" style="display:flex;flex-direction:column;gap:6px"><span>Constancia N° ${esc(r.num)} conforme: se aceptaron <b>${n} ${n===1?'día':'días'}</b> extra. Sugerencia: sumarlos a esta tarea.</span><span>Fin de la tarea: <b>${fmt(t.end)} → ${fmt(fin)}</b></span><button class="btn sm gold" type="button" data-act="ncAplicar" data-o="${o.id}" data-t="${t.id}" data-id="${r.id}" style="align-self:flex-start">Aplicar</button></div>`}
+const ncOpts=(o,t,v)=>{const L=ncDe(o).slice().sort((a,b)=>((b.nc&&b.nc.tareaId===t.id)-(a.nc&&a.nc.tareaId===t.id))||((b.creado||0)-(a.creado||0)));return `<option value="">Elegí la constancia (opcional)…</option>${L.map(r=>`<option value="${esc(r.id)}"${v===r.id?' selected':''}>N° ${esc(r.num||'')} · ${esc((r.nc&&r.nc.tareaNom)||'')} · ${esc(NC.estado(r))}</option>`).join('')}`};
+{const f=sheetTarea;sheetTarea=window.sheetTarea=function(oid,id){const r0=f.apply(this,arguments);try{const o=findO(oid),t=o&&o.tasks.find(x=>x.id===id),sel=document.getElementById('av-causa');if(!t||!sel||document.getElementById('av-nc'))return r0;
+  ctLoad(o);const v=(t.real&&t.real.nc)||'',lab=sel.closest('label')||sel;const box=document.createElement('div');box.id='av-ncbox';
+  const pinta=()=>{const on=sel.value==='Tarea no convencional';box.innerHTML=on?`<label class="f">Constancia vinculada<select id="av-nc">${ncOpts(o,t,box.dataset.v||v)}</select></label><div id="av-ncsug">${ncSug(o,t,box.dataset.v||v)}</div>`:'';const s2=document.getElementById('av-nc');if(s2)s2.onchange=()=>{box.dataset.v=s2.value;pinta()}};
+  lab.insertAdjacentElement('afterend',box);sel.addEventListener('change',pinta);pinta()}catch(e){}return r0}}
+{const _av=SUBMIT.avance;SUBMIT.avance=function(f){const nc=(document.getElementById('av-nc')||{}).value||'',causa=val('av-causa');const r=_av.apply(this,arguments);try{const o=findO(f.dataset.o),t=o&&o.tasks.find(x=>x.id===f.dataset.id);if(t&&t.real){if(causa==='Tarea no convencional'&&nc)t.real.nc=nc;else delete t.real.nc}}catch(e){}return r}}
+A.ncAplicar=ds=>{const o=findO(ds.o),t=o&&o.tasks.find(x=>x.id===ds.t),r=o&&ncDe(o).find(x=>x.id===ds.id);if(!t||!r)return;const n=NC.diasAceptados(r.nc);if(!n)return;
+  const antes=t.end;t.end=addWork(t.end,n);t.weeks=Math.max(1,Math.round((t.end-t.start+3*DAY)/(7*DAY)));t.real=t.real||{ini:t.start,fin:null,av:0,causa:'Tarea no convencional',dot:(o.dotacion&&o.dotacion.hoy)||0};t.real.causa='Tarea no convencional';t.real.nc=r.id;t.real.ncAp=r.id;
+  toast(`Se sumaron ${n} ${n===1?'día':'días'}: fin ${fmt(antes)} → ${fmt(t.end)}`);draw();try{keepScroll(()=>sheetTarea(o.id,t.id))}catch(e){sheetTarea(o.id,t.id)}};
+/* informe semanal: las constancias de la semana */
+const ncSemana=(o,a,b)=>ncDe(o).filter(r=>(r.creado||0)>=a&&(r.creado||0)<b+DAY);
+const ncFilas=L=>L.map(r=>{const nc=r.nc||{},re=nc.res,v=NC.vigente(nc),c=NC.calc(nc.hab,v);return['N° '+(r.num||''),nc.tareaNom||'',(c.dias>0?'+':'')+Math.round(c.dias*10)/10+' días'+(re&&re.acc==='otro'?' (aceptado)':''),NC.estado(r)]});
+const ncBoxInf=(o,a,b)=>{const L=ncSemana(o,a,b);if(!L.length)return null;const d=document.createElement('div');d.className='infobox';d.id='nc-inf';d.innerHTML=`<b>Constancias de tarea no convencional de la semana</b>${ncFilas(L).map(f=>`<div class="small">${f.map(esc).join(' · ')}</div>`).join('')}`;return d};
+{const f=sheetInformeForm;sheetInformeForm=window.sheetInformeForm=function(){const r=f.apply(this,arguments);try{const o=findO(INFD.obra);ctLoad(o);const h=document.querySelector('.sheet h2'),b=ncBoxInf(o,INFD.desde,INFD.hasta||INFD.desde+4*DAY);if(h&&b&&!document.getElementById('nc-inf'))h.insertAdjacentElement('afterend',b)}catch(e){}return r}}
+{const f=sheetInformeVer;sheetInformeVer=window.sheetInformeVer=function(id){const r=f.apply(this,arguments);try{if(ROLE()==='cliente')return r;const i=OBRAS.flatMap(o=>o.informes).find(x=>x.id===id),h=document.querySelector('.sheet h2'),b=i&&ncBoxInf(i.obra,i.desde,hastaDe(i));if(h&&b&&!document.getElementById('nc-inf'))h.insertAdjacentElement('afterend',b)}catch(e){}return r}}
+{const f=informeDoc;informeDoc=window.informeDoc=function(i){const D=f.apply(this,arguments);try{const L=ncSemana(i.obra,i.desde,hastaDe(i));if(L.length&&D&&Array.isArray(D.secciones)){const k=Math.max(0,D.secciones.findIndex(s=>s.h==='Trabajos ejecutados'));D.secciones.splice(k,0,{h:'Constancias de tarea no convencional',tabla:{cols:['N°','Tarea','Días extra','Estado'],w:[.14,.46,.18,.22],rows:ncFilas(L)}})}}catch(e){}return D}}
+/* tarjeta de la obra en Dirección */
+{const f=orow;orow=window.orow=function(o){let h=f.apply(this,arguments);try{if(ROLE()!=='direccion')return h;ctLoadAll();const L=ncDe(o);if(!L.length)return h;const dias=L.reduce((s,r)=>s+NC.diasAceptados(r.nc),0);
+  const tx=`<span class="small" style="display:block;color:#cd7d3c;margin-top:2px">⏱ Tareas no convencionales: ${L.length} (${dias} ${dias===1?'día':'días'} extra aceptados)</span>`;const k=h.lastIndexOf('</span></button>');if(k>0)h=h.slice(0,k)+tx+h.slice(k)}catch(e){}return h}}
+/* NEXO IA: ve las constancias de cada obra */
+try{const g=window.iaDatosObra;if(typeof g==='function')window.iaDatosObra=function(o){const r=g.apply(this,arguments);try{const L=ncDe(o);if(L.length&&r&&typeof r==='object')r.constancias_tarea_no_convencional=L.map(x=>{const nc=x.nc||{};return{numero:x.num,contratista:x.ctNombre,tarea:nc.tareaNom,ubicacion:nc.ubic,motivos:NC.motTxt(nc),tiempo_extra:NC.calc(nc.hab,nc.real).txt,estado:NC.estado(x),dias_aceptados:NC.diasAceptados(nc),cargada:fAR(x.creado)}})}catch(e){}return r}}catch(e){}
+}catch(e){console.error('nx-noconv',e)}})();
 </script>
 </body></html>
