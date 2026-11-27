@@ -1,0 +1,32 @@
+name: nx-fix
+on:
+  workflow_dispatch:
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Verificación FIX-01 en la app publicada (solo lectura)
+        run: |
+          curl -s 'https://nexoentorno.vercel.app/api/nexo2' -o c.json
+          python3 - <<'PY'
+          import json
+          j=json.load(open('c.json'));C=json.loads(j['cfg']['v']);print('BUILD_NUBE',j.get('build'))
+          for id in ['o3','o2','o4','o7269']:
+            e=(C.get('mod') or {}).get(id) or next((x for x in C.get('nuevas',[]) if x.get('id')==id),{})
+            print('MARCA',id,e.get('nombre',''),'sinCrono',e.get('sinCrono'),'cg',e.get('cg'),'ov.r',len((e.get('ov') or {}).get('r') or {}),'baseOv',bool(e.get('baseOv')))
+          PY
+          echo "VIEJO_FORMATO $(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{"key":"cfg","t":1,"v":"{}"}' https://nexoentorno.vercel.app/api/nexo2)"
+          echo "VIEJA_VERSION $(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{"op":"cfg_ops","build":"20261127-000000","ops":[]}' https://nexoentorno.vercel.app/api/nexo2)"
+          npm i playwright@1.47.2 >/dev/null 2>&1 && npx playwright install --with-deps chromium >/dev/null 2>&1
+          cat > t.cjs <<'JS'
+          const {chromium}=require('playwright');
+          (async()=>{const b=await chromium.launch();const p=await b.newPage({viewport:{width:1280,height:900}});const er=[];p.on('pageerror',e=>er.push(e.message.slice(0,200)));
+          await p.route('**/api/nexo2',async r=>{if(r.request().method()!=='POST')return r.continue();return r.fulfill({json:{ok:false,error:'solo lectura'}})});
+          await p.goto('https://nexoentorno.vercel.app/nexo2.html',{waitUntil:'domcontentloaded',timeout:90000});await p.waitForTimeout(15000);await p.reload({waitUntil:'domcontentloaded'});await p.waitForTimeout(15000);
+          console.log('BUILD_PAGINA',await p.evaluate(()=>window.NEXO_BUILD_V));
+          for(const u of [{rol:'direccion',name:'D'},{rol:'jefe',name:'J'}])for(const id of ['o3','o2','o4','o7269']){const r=await p.evaluate(([u,id])=>{S.u=u;S.mias=OBRAS.map(o=>o.id);const o=findO(id);if(!o)return id+' no está';S.obra=id;S.tab='obra';S.otab='crono';try{draw()}catch(e){return 'ERROR '+e.message}let fin='';try{fin=fmt(finObra(o))}catch(e){fin='error'}const vac=/No hay tareas en esta vista/.test(document.body.innerText);return `${o.nombre} · tareas ${o.tasks.length} · fin ${fin} · vacío ${vac}`},[u,id]);console.log('VISTA',u.rol,r)}
+          console.log('ERRORES',JSON.stringify(er.slice(0,5)));await b.close()})();
+          JS
+          node t.cjs
