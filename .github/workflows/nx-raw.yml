@@ -1,0 +1,33 @@
+name: nx-raw
+on:
+  workflow_dispatch:
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Conteo de estados guardados en la nube (solo lectura, sin montos)
+        run: |
+          curl -s 'https://nexoentorno.vercel.app/api/nexo2?t=1' -o c.json
+          python3 - <<'PY'
+          import json,collections
+          j=json.load(open('c.json'));print('claves',list(j.keys())[:20])
+          def walk(x):
+            if isinstance(x,dict):
+              for k,v in x.items():
+                if k in('o7688','o4541') or (isinstance(v,dict) and v.get('id') in('o7688','o4541')):yield k,v
+                yield from walk(v)
+            elif isinstance(x,list):
+              for v in x:yield from walk(v)
+          vistos=0
+          for k,v in walk(j):
+            if not isinstance(v,dict):continue
+            vistos+=1;ov=v.get('ov') or {};c=ov.get('c') or {}
+            est=collections.Counter()
+            for kk,cv in c.items():
+              for ik,a in (cv.get('i') or {}).items():est[a[0]]+=1
+            print('OBRA',k,v.get('id'),v.get('nombre'),'ovt',v.get('ovt'),'enCurso',v.get('enCurso'),'cg',v.get('cg'),'cgu',v.get('cgu'),'cards_ov',len(c),'estados',dict(est),'r',len(ov.get('r') or {}))
+            for r in v.get('resp') or []:
+              o2=r.get('ov') or {};e2=collections.Counter(a[0] for cv in (o2.get('c') or {}).values() for a in (cv.get('i') or {}).values())
+              print('   RESP',r.get('t'),r.get('m'),dict(e2))
+          print('vistos',vistos)
+          PY
