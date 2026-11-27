@@ -7021,11 +7021,10 @@ try{const _ia=iaDatosObra;iaDatosObra=window.iaDatosObra=function(o){const dd=_i
 (function(){try{
 TPL_TIPO['Condición']='ope';TPL_TIPO['Subcontrato']='ope';TPL_TIPO['Servicio']='ope';
 CARD.ope.n='Condiciones operativas y servicios';CARD.ser.n='Condiciones operativas y servicios';
-{const k=CARD_ORD.indexOf('ser');if(k>=0)CARD_ORD.splice(k,1)}
 {const k=TPL_PREV.findIndex(x=>x[0]==='GP06');if(k>=0)TPL_PREV.splice(k,1)}
 TPL_PREV.forEach(x=>{if(x[2]==='ser')x[2]='ope'});
 TPL_EXTRA.forEach(x=>{if(x[3]==='ser')x[3]='ope'});
-const _ac=addCard;addCard=window.addCard=function(o,task,tipo,items,extra){return _ac.call(this,o,task,tipo==='ser'?'ope':tipo,items,extra)};
+const _ac=addCard;addCard=window.addCard=function(o,task,tipo,items,extra){return _ac.call(this,o,task,tipo==='ser'&&extra&&extra.rcod?'ope':tipo,items,extra)};
 const TODA='Toda la obra (todas las plantas)';
 const hecha2=t=>!!(t&&t.real&&(t.real.av>=100||t.real.fin));
 /* plantas del mismo trabajo que todavía no terminaron */
@@ -7046,7 +7045,7 @@ tplCards=window.tplCards=function(o,soloTareas){
       if(tp==='Plano')item.origen='manual';
       marca(addCard(o,t,TPL_TIPO[tp]||'doc',[item],{rcod:r.codigo,rtipo:tp,rdesc:txt,apert:r.apertura_semanas,plazo:r.plazo_entrega_semanas}))})});
   tplExtra(o,soloTareas);try{tplPrev(o,soloTareas)}catch(e){}
-  o.cards.forEach(c=>{if(c.tipo==='ser')c.tipo='ope'});
+  o.cards.forEach(c=>{if(c.tipo==='ser'&&c.rcod)c.tipo='ope'});
   try{cardsUnir(o)}catch(e){console.error('cardsUnir',e)}};
 /* lo guardado se aplica sobre las tarjetas nuevas: el tipo y el nombre nuevo de la plantilla mandan, y después se juntan las repetidas */
 const _ova=ovAplicar;ovAplicar=window.ovAplicar=function(o,ov){
@@ -7055,7 +7054,7 @@ const _ova=ovAplicar;ovAplicar=window.ovAplicar=function(o,ov){
     if(ov&&ov.c)Object.entries(ov.c).forEach(([k,v])=>{if(!o.cards.some(x=>ckey(o,x)===k)){const c=o.cards.find(x=>x.alias&&x.alias.includes(k));if(c)vias.push([c,v])}})}catch(e){}
   const r=_ova.apply(this,arguments);
   try{vias.forEach(([c,v])=>{if(!c.impacto&&v.im){c.impacto=v.im;c.impactoTxt=v.it||''}if(!c.esc&&v.es)c.esc=v.es});
-    o.cards.forEach(c=>{if(tp.has(c))c.tipo=tp.get(c);if(c.tipo==='ser')c.tipo='ope';c.items.forEach(i=>{if(tt.has(i)&&i.txt===i.k)i.txt=tt.get(i)})});
+    o.cards.forEach(c=>{if(tp.has(c))c.tipo=tp.get(c);if(c.tipo==='ser'&&c.rcod)c.tipo='ope';c.items.forEach(i=>{if(tt.has(i)&&i.txt===i.k)i.txt=tt.get(i)})});
     cardsUnir(o)}catch(e){console.error('ovAplicar+',e)}
   return r};
 /* B · no se cierra (N/A ni "antes de Nexo") lo que es de toda la obra mientras falte alguna planta */
@@ -7102,7 +7101,7 @@ window.nxPlanMigracion=function(o){
   const av=new Set();o.tasks.forEach(t=>{if(t.real)av.add(ren[t.id]||t.id)});
   Object.keys(ov.r||{}).forEach(k=>av.add(k));
   const old=new Map(o.base.map(b=>[ren[b.id]||b.id,b]));
-  const nb=gen.map(g=>{const b=old.get(g.id);return b&&(av.has(g.id)||b.manual)?{...g,start:b.start,end:b.end,weeks:b.weeks,manual:!!b.manual}:g});
+  const nb=gen.map(g=>{const b=old.get(g.id);return b&&(av.has(g.id)||(b.manual&&!SEQ.test(g.id)))?{...g,start:b.start,end:b.end,weeks:b.weeks,manual:!!b.manual}:g});
   const extra=o.base.filter(b=>!gid.has(ren[b.id]||b.id)).map(b=>({...b,manual:true}));
   /* las tareas sin código (agregadas a mano o de antes) mantienen su orden: así lo cargado en ellas se sigue encontrando */
   const fin=[...nb,...extra].sort((a,b)=>a.start-b.start),sc=fin.map((b,i)=>b.cod?-1:i).filter(i=>i>=0),orig=o.base.filter(b=>!b.cod).map(b=>fin.find(x=>x.id===b.id)).filter(Boolean);
