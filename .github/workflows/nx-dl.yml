@@ -11,7 +11,7 @@ jobs:
           python3 - <<'PY'
           import json,re,urllib.parse,subprocess
           t=open('c.json').read().replace('\\/','/')
-          L=[u for u in re.findall(r'https://[a-z0-9]+\.supabase\.co/storage/v1/object/public/[^"\\\\?]+\.pdf',t)]
+          L=[u for u in re.findall(r'https://[a-z0-9]+\.supabase\.co/storage/v1/object/public/[^"\\\\?]+\.(?:pdf|jpg|jpeg|png|webp)',t)]
           print('PDFS_ENCONTRADOS',len(L))
           if L:
             u=L[0];n='Constancia tarea no convencional N° 0033 - Saenz Peña 011 - Revoques (PB y 1° piso) sobre… - 2026-11-27.pdf'
