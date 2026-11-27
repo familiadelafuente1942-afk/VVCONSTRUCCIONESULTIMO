@@ -7,10 +7,10 @@ jobs:
     steps:
       - name: Estado del registro cfg (solo lectura, sin montos)
         run: |
-          curl -s 'https://nexoentorno.vercel.app/api/nexo2' -o c.json
+          curl -s 'https://nexoentorno.vercel.app/api/nexo2' -o c.json; sleep 3; curl -s 'https://nexoentorno.vercel.app/api/nexo2' -o c.json; curl -s 'https://nexoentorno.vercel.app/api/nexo2?t=1'; echo
           python3 - <<'PY'
           import json
-          j=json.load(open('c.json'));print('CLAVES_GET',list(j.keys()))
+          j=json.load(open('c.json'));print('CLAVES_GET',list(j.keys()),'CAP',j.get('cap'))
           c=j['cfg'];v=c['v'];print('CFG t',c['t'],'largo v',len(v),'bytes utf8',len(v.encode()))
           C=json.loads(v);print('TOP',[(k,len(json.dumps(C[k],ensure_ascii=False,separators=(',',':')).encode())) for k in C])
           def info(id,e):
