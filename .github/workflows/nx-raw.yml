@@ -35,4 +35,11 @@ jobs:
               o2=r.get('ov') or {};e2=collections.Counter(a[0] for cv in (o2.get('c') or {}).values() for a in (cv.get('i') or {}).values())
               print('   RESP',r.get('t'),r.get('m'),dict(e2))
           print('vistos',vistos)
+          print('NUEVAS',[(x.get('id'),x.get('nombre'),sorted(x.keys())[:40]) for x in j.get('nuevas',[]) if isinstance(x,dict)])
+          print('MOD',{k:sorted(v.keys()) for k,v in (j.get('mod') or {}).items()})
+          for x in j.get('nuevas',[]):
+            if isinstance(x,dict) and x.get('id')=='o7688':
+              ov=x.get('ov') or {};print('O7688 ov claves',list(ov.keys()),'enCurso',x.get('enCurso'),'ovt',x.get('ovt'))
+              est=collections.Counter(a[0] for cv in (ov.get('c') or {}).values() for a in (cv.get('i') or {}).values());print('O7688 estados',dict(est))
+              for r in x.get('resp') or []:print('   R7688',r.get('t'),r.get('m'),dict(collections.Counter(a[0] for cv in ((r.get('ov') or {}).get('c') or {}).values() for a in (cv.get('i') or {}).values())))
           PY
