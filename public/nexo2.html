@@ -5143,7 +5143,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261127-151824';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261127-152613';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -5480,7 +5480,7 @@ function ctPorContratista(o,L){const ds=L.filter(r=>r.doc&&r.tipo!=='auditoria')
 function tabReclamos(o){const a=CTR[o.id];if(!a||!a.items||Date.now()-a.t>15000){ctLoad(o);if(ROLE()==='direccion')ctLoadAll()}
   if(!a||!a.items)return '<div class="infobox"><b>Cargando avisos de contratistas…</b></div>';
   const st=ctStats(a.items),dir=ROLE()==='direccion',link=location.origin+'/contratistas.html';
-  const L=a.items.slice().sort((p,q)=>(ctAbierto(q)-ctAbierto(p))||(q.creado-p.creado));
+  const L=a.items.slice().sort((p,q)=>((q.creado||0)-(p.creado||0))||String(q.num||'').localeCompare(String(p.num||'')));/* primero el último recibido */
   return `<div class="infobox">Los contratistas (plomero, herrero, pintor, etc.) cargan acá lo que les falta: material, definiciones o planos, retrasos y adicionales. Le llega <b>directo a Dirección y a Jefatura</b>, con fecha y hora, y queda registrado cuánto tardó la obra en responder.</div>
   ${a.err?`<div class="infobox" style="border-color:#d9605a">${esc(a.err)} <button class="btn sm" data-act="ctRef">Reintentar</button></div>`:''}
   <div class="card"><span class="eyebrow">${dir?'Evaluación de la jefatura en esta obra':'Cómo venís respondiendo'}</span>${st.n?`<p><b style="color:var(--${st.sem||'verde'})">${ctSemTxt[st.sem]}</b></p>${ctStatsHtml(st)}`:'<p class="muted">Todavía no hay avisos de contratistas en esta obra.</p>'}</div>
@@ -6480,7 +6480,9 @@ function dirItems(){const obras=misObras(),IDS=new Set(obras.map(o=>o.id)),A1=[]
       const tp=[...new Set(cardsDe([o]).filter(z=>z.task===c.task&&!cDone(z)&&color(z)==='rojo').map(z=>CARD[z.tipo].n.toLowerCase()))].join(', ');
       A3.push({u:1,f:k.limit,tags:[tag('VENCIDA · SIN AVISO','tg-venc')],t:`${c.task.name} (${tp})`,d:`${o.nombre} · ${jefeDe(o)} tiene la tarjeta vencida y no pidió ayuda · arranca ${dm(c.task.start)}`,a:{act:'card',id:c.id}})})}catch(e){}
   const so=(a,b)=>a.u-b.u||a.f-b.f||String(a.d||'').localeCompare(String(b.d||''),'es')||String(a.t||'').localeCompare(String(b.t||''),'es');
-  return [A1.sort(so),A2.sort(so),A3.sort(so)]}
+  /* reclamos: primero el último recibido */
+  const nu=(a,b)=>(b.f||0)-(a.f||0)||String(b.d||'').localeCompare(String(a.d||''),'es',{numeric:true});
+  return [A1.sort(so),A2.sort(nu),A3.sort(nu)]}
 window.dirItems=dirItems;
 const DIRP=[['ADICIONALES','para aprobar','adicional','adicionales','No hay adicionales esperando aprobación.'],['RECLAMOS DE CONTRATISTAS','a la jefatura de obra','reclamo abierto','reclamos abiertos','Los contratistas no tienen reclamos abiertos.'],['RECLAMOS DE LA JEFATURA','para destrabar con el estudio','ítem','ítems','La jefatura no pidió ayuda y no hay tarjetas vencidas.']];
 function dirPanel(k,L){let[ti,sub,s1,s2,vac]=DIRP[k];if(ROLE()==='jefe'){if(k===0)sub='de tus obras';if(k===1)sub='a tu jefatura';}const n=L.length,ver=L.slice(0,3),sr=k===1?L.filter(x=>x.u<=1).length:k===2?L.filter(x=>x.u===0).length:0;
