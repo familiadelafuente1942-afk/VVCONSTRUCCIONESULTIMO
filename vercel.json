@@ -49,6 +49,9 @@
     },
     "api/mcp-whatsapp.js": {
       "maxDuration": 30
+    },
+    "api/cad.js": {
+      "maxDuration": 300
     }
   },
   "crons": [

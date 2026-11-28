@@ -97,6 +97,8 @@ async function leerCodigos(H) {
   return { dir: "", obras: JSON.parse(JSON.stringify(SEED)), seed: true };
 }
 const dirVigente = (c) => c.dir || process.env.NEXO_DIR_CODE || process.env.NEXO2_DIR_CODE || "";
+// Dirección válida (para otras funciones del servidor, ej. CAD Check)
+export async function esDir(H, c) { const cods = await leerCodigos(H); const d = norm(dirVigente(cods)); return !!d && norm(c) === d; }
 // ===== Conector personal de Claude (un link por persona y rol; se guarda solo la huella) =====
 const huellaCod = (c) => crypto.createHash("sha256").update("c:" + norm(c)).digest("hex").slice(0, 16);
 const CAMPO_ROL = { jefe: "j", aud: "a", est: "e", prop: "clave" };

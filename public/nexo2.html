@@ -3300,8 +3300,8 @@ document.addEventListener('input',e=>{const el=e.target.closest('[data-inp]');if
 document.addEventListener('submit',e=>{const f=e.target.closest('[data-submit]');if(!f)return;e.preventDefault();if(f.dataset.submit==='ia'){IA_SUBMIT();return}const fn=SUBMIT[f.dataset.submit];if(fn)fn(f,e)});
 
 /* ================= navegación ================= */
-const ICON={inicio:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',obras:'<path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6"/>',pedidos:'<rect x="3" y="4" width="8" height="7" rx="1.5"/><rect x="13" y="4" width="8" height="7" rx="1.5"/><rect x="3" y="13" width="8" height="7" rx="1.5"/><rect x="13" y="13" width="8" height="7" rx="1.5"/>',registro:'<path d="M5 4h11l3 3v13H5zM9 10h6M9 14h6"/>',mas:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',compras:'<circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M3 4h2.5l2.2 11h10.6L21 8H6.3"/>',folder:'<path d="M3 7h6l2 2h10v10H3z"/>'};
-function navItems(){const r=ROLE();return{direccion:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Tarjetas','pedidos'],['desempeno','Desempeño','chart'],['compras','Compras','compras'],['mas','Más','mas']],jefe:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Tarjetas','pedidos'],['registro','Registro','registro'],['mas','Más','mas']],auditor:[['inicio','Inicio','inicio'],['obras','Obras','obras']],estudio:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Tarjetas','pedidos'],['docs','Documentos','folder']],cliente:[['cliente','Mi obra','inicio']]}[r]||[]}
+const ICON={cad:'<path d="M4 4h11l5 5v11H4z"/><path d="M15 4v5h5"/><path d="M7 13h4M7 16h3"/><path d="M13.5 15.5l1.8 1.8 3.2-3.6"/>',inicio:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',obras:'<path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6"/>',pedidos:'<rect x="3" y="4" width="8" height="7" rx="1.5"/><rect x="13" y="4" width="8" height="7" rx="1.5"/><rect x="3" y="13" width="8" height="7" rx="1.5"/><rect x="13" y="13" width="8" height="7" rx="1.5"/>',registro:'<path d="M5 4h11l3 3v13H5zM9 10h6M9 14h6"/>',mas:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',compras:'<circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M3 4h2.5l2.2 11h10.6L21 8H6.3"/>',folder:'<path d="M3 7h6l2 2h10v10H3z"/>'};
+function navItems(){const r=ROLE();return{direccion:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Tarjetas','pedidos'],['desempeno','Desempeño','chart'],['compras','Compras','compras'],['cad','CAD Check','cad'],['mas','Más','mas']],jefe:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Tarjetas','pedidos'],['registro','Registro','registro'],['mas','Más','mas']],auditor:[['inicio','Inicio','inicio'],['obras','Obras','obras']],estudio:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Tarjetas','pedidos'],['docs','Documentos','folder']],cliente:[['cliente','Mi obra','inicio']]}[r]||[]}
 let _snapH='',_snapT=0;
 function credAud(o){if(ROLE()==='direccion')return{rol:'dir',codigo:dirAuthGet()};if(MODO_PRUEBAS)return{rol:'dir',codigo:dirAuthGet()};if(ROLE()==='auditor'){try{return{rol:'aud',codigo:((JSON.parse(localStorage.getItem('nexo2_cred')||'{}').aud)||{})[o.id]||''}}catch(e){}}return null}
 function audReid(a){const old=a.id,nid='ar'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),o=a.obra;o.sup.forEach(s=>{if(s.acta===old)s.acta=nid});o.cert.forEach(c=>{if(c.doc===old)c.doc=nid});DOCS.forEach(x=>{if(x.rev===old)x.rev=nid});a.id=nid;a.real=true;a.auto=false}
@@ -3394,7 +3394,7 @@ function formRestaurar(k){if(!k)return;k.L.forEach(x=>{const el=document.getElem
 function draw(){
   const r=ROLE();
   setTimeout(snapPublicar,1500);setTimeout(audSync,1800);setTimeout(adicSync,2200);
-  const view=!S.u?(S.step==='roles'?vRoles():S.step==='obras'||S.step==='obrasAud'?vSelObras():S.step==='cons'?vCons():S.step==='clave'?vClave():vLogin()):({inicio:vInicio,obras:vObras,obra:vObra,pedidos:vPedidos,registro:vRegistro,mas:vMas,config:vConfig,claves:vClaves,ctadmin:vCtAdmin,claude:(window.vClaude||vInicio),desempeno:vDesempeno,compras:(window.vCompras||vInicio),docs:vDocs,cliente:vCliente}[S.tab]||vInicio)();
+  const view=!S.u?(S.step==='roles'?vRoles():S.step==='obras'||S.step==='obrasAud'?vSelObras():S.step==='cons'?vCons():S.step==='clave'?vClave():vLogin()):({inicio:vInicio,obras:vObras,obra:vObra,pedidos:vPedidos,registro:vRegistro,mas:vMas,config:vConfig,claves:vClaves,ctadmin:vCtAdmin,claude:(window.vClaude||vInicio),cad:(window.vCad||vInicio),desempeno:vDesempeno,compras:(window.vCompras||vInicio),docs:vDocs,cliente:vCliente}[S.tab]||vInicio)();
   {const kf=formGuardar();$('#view').innerHTML=view;formRestaurar(kf)}
   $('#who').innerHTML=S.u?`<span><b>${esc(S.u.name)}</b>${r==='jefe'||r==='auditor'?`<span class="rol">${plural(misObras().length,'obra','obras')}</span>`:r==='estudio'?`<button class="rol rolbtn" data-act="cambiarCons">${esc(CONSTRUCTORAS.find(c=>c.id===S.cons).n)} ▾</button>`:r==='direccion'?`<span class="rol">${ORG}</span>`:''}</span><button class="btn ghost sm" data-act="brillo" aria-label="Del blanco al negro" title="Del blanco al negro"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg></button>${LOCK&&LOCK!=='constructora'?'':'<button class="btn ghost sm" data-act="salir">Salir</button>'}`:'<span class="muted">Ingresá con tu cuenta</span>';
   /* jefatura y Dirección ya no tienen Novedades (todo está en sus paneles): sin globito en Inicio */const nb=(r==='jefe'||r==='direccion')?0:misNotifs().filter(n=>!n.leido).length;
@@ -5229,7 +5229,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261128-012247';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261128-015001';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -7358,5 +7358,86 @@ A.regMas=ds=>{const o=findO(ds.o);const x=REGL[o.id]=REGL[o.id]||{};x.t=0;x.c=fa
 /* NEXO IA: lo que se vio del registro */
 try{const g=window.iaDatosObra;if(typeof g==='function')window.iaDatosObra=function(o){const r=g.apply(this,arguments);try{const x=REGL[o.id];if(x&&x.items&&x.items.length&&r&&typeof r==='object')r.registro_de_cambios=x.items.slice(0,60).map(z=>({cuando:fAR(z.t)+' '+hAR(z.t),quien:(z.nom||'')+' '+(z.rol||''),panel:z.panel,campos:(z.campos||[]).join(', '),resultado:z.res,antes:z.antes,despues:z.despues,version:z.build}))}catch(e){}return r}}catch(e){}
 }catch(e){console.error('nx-registro',e)}})();
+</script>
+<script id="nx-cad">
+/* ===== CAD Check (Dirección): planos en PDF → la IA revisa qué documentación falta, qué les falta a los planos, inconsistencias y cómputo preliminar ===== */
+(function(){
+const CAD={L:null,t:0,cargando:false,err:'',P:{},sel:null,trab:'',disc:[]};
+const cadApi=async b=>{const r=await fetch('/api/cad',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...b,cred:{rol:'dir',codigo:dirAuthGet()}})});let j={};try{j=await r.json()}catch(e){}if(!r.ok||j.error)throw new Error(j.error||('error '+r.status));return j};
+async function cadLista(f){if(CAD.cargando||(!f&&CAD.L&&Date.now()-CAD.t<20000))return;CAD.cargando=true;try{const r=await cadApi({op:'cad_list'});CAD.L=r.items||[];CAD.disc=r.disc||CAD.disc;CAD.err=''}catch(e){CAD.err='No se pudo leer CAD Check: '+e.message;CAD.L=CAD.L||[]}CAD.cargando=false;CAD.t=Date.now();if(S.tab==='cad'&&!document.querySelector('.sheet'))draw()}
+async function cadAbrir(pid){try{const r=await cadApi({op:'cad_get',pid});CAD.P[pid]=r.p;CAD.disc=r.disc||CAD.disc}catch(e){toast(e.message)}if(S.tab==='cad')draw()}
+window.cadDe=id=>CAD.P[id]||null;
+const EST={RECIBIDO:['Recibido','var(--verde)'],INCOMPLETO:['Incompleto','#e0894f'],FALTA:['Falta','#d9605a']};
+const GRV={ALTA:'#d9605a',MEDIA:'#e0894f',BAJA:'var(--muted,#888)'};
+const num=n=>Number(n||0).toLocaleString('es-AR',{maximumFractionDigits:0});
+window.vCad=function(){if(ROLE()!=='direccion')return '<section class="sec"><p class="muted">Solo Dirección.</p></section>';
+  cadLista();const L=CAD.L||[];
+  const ob=misObras();const pr=L.filter(x=>!x.obra);
+  if(!CAD.sel)CAD.sel=(L[0]&&L[0].id)||(ob[0]&&ob[0].id)||null;
+  const sel=CAD.sel,P=CAD.P[sel],en=L.find(x=>x.id===sel);
+  if(sel&&en&&!P)setTimeout(()=>cadAbrir(sel),0);
+  let h=`<section class="sec"><span class="eyebrow">Dirección</span><h1>CAD Check</h1><p class="muted">Subí los planos en PDF que llegan del estudio: la IA revisa qué documentación falta, qué les falta a los planos (cotas, ejes, niveles…), si hay inconsistencias entre planos y arma un cómputo preliminar. Sirve para pedir todo lo que falta apenas llega el primer juego de planos.</p>${CAD.err?`<div class="infobox">${esc(CAD.err)}</div>`:''}
+  <div class="filters wrap">${ob.map(o=>`<button aria-pressed="${o.id===sel}" data-act="cadSel" data-p="${o.id}">${esc(o.nombre)}</button>`).join('')}${pr.map(x=>`<button aria-pressed="${x.id===sel}" data-act="cadSel" data-p="${x.id}">${esc(x.nombre)}</button>`).join('')}<button data-act="cadNuevo">+ Proyecto sin obra</button></div>`;
+  if(!sel)return h+'<p class="muted">Elegí una obra o creá un proyecto.</p></section>';
+  const o=findO(sel);const nombre=(P&&P.nombre)||(en&&en.nombre)||(o&&o.nombre)||'';
+  if(!en)return h+`<div class="card"><b>${esc(nombre)}</b><p class="muted small">Todavía no hay planos cargados para esta obra.</p><button class="btn gold" data-act="cadCrear" data-p="${sel}">Empezar a cargar planos</button></div></section>`;
+  if(!P)return h+'<p class="muted">Cargando…</p></section>';
+  const D=P.docs||[],an=P.an,R=an&&an.r;
+  const dsc=CAD.disc.length?CAD.disc:['Arquitectura','Estructura','Sanitaria','Eléctrica','Gas','Climatización','Incendio','Carpinterías','Detalles','Memoria / pliego','Estudio de suelos','Otro'];
+  h+=`<div class="card"><span class="eyebrow">${esc(nombre)} · Planos (${D.length})</span>${D.map(d=>`<div class="row" style="justify-content:space-between;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid rgba(127,127,127,.18)"><a href="${esc(urlDescarga(d.u,d.n))}" target="_blank" rel="noopener" style="flex:1;min-width:150px;word-break:break-word;color:inherit;text-decoration:none"><b>${esc(d.n)}</b></a><span class="muted small">${d.kb?num(d.kb/1024>=1?d.kb/1024:1)+(d.kb>=1024?' MB':' KB'):''}</span><select data-chg="cadDisc" data-id="${d.id}" style="max-width:170px">${dsc.map(x=>`<option ${x===d.disc?'selected':''}>${esc(x)}</option>`).join('')}</select><button class="btn sm ghost" data-act="cadQuitar" data-id="${d.id}">Quitar</button></div>`).join('')||'<p class="muted small">Todavía no subiste planos.</p>'}
+  <label class="btn" style="display:inline-block;margin-top:10px;cursor:pointer">Subir planos (PDF)<input type="file" accept="application/pdf,.pdf" multiple data-chg="cadSubir" style="display:none"></label>
+  <p class="muted small" style="margin-top:6px">Elegí la disciplina de cada plano. Se revisan hasta 12 planos juntos (máximo 100 páginas y 32 MB en total).</p>
+  <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">${dsc.filter(x=>x!=='Otro').map(x=>{const ok=D.some(d=>d.disc===x);return `<span class="small" style="padding:3px 8px;border-radius:99px;border:1px solid ${ok?'var(--verde)':'rgba(127,127,127,.35)'};color:${ok?'var(--verde)':'var(--muted,#888)'}">${ok?'✓':'✗'} ${esc(x)}</span>`}).join('')}</div>
+  <button class="btn gold" style="margin-top:12px" data-act="cadAnalizar" ${D.length&&!CAD.trab?'':'disabled'}>${CAD.trab===sel?'Revisando los planos… (puede tardar 1 a 3 minutos)':an?'Volver a revisar los planos':'Revisar los planos con IA'}</button></div>`;
+  if(R){
+    const falta=R.legajo.filter(x=>x.estado!=='RECIBIDO');
+    h+=`<div class="card"><span class="eyebrow">Revisión del ${esc(fmtD(an.t))}</span><p style="margin:6px 0">${esc(R.resumen)}</p><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sm gold" data-act="cadPdf">PDF del informe</button><button class="btn sm" data-act="cadWa">Pedir lo que falta por WhatsApp</button></div></div>
+    <div class="card"><span class="eyebrow">Documentación (${falta.length} por pedir)</span>${R.legajo.map(x=>`<div style="padding:6px 0;border-bottom:1px solid rgba(127,127,127,.18)"><b>${esc(x.documento)}</b> <span class="small" style="color:${EST[x.estado][1]};font-weight:600">${EST[x.estado][0]}</span>${x.disciplina?` <span class="muted small">· ${esc(x.disciplina)}</span>`:''}${x.detalle?`<div class="muted small">${esc(x.detalle)}</div>`:''}</div>`).join('')}</div>
+    <div class="card"><span class="eyebrow">Qué les falta a los planos</span>${R.planos.filter(x=>x.faltan.length||x.detalle).map(x=>`<div style="padding:6px 0;border-bottom:1px solid rgba(127,127,127,.18)"><b>${esc(x.plano)}</b>${x.faltan.length?`<div class="small" style="color:#e0894f">Falta: ${esc(x.faltan.join(', '))}</div>`:''}${x.detalle?`<div class="muted small">${esc(x.detalle)}</div>`:''}</div>`).join('')||'<p class="muted small">No se encontraron faltantes en los planos.</p>'}</div>
+    <div class="card"><span class="eyebrow">Inconsistencias y riesgos (${R.hallazgos.length})</span>${R.hallazgos.map(x=>`<div style="padding:6px 0;border-bottom:1px solid rgba(127,127,127,.18)"><b>${esc(x.titulo)}</b> <span class="small" style="color:${GRV[x.gravedad]};font-weight:600">· gravedad ${esc(x.gravedad.toLowerCase())}</span><div class="muted small">${esc(x.detalle)}${x.planos.length?' · '+esc(x.planos.join(', ')):''}</div></div>`).join('')||'<p class="muted small">Sin observaciones.</p>'}</div>
+    <div class="card"><span class="eyebrow">Cómputo preliminar</span>${R.computo.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><tr><th style="text-align:left">Ítem</th><th style="text-align:right">Cantidad</th><th>Unidad</th><th style="text-align:left">De dónde sale</th></tr>${R.computo.map(x=>`<tr style="border-top:1px solid rgba(127,127,127,.18)"><td>${esc(x.item)}</td><td style="text-align:right"><b>${num(x.cantidad)}</b></td><td style="text-align:center">${esc(x.unidad)}</td><td class="muted small">${esc(x.base)}${x.confianza?' · '+x.confianza+'% seguro':''}</td></tr>`).join('')}</table></div><p class="muted small">Es preliminar: sirve para tener una idea, no reemplaza el cómputo definitivo.</p>`:'<p class="muted small">Los planos no traen datos suficientes para computar.</p>'}</div>
+    <div class="card"><span class="eyebrow">Pedido al estudio</span><ol style="margin:6px 0 0 18px;padding:0">${R.pedido.map(x=>`<li class="small" style="margin:3px 0">${esc(x)}</li>`).join('')}</ol></div>`;
+  }
+  if(!en.obra)h+=`<button class="btn sm ghost" data-act="cadBorrar">Quitar este proyecto de la lista</button>`;
+  return h+'</section>'};
+A.cadSel=ds=>{CAD.sel=ds.p;if(!CAD.P[ds.p])cadAbrir(ds.p);draw()};
+A.cadCrear=async ds=>{const o=findO(ds.p);try{const r=await cadApi({op:'cad_new',obra:o.id,nombre:o.nombre});CAD.P[r.id]=r.p;await cadLista(true)}catch(e){toast(e.message)}draw()};
+A.cadNuevo=()=>openSheet(`<span class="eyebrow">CAD Check</span><h2>Proyecto sin obra</h2><p class="muted small">Para revisar planos de un proyecto que todavía no es una obra en NEXO (por ejemplo, para cotizar).</p><form data-submit="cadNuevoOk"><label class="f">Nombre<input id="cad-nom" placeholder="Ej: Casa Pérez · Lote 52"></label><button class="btn gold" type="submit">Crear</button></form>`,'Proyecto nuevo');
+SUBMIT.cadNuevoOk=async f=>{const n=(f.querySelector('#cad-nom').value||'').trim();if(!n){toast('Poné el nombre');return}try{const r=await cadApi({op:'cad_new',nombre:n});CAD.P[r.id]=r.p;CAD.sel=r.id;closeSheet();await cadLista(true)}catch(e){toast(e.message)}draw()};
+A.cadQuitar=async ds=>{if(!confirm('¿Quitar este plano de la revisión? El archivo queda guardado.'))return;try{const r=await cadApi({op:'cad_doc_del',pid:CAD.sel,id:ds.id});CAD.P[CAD.sel]=r.p}catch(e){toast(e.message)}draw()};
+A.cadBorrar=async()=>{if(!confirm('¿Quitar este proyecto de la lista de CAD Check?'))return;try{await cadApi({op:'cad_del',pid:CAD.sel});CAD.sel=null;await cadLista(true)}catch(e){toast(e.message)}draw()};
+CHG.cadDisc=async(v,el)=>{try{const r=await cadApi({op:'cad_doc_set',pid:CAD.sel,id:el.dataset.id,disc:v});CAD.P[CAD.sel]=r.p}catch(e){toast(e.message)}};
+CHG.cadSubir=async(v,el)=>{const fs=[...(el.files||[])];el.value='';const pid=CAD.sel;if(!fs.length||!pid)return;
+  for(const f of fs){try{if(!/pdf$/i.test(f.type)&&!/\.pdf$/i.test(f.name))throw new Error('“'+f.name+'” no es PDF');if(f.size>45e6)throw new Error('“'+f.name+'” pesa más de 45 MB');toast('Subiendo '+f.name+'…');
+    const u=await codApi({op:'ct_up_url',obra:pid,name:f.name,type:'application/pdf',size:f.size,cred:{rol:'dir',codigo:dirAuthGet()}});if(!u.ok)throw new Error(u.error||'no se pudo preparar la subida');
+    const x=await fetch(u.up,{method:'PUT',headers:{'Content-Type':'application/pdf'},body:f});if(!x.ok)throw new Error('falló la subida');
+    const disc=/estruct|encofr|armad|fundac/i.test(f.name)?'Estructura':/sanit|clo[ac]|agua|pluv/i.test(f.name)?'Sanitaria':/electr|ilum/i.test(f.name)?'Eléctrica':/gas/i.test(f.name)?'Gas':/clima|aire|hvac/i.test(f.name)?'Climatización':/carpint|abert/i.test(f.name)?'Carpinterías':/detall/i.test(f.name)?'Detalles':/suelo/i.test(f.name)?'Estudio de suelos':/memor|pliego|espec/i.test(f.name)?'Memoria / pliego':'Arquitectura';
+    const r=await cadApi({op:'cad_doc_add',pid,u:u.pub,n:f.name,size:f.size,disc});CAD.P[pid]=r.p;draw()}catch(e){toast('No se pudo subir: '+e.message)}}
+  toast('Planos subidos');draw()};
+A.cadAnalizar=async()=>{const pid=CAD.sel;if(CAD.trab)return;CAD.trab=pid;draw();
+  try{const r=await cadApi({op:'cad_analizar',pid});CAD.P[pid]=r.p;toast('Revisión lista');cadLista(true)}catch(e){toast(e.message)}CAD.trab='';draw()};
+function cadTexto(P){const R=P.an.r;return `Hola. Revisamos los planos de ${P.nombre} y para poder avanzar nos falta:\n`+R.pedido.map((x,i)=>`${i+1}. ${x}`).join('\n')+`\nGracias.`}
+A.cadWa=()=>{const P=CAD.P[CAD.sel];if(!P||!P.an)return;window.open('https://wa.me/?text='+encodeURIComponent(cadTexto(P)),'_blank')};
+A.cadPdf=async()=>{const P=CAD.P[CAD.sel];if(!P||!P.an)return;const R=P.an.r;
+  const D=new PdfDoc(),M=D.M,W=D.W-2*M,bottom=D.H-M-20;
+  const wrap=(t,size,bold)=>{const out=[];String(t||'').split('\n').forEach(par=>{let l='';par.split(' ').forEach(w=>{const c=l?l+' '+w:w;if(tw(c,size,bold)>W-8&&l){out.push(l);l=w}else l=c});out.push(l)});return out};
+  const esc2=(h)=>{if(D.y+h>bottom)D.newPage()};
+  const par=(t,size=9.5,bold=false,col=INK,ind=0)=>{wrap(t,size,bold).forEach(l=>{esc2(size+4);D.text(M+ind,D.y,l,size,bold,col);D.y+=size+4})};
+  const tit=(t)=>{esc2(40);D.y+=8;D.text(M,D.y,t.toUpperCase(),10.5,true,GOLD);D.y+=16;D.line(M,D.y-4,M+W,D.y-4,LINE)};
+  D.rect(0,0,D.W,64,'#17181c');D.text(M,22,'CAD CHECK · REVISIÓN DE PLANOS',13,true,'#ffffff');D.text(M,42,String(P.nombre).toUpperCase(),10,true,'#d9b26e');D.y=86;
+  par('Revisión del '+fmtD(P.an.t)+' · '+(P.docs||[]).filter(d=>(P.an.docs||[]).includes(d.id)).length+' planos revisados',8.5,false,GREY);D.y+=4;par(R.resumen,10);
+  tit('Documentación');R.legajo.forEach(x=>{par((x.estado==='RECIBIDO'?'[OK] ':x.estado==='FALTA'?'[FALTA] ':'[INCOMPLETO] ')+x.documento+(x.disciplina?' · '+x.disciplina:''),9.5,true,x.estado==='RECIBIDO'?'#1f8a4c':x.estado==='FALTA'?'#c8463e':'#cd7d3c');if(x.detalle)par(x.detalle,8.5,false,GREY,10);D.y+=2});
+  tit('Qué les falta a los planos');R.planos.filter(x=>x.faltan.length||x.detalle).forEach(x=>{par(x.plano,9.5,true);if(x.faltan.length)par('Falta: '+x.faltan.join(', '),9,false,'#cd7d3c',10);if(x.detalle)par(x.detalle,8.5,false,GREY,10);D.y+=2});
+  if(R.hallazgos.length){tit('Inconsistencias y riesgos');R.hallazgos.forEach(x=>{par(x.titulo+' · gravedad '+x.gravedad.toLowerCase(),9.5,true);par(x.detalle+(x.planos.length?' · '+x.planos.join(', '):''),8.5,false,GREY,10);D.y+=2})}
+  if(R.computo.length){tit('Cómputo preliminar');R.computo.forEach(x=>{par(x.item+': '+num(x.cantidad)+' '+x.unidad,9.5,true);if(x.base)par(x.base,8.5,false,GREY,10)});par('Es preliminar: no reemplaza el cómputo definitivo.',8,false,GREY)}
+  tit('Pedido al estudio');R.pedido.forEach((x,i)=>par((i+1)+'. '+x,9.5));
+  const blob=D.build();const nom=nombrePdf({tipo:'CAD Check',obra:P.nombre,titulo:'Revisión de planos',fecha:P.an.t});const f=new File([blob],nom,{type:'application/pdf'});
+  try{if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f]});return}}catch(e){if(e&&e.name==='AbortError')return}
+  bajarBlob(blob,nom)};
+/* NEXO IA: la última revisión de planos de cada obra */
+try{const g=window.iaDatosObra;if(typeof g==='function')window.iaDatosObra=iaDatosObra=function(o){const d=g.apply(this,arguments);try{const P=CAD.P[o.id];if(P&&P.an&&d&&typeof d==='object'){const R=P.an.r;d.cad_check_revision_de_planos={fecha:fmtD(P.an.t),resumen:R.resumen,documentacion_que_falta:R.legajo.filter(x=>x.estado!=='RECIBIDO').map(x=>x.documento+' ('+x.estado.toLowerCase()+')'),faltantes_en_planos:R.planos.filter(x=>x.faltan.length).map(x=>x.plano+': '+x.faltan.join(', ')),inconsistencias:R.hallazgos.map(x=>x.titulo),computo:R.computo.map(x=>x.item+': '+num(x.cantidad)+' '+x.unidad),pedido_al_estudio:R.pedido}}}catch(e){}return d}}catch(e){}
+/* al abrir una obra, se trae su revisión (si tiene) para que NEXO IA la vea */
+setTimeout(()=>{if(ROLE()==='direccion')cadLista().then(()=>{(CAD.L||[]).filter(x=>x.obra&&x.an).forEach(x=>{if(!CAD.P[x.id])cadAbrir(x.id)})})},4000);
+})();
 </script>
 </body></html>

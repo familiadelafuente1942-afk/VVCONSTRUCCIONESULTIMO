@@ -87,6 +87,15 @@ async function ejecutar(name, a, H) {
       if (hits.length >= 25) break; }
     return JSON.stringify({ busqueda: a.texto, resultados: hits });
   }
+  if (name === "revision_planos") {
+    const idx = (await leer(H, "cad_idx")) || {}; const L = idx.items || [];
+    const q = String(a.obra || ""); const n = nrm(q);
+    const p = L.find((x) => nrm(x.nombre) === n) || L.find((x) => coincideTok(x.nombre, q) || nrm(x.nombre).includes(n));
+    if (!p) return "No hay revisión de planos (CAD Check) para esa obra. Proyectos con planos: " + (L.map((x) => x.nombre).join(", ") || "ninguno");
+    const v = await leer(H, "cad_" + p.id); if (!v || !v.an) return `${p.nombre} tiene ${((v && v.docs) || []).length} planos cargados en CAD Check pero todavía no se revisaron.`;
+    const R = v.an.r;
+    return JSON.stringify({ obra: v.nombre, fecha: fl(v.an.t), planos: (v.docs || []).map((d) => d.n + " (" + d.disc + ")"), resumen: R.resumen, documentacion: R.legajo.map((x) => x.documento + ": " + x.estado.toLowerCase() + (x.detalle ? " · " + x.detalle : "")), faltantes_en_planos: R.planos.filter((x) => x.faltan.length).map((x) => x.plano + ": " + x.faltan.join(", ")), inconsistencias: R.hallazgos.map((x) => x.titulo + " (" + x.gravedad.toLowerCase() + "): " + x.detalle), computo_preliminar: R.computo.map((x) => x.item + ": " + Math.round(x.cantidad).toLocaleString("es-AR") + " " + x.unidad), pedido_al_estudio: R.pedido });
+  }
   throw new Error("Herramienta desconocida: " + name);
 }
 
@@ -95,7 +104,7 @@ const TOOLS = [
   { name: "obras", description: "Cartera de obras de NEXO 2 con avance, etapa, jefe de obra, entrega prevista, desvío en semanas, tarjetas vencidas y lo que nos deben (materiales/documentación).", inputSchema: { type: "object", properties: {} } },
   { name: "obra", description: "Detalle de una obra: estado, últimos registros, últimas actas y reclamos/auditorías de contratistas.", inputSchema: { type: "object", properties: { nombre: { type: "string", description: "Nombre de la obra, ej: Golf 293, Los Puentes 246" } }, required: ["nombre"] } },
   { name: "reclamos", description: "Reclamos y auditorías que mandaron los contratistas, por obra o todos; con opción de ver solo los que Dirección todavía no respondió.", inputSchema: { type: "object", properties: { obra: { type: "string" }, solo_sin_respuesta: { type: "boolean" }, cantidad: { type: "number" } } } },
-  { name: "buscar", description: "Busca una palabra en todos los datos de NEXO 2 (obras, registros, reclamos, compras, etc.).", inputSchema: { type: "object", properties: { texto: { type: "string" } }, required: ["texto"] } },
+  { name: "buscar", description: "Busca una palabra en todos los datos de NEXO 2 (obras, registros, reclamos, compras, etc.).", inputSchema: { type: "object", properties: { texto: { type: "string" } }, required: ["texto"] } },  { name: "revision_planos", description: "CAD Check: la última revisión de planos de una obra (qué documentación falta, qué les falta a los planos como cotas, ejes o niveles, inconsistencias, cómputo preliminar y el pedido al estudio).", inputSchema: { type: "object", properties: { obra: { type: "string" } }, required: ["obra"] } },
 ];
 // para MiAsistente (api/asistente-apps.js)
 export async function correrNexo(name, args) { const sk = process.env.SUPABASE_SERVICE_KEY; return ejecutar(name, args || {}, { apikey: sk, Authorization: "Bearer " + sk, "Content-Type": "application/json" }); }

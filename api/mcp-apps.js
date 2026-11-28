@@ -283,14 +283,14 @@ const T = {
   constancias: { name: "constancias", description: "Constancias de tarea no convencional / mayor tiempo de las obras de esta persona.", inputSchema: { type: "object", properties: { obra: { type: "string" } } } },
 };
 const TOOLS_ROL = {
-  dir: ["mis_obras", "estado_obra", "reclamos", "reclamo", "responder_reclamo", "cargar_avance", "cargar_reclamo", "novedades", "buscar"],
+  dir: ["mis_obras", "estado_obra", "reclamos", "reclamo", "responder_reclamo", "cargar_avance", "cargar_reclamo", "novedades", "buscar", "revision_planos"],
   jefe: ["mis_obras", "estado_obra", "reclamos", "reclamo", "responder_reclamo", "cargar_avance"],
   ct: ["mis_obras", "estado_obra", "reclamos", "reclamo", "cargar_reclamo"],
   est: ["mis_obras", "estado_obra"],
   aud: ["mis_obras", "estado_obra", "constancias"],
   prop: ["mis_obras", "estado_obra", "constancias"],
 };
-const T_NEXO = { novedades: { name: "novedades", description: "Lo último que pasó en todas las obras (registros, adicionales, actas, reclamos). Parámetro opcional dias.", inputSchema: { type: "object", properties: { dias: { type: "number" } } } }, buscar: { name: "buscar", description: "Busca una palabra en todos los datos de NEXO 2.", inputSchema: { type: "object", properties: { texto: { type: "string" } }, required: ["texto"] } } };
+const T_NEXO = { revision_planos: { name: "revision_planos", description: "CAD Check: la última revisión de planos de una obra (documentación que falta, faltantes en los planos, inconsistencias, cómputo preliminar y pedido al estudio).", inputSchema: { type: "object", properties: { obra: { type: "string" } }, required: ["obra"] } }, novedades: { name: "novedades", description: "Lo último que pasó en todas las obras (registros, adicionales, actas, reclamos). Parámetro opcional dias.", inputSchema: { type: "object", properties: { dias: { type: "number" } } } }, buscar: { name: "buscar", description: "Busca una palabra en todos los datos de NEXO 2.", inputSchema: { type: "object", properties: { texto: { type: "string" } }, required: ["texto"] } } };
 function personalApp(me) {
   const tools = TOOLS_ROL[me.rol].map((n) => T[n] || T_NEXO[n]);
   const cartera = async () => { const O = JSON.parse(await correrNexo("obras", {})).obras || []; if (me.rol === "dir") return O; if (me.rol === "ct") { const d = await nx2({ op: "ct_mine", cred: me.cred }); const ids = new Set((d.obras || []).map((o) => o.id)); return O.filter((o) => ids.has(o.id)); } return O.filter((o) => (me.obras || []).includes(o.id)); };
@@ -305,7 +305,7 @@ function personalApp(me) {
     nombre: "NEXO · " + ROL_N[me.rol], tools,
     async run(n, a) {
       if (!TOOLS_ROL[me.rol].includes(n)) throw new Error("Esta acción no está habilitada para " + ROL_N[me.rol]);
-      if (n === "novedades" || n === "buscar") return correrNexo(n, a);
+      if (n === "novedades" || n === "buscar" || n === "revision_planos") return correrNexo(n, a);
       if (n === "mis_obras") return JSON.stringify({ persona: me.nombre, rol: ROL_N[me.rol], obras: await cartera() });
       if (n === "estado_obra") {
         const { o, err } = await unaObra(a.obra); if (err) return err;
