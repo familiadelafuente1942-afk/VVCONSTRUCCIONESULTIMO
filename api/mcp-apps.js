@@ -8,7 +8,8 @@
 import crypto from "crypto";
 import auditoria from "./auditoria.js";
 import { calcCert } from "./_fincalc.js";
-import nexo2 from "./nexo2.js";
+import nexo2, { credToken } from "./nexo2.js";
+import { correrNexo } from "./mcp-nexo.js";
 import PDFDocument from "pdfkit";
 
 const NX = process.env.SUPABASE_URL || "https://qaubkwiwtszebdgfrizr.supabase.co";
@@ -257,41 +258,99 @@ function buscarEn(data, texto) {
   rec(data, ""); return JSON.stringify({ busqueda: texto, resultados: hits });
 }
 
-// ---- link personal de cada contratista (/mcp/u/<clave>): solo ve y carga lo suyo ----
+// ---- link personal de cada persona (/mcp/u/<clave>): Dirección, jefatura, contratista, estudio, auditoría o propietario ----
+const ROL_N = { dir: "Dirección", jefe: "Jefatura de obra", ct: "Contratista", est: "Estudio de arquitectura", aud: "Auditoría", prop: "Propietario" };
 async function personal(k) {
   if (!/^[A-Za-z0-9_-]{20,60}$/.test(k)) return null;
   const h = crypto.createHash("sha256").update("u:" + k).digest("hex");
   const tk = (await leer("mcptok")) || {}; const z = (tk.items || []).find((y) => y.h && y.h.length === h.length && crypto.timingSafeEqual(Buffer.from(y.h), Buffer.from(h)));
   if (!z) return null;
-  const reg = (await leer("ctcods")) || {}; const x = (reg.items || []).find((c) => c.id === z.ctId);
-  if (!x) return null;
+  const c = await credToken(H, z); if (!c) return null;
   if (Date.now() - (z.ult || 0) > 36e5) { z.ult = Date.now(); try { await fetch(`${NX}/rest/v1/nexo2_estado?on_conflict=clave`, { method: "POST", headers: { ...H, Prefer: "resolution=merge-duplicates" }, body: JSON.stringify({ clave: "mcptok", valor: tk }) }); } catch (e) {} }
-  return { cod: x.cod, nombre: x.nombre, rubro: x.rubro };
+  return { ...c, nombre: z.rol === "ct" ? c.ct.nombre : z.nombre || ROL_N[z.rol], rubro: c.ct && c.ct.rubro };
 }
-async function misDatos(me) { const d = await nx2({ op: "ct_mine", cred: { rol: "ct", codigo: me.cod } }); return d; }
-const PERSONAL = {
-  nombre: "NEXO · Contratista",
-  tools: [
-    { name: "mis_obras", description: "Las obras donde este contratista tiene acceso en NEXO (V+V Construcciones).", inputSchema: { type: "object", properties: {} } },
-    { name: "mis_reclamos", description: "Reclamos que cargó este contratista, del último al primero, con estado y si la Jefatura o la Dirección respondió. Filtro opcional por obra.", inputSchema: { type: "object", properties: { obra: { type: "string" }, cantidad: { type: "number" } } } },
-    { name: "cargar_reclamo", description: "CARGA un reclamo de este contratista en una de sus obras: le llega a la Jefatura y a la Dirección en NEXO. Ej: 'cargame en jefatura del lote 246 un reclamo por falta de niveles de piso terminado'. Primero llamala con confirmado=false: devuelve el resumen; leéselo al usuario y preguntale si lo enviás. Solo con un sí explícito volvé a llamarla igual con confirmado=true. Tipos: material (falta material), definicion (falta definición, plano, documentación, niveles o medidas), retraso, adicional (trabajo extra), otro.", inputSchema: { type: "object", properties: { obra: { type: "string", description: "Como lo diga el usuario: 'lote 246', 'Puentes 246'" }, tipo: { type: "string", enum: ["material", "definicion", "retraso", "adicional", "otro"] }, que_pasa: { type: "string", description: "Título corto del reclamo" }, detalle: { type: "string" }, tarea: { type: "string" }, dias_retraso: { type: "number" }, monto: { type: "number", description: "Solo adicional, en pesos" }, confirmado: { type: "boolean" } }, required: ["obra", "que_pasa"] } },
-  ],
-  async run(n, a, me) {
-    const d = await misDatos(me); const obras = d.obras || [];
-    if (n === "mis_obras") return JSON.stringify({ contratista: me.nombre, rubro: me.rubro, obras: obras.map((o) => o.nombre) });
-    if (n === "mis_reclamos") {
-      let X = (d.items || []).slice().sort((p, q) => (q.creado || 0) - (p.creado || 0)); if (a.obra) X = X.filter((x) => coincide(x.obraNombre, a.obra));
-      return JSON.stringify({ cantidad: X.length, items: X.slice(0, Math.min(30, Number(a.cantidad) || 10)).map((x) => ({ num: x.num, fecha: fl(x.creado), obra: x.obraNombre, tipo: TIPO_R[x.tipo] || x.tipo, titulo: x.titulo, estado: x.estado, respondido: (x.hist || []).some((h) => h.por !== "ct"), ultima: corta(((x.hist || []).slice(-1)[0] || {}).tx || "", 200) })) });
-    }
-    if (n === "cargar_reclamo") {
-      const m = obras.filter((o) => coincide(o.nombre, a.obra));
-      if (!m.length) return `No encontré "${a.obra}" entre tus obras: ${obras.map((o) => o.nombre).join(", ")}. Preguntale cuál es.`;
-      if (m.length > 1) return `"${a.obra}" puede ser ${m.map((o) => o.nombre).join(" o ")}. Preguntale cuál.`;
-      return cargarReclamo(a, { cod: me.cod, nombre: me.nombre, obra: m[0].id, obraN: m[0].nombre });
-    }
-    throw new Error("Consulta desconocida");
-  },
+const CONF = "Primero llamala con confirmado=false: devuelve el resumen; leéselo al usuario y preguntale si lo cargás. Solo con un sí explícito volvé a llamarla igual con confirmado=true.";
+const T = {
+  mis_obras: { name: "mis_obras", description: "Las obras de NEXO (V+V Construcciones) a las que tiene acceso esta persona, con avance, etapa, entrega prevista y lo que falta (materiales o documentación).", inputSchema: { type: "object", properties: {} } },
+  estado_obra: { name: "estado_obra", description: "Estado de una obra: avance, etapa, jefe, entrega, desvío, tarjetas vencidas, definiciones, lo que falta y, según el rol, sus reclamos o constancias.", inputSchema: { type: "object", properties: { obra: { type: "string", description: "Como lo diga el usuario: 'lote 246', 'Golf 293'" } }, required: ["obra"] } },
+  reclamos: { name: "reclamos", description: "Reclamos de contratistas de las obras de esta persona, del último al primero, con estado y si ya se respondió. Filtros: obra, solo sin respuesta.", inputSchema: { type: "object", properties: { obra: { type: "string" }, solo_sin_respuesta: { type: "boolean" }, cantidad: { type: "number" } } } },
+  reclamo: { name: "reclamo", description: "Detalle de un reclamo por número (ej 0021): qué pide, historial y respuestas.", inputSchema: { type: "object", properties: { num: { type: "string" } }, required: ["num"] } },
+  responder_reclamo: { name: "responder_reclamo", description: "RESPONDE un reclamo de contratista por número y, si se pide, le cambia el estado (gestion = en gestión, resuelto, rechazado = no corresponde, abierto). El contratista lo ve en su app. " + CONF, inputSchema: { type: "object", properties: { num: { type: "string" }, respuesta: { type: "string" }, estado: { type: "string", enum: ["gestion", "resuelto", "rechazado", "abierto"] }, confirmado: { type: "boolean" } }, required: ["num"] } },
+  cargar_avance: { name: "cargar_avance", description: "CARGA un avance de obra (texto, con sector opcional) en una obra: queda en Avances de NEXO 2 con fecha y autor. " + CONF, inputSchema: { type: "object", properties: { obra: { type: "string" }, texto: { type: "string" }, sector: { type: "string", description: "Ej: planta baja, losa, fachada" }, confirmado: { type: "boolean" } }, required: ["obra", "texto"] } },
+  cargar_reclamo: { name: "cargar_reclamo", description: "CARGA un reclamo de contratista en una obra: le llega a la Jefatura y a la Dirección. Ej: 'cargame en jefatura del lote 246 un reclamo por falta de niveles de piso terminado'. " + CONF + " Tipos: material (falta material), definicion (falta definición, plano, documentación, niveles o medidas), retraso, adicional (trabajo extra), otro.", inputSchema: { type: "object", properties: { obra: { type: "string" }, contratista: { type: "string", description: "Solo Dirección: a nombre de qué contratista (por defecto V+V)" }, tipo: { type: "string", enum: ["material", "definicion", "retraso", "adicional", "otro"] }, que_pasa: { type: "string", description: "Título corto del reclamo" }, detalle: { type: "string" }, tarea: { type: "string" }, dias_retraso: { type: "number" }, monto: { type: "number", description: "Solo adicional, en pesos" }, confirmado: { type: "boolean" } }, required: ["obra", "que_pasa"] } },
+  constancias: { name: "constancias", description: "Constancias de tarea no convencional / mayor tiempo de las obras de esta persona.", inputSchema: { type: "object", properties: { obra: { type: "string" } } } },
 };
+const TOOLS_ROL = {
+  dir: ["mis_obras", "estado_obra", "reclamos", "reclamo", "responder_reclamo", "cargar_avance", "cargar_reclamo", "novedades", "buscar"],
+  jefe: ["mis_obras", "estado_obra", "reclamos", "reclamo", "responder_reclamo", "cargar_avance"],
+  ct: ["mis_obras", "estado_obra", "reclamos", "reclamo", "cargar_reclamo"],
+  est: ["mis_obras", "estado_obra"],
+  aud: ["mis_obras", "estado_obra", "constancias"],
+  prop: ["mis_obras", "estado_obra", "constancias"],
+};
+const T_NEXO = { novedades: { name: "novedades", description: "Lo último que pasó en todas las obras (registros, adicionales, actas, reclamos). Parámetro opcional dias.", inputSchema: { type: "object", properties: { dias: { type: "number" } } } }, buscar: { name: "buscar", description: "Busca una palabra en todos los datos de NEXO 2.", inputSchema: { type: "object", properties: { texto: { type: "string" } }, required: ["texto"] } } };
+function personalApp(me) {
+  const tools = TOOLS_ROL[me.rol].map((n) => T[n] || T_NEXO[n]);
+  const cartera = async () => { const O = JSON.parse(await correrNexo("obras", {})).obras || []; if (me.rol === "dir") return O; if (me.rol === "ct") { const d = await nx2({ op: "ct_mine", cred: me.cred }); const ids = new Set((d.obras || []).map((o) => o.id)); return O.filter((o) => ids.has(o.id)); } return O.filter((o) => (me.obras || []).includes(o.id)); };
+  const unaObra = async (q) => { const O = await cartera(); const m = O.filter((o) => coincide(o.nombre, q)); if (!m.length) return { err: `No encontré "${q}" entre tus obras: ${O.map((o) => o.nombre).join(", ") || "ninguna"}. Preguntale cuál es.` }; const ex = m.find((o) => nrm(o.nombre) === nrm(q)); if (m.length > 1 && !ex) return { err: `"${q}" puede ser ${m.map((o) => o.nombre).join(" o ")}. Preguntale cuál.` }; return { o: ex || m[0] }; };
+  const recDe = async (O) => { // reclamos visibles para esta persona
+    if (me.rol === "ct") { const d = await nx2({ op: "ct_mine", cred: me.cred }); return (d.items || []).map((x) => ({ ...x, obraN: x.obraNombre })); }
+    const L = await Promise.all(O.map(async (o) => { try { const d = await nx2({ op: "ct_list_obra", cred: me.cred, obra: o.id }); return (d.items || []).map((x) => ({ ...x, obra: o.id, obraN: o.nombre })); } catch (e) { return []; } }));
+    return L.flat();
+  };
+  const corto = (x) => ({ num: x.num, fecha: fl(x.creado), obra: x.obraN, contratista: x.ctNombre, tipo: TIPO_R[x.tipo] || x.tipo, titulo: x.titulo, estado: x.estado, respondido: (x.hist || []).some((h) => h.por !== "ct"), ultima: corta(((x.hist || []).slice(-1)[0] || {}).tx || "", 200) });
+  return {
+    nombre: "NEXO · " + ROL_N[me.rol], tools,
+    async run(n, a) {
+      if (!TOOLS_ROL[me.rol].includes(n)) throw new Error("Esta acción no está habilitada para " + ROL_N[me.rol]);
+      if (n === "novedades" || n === "buscar") return correrNexo(n, a);
+      if (n === "mis_obras") return JSON.stringify({ persona: me.nombre, rol: ROL_N[me.rol], obras: await cartera() });
+      if (n === "estado_obra") {
+        const { o, err } = await unaObra(a.obra); if (err) return err;
+        if (me.rol === "dir") return correrNexo("obra", { nombre: o.nombre });
+        const out = { obra: o };
+        if (me.rol === "jefe" || me.rol === "ct") out.reclamos = (await recDe([o])).filter((x) => me.rol !== "ct" || x.obraN === o.nombre).sort((p, q) => (q.creado || 0) - (p.creado || 0)).slice(0, 10).map(corto);
+        if (me.rol === "aud" || me.rol === "prop") out.constancias = (await recDe([o])).map(corto).slice(0, 10);
+        return JSON.stringify(out);
+      }
+      if (n === "reclamos" || n === "constancias" || n === "reclamo") {
+        let O = await cartera(); if (a.obra && n !== "reclamo") { const { o, err } = await unaObra(a.obra); if (err) return err; O = [o]; }
+        let X = (await recDe(O)).sort((p, q) => (q.creado || 0) - (p.creado || 0));
+        if (n === "reclamo") { const x = X.find((y) => String(Number(y.num)) === String(Number(a.num))); if (!x) return "No encontré el reclamo N° " + a.num + " en tus obras."; return JSON.stringify({ ...corto(x), detalle: corta(x.desc || "", 2000), tarea: x.tarea, dias_retraso: x.diasRetraso, historial: (x.hist || []).filter((h) => !h.interno).map((h) => `${fl(h.t)} ${h.nom || h.por}: ${h.tx || ""}${h.estado ? " [" + h.estado + "]" : ""}`) }); }
+        if (n === "reclamos") X = X.filter((x) => x.tipo !== "noconv");
+        if (a.solo_sin_respuesta) X = X.filter((x) => !(x.hist || []).some((h) => h.por !== "ct") && !/resuelto|cerrado/.test(x.estado || ""));
+        return JSON.stringify({ cantidad: X.length, items: X.slice(0, Math.min(30, Number(a.cantidad) || 10)).map(corto) });
+      }
+      if (n === "responder_reclamo") {
+        const O = await cartera(); const x = (await recDe(O)).find((y) => String(Number(y.num)) === String(Number(a.num)));
+        if (!x) return "No encontré el reclamo N° " + a.num + " en tus obras.";
+        const tx = String(a.respuesta || "").trim().slice(0, 2000), est = ["gestion", "resuelto", "rechazado", "abierto"].includes(a.estado) ? a.estado : "";
+        if (!tx && !est) return "Falta la respuesta o el estado nuevo.";
+        if (est === "rechazado" && !tx) return "Para marcarlo como que no corresponde hay que explicar por qué.";
+        const EN = { gestion: "en gestión", resuelto: "resuelto", rechazado: "no corresponde", abierto: "reabierto" };
+        const res = `Reclamo N° ${x.num} · ${x.obraN} · ${x.ctNombre}: ${x.titulo}${tx ? "\nRespuesta de " + ROL_N[me.rol] + ": " + tx : ""}${est ? "\nEstado nuevo: " + EN[est] : ""}`;
+        if (!a.confirmado) return "TODAVÍA NO SE CARGÓ. Leele esto al usuario y preguntale si lo cargás (solo con un sí explícito volvé a llamar con confirmado=true y los mismos datos):\n" + res;
+        await nx2({ op: "ct_cmt", cred: me.cred, obra: x.obra, id: x.id, txt: tx, estado: est || undefined });
+        return `CARGADO ✓ Respuesta al reclamo N° ${x.num} (${x.obraN}). El contratista ya la ve en su app.`;
+      }
+      if (n === "cargar_avance") {
+        const { o, err } = await unaObra(a.obra); if (err) return err;
+        const tx = String(a.texto || "").trim().slice(0, 2000); if (!tx) return "Falta el texto del avance.";
+        const sec = String(a.sector || "").trim().slice(0, 120);
+        const res = `Avance en ${o.nombre}${sec ? " · " + sec : ""}: ${tx} · Autor: ${me.nombre}`;
+        if (!a.confirmado) return "TODAVÍA NO SE CARGÓ. Leele esto al usuario y preguntale si lo cargás (solo con un sí explícito volvé a llamar con confirmado=true y los mismos datos):\n" + res;
+        await nx2({ op: "av_add", cred: me.cred, obra: o.id, item: { txt: tx, sector: sec, autor: me.nombre + " (por Claude)", fotos: [] } });
+        return `CARGADO ✓ Avance en ${o.nombre}. Ya está en Avances de NEXO 2.`;
+      }
+      if (n === "cargar_reclamo") {
+        if (me.rol === "dir") { const ct = await buscarCt(a.obra, a.contratista); return cargarReclamo(a, ct); }
+        const { o, err } = await unaObra(a.obra); if (err) return err;
+        return cargarReclamo(a, { cod: me.cred.codigo, nombre: me.nombre, obra: o.id, obraN: o.nombre });
+      }
+      throw new Error("Consulta desconocida");
+    },
+  };
+}
 const APPS = { barracas: { ...BARRACAS, nombre: "Barracas" }, finanzas: { ...FINANZAS, nombre: "Finanzas cliente" }, seguimiento: { ...SEGUIMIENTO, nombre: "Seguimiento V+V" }, contratistas: { ...CONTRATISTAS, nombre: "Contratistas" } };
 // para MiAsistente (api/asistente-apps.js): misma consulta, sin pasar por el protocolo MCP
 export async function correrApp(app, name, args) {
@@ -303,7 +362,7 @@ export const CATALOGO = Object.fromEntries(Object.entries(APPS).map(([k, A]) => 
 const ok = (id, result) => ({ jsonrpc: "2.0", id, result });
 async function rpc(m, A, me) {
   const id = m.id ?? null;
-  if (m.method === "initialize") return ok(id, { protocolVersion: (m.params && m.params.protocolVersion) || "2025-06-18", capabilities: { tools: { listChanged: false } }, serverInfo: { name: A.nombre, version: "1.0.0" }, instructions: me ? `NEXO de V+V Construcciones (Argentina) para el contratista ${me.nombre}. Puede consultar sus reclamos y cargar reclamos nuevos en sus obras: le llegan a la Jefatura y a la Dirección. Suele hablar manejando: contestá corto y hablado. Antes de enviar un reclamo leéle siempre el resumen y esperá un sí explícito. Montos en pesos sin decimales con separador de miles.` : A === APPS.contratistas ? `Datos reales de la app Contratistas de Sebastián (V+V Construcciones, Argentina). Suele preguntar manejando: contestá corto y hablado, montos sin decimales con separador de miles. Lectura, salvo cargar_reclamo y responder_informe, que cargan en nombre del contratista solo después de leerle el resumen y recibir un sí explícito.` : `Datos reales de la app ${A.nombre} de Sebastián (V+V Construcciones, Argentina). Suele preguntar manejando: contestá corto y hablado, montos sin decimales con separador de miles. Solo lectura.` });
+  if (m.method === "initialize") return ok(id, { protocolVersion: (m.params && m.params.protocolVersion) || "2025-06-18", capabilities: { tools: { listChanged: false } }, serverInfo: { name: A.nombre, version: "1.0.0" }, instructions: me ? `NEXO de V+V Construcciones (Argentina) para ${me.nombre} (${ROL_N[me.rol]}). Solo ve y hace lo de sus obras. Suele hablar manejando: contestá corto y hablado. Antes de cargar o responder algo, leéle siempre el resumen y esperá un sí explícito. Montos en pesos sin decimales con separador de miles.` : A === APPS.contratistas ? `Datos reales de la app Contratistas de Sebastián (V+V Construcciones, Argentina). Suele preguntar manejando: contestá corto y hablado, montos sin decimales con separador de miles. Lectura, salvo cargar_reclamo y responder_informe, que cargan en nombre del contratista solo después de leerle el resumen y recibir un sí explícito.` : `Datos reales de la app ${A.nombre} de Sebastián (V+V Construcciones, Argentina). Suele preguntar manejando: contestá corto y hablado, montos sin decimales con separador de miles. Solo lectura.` });
   if (m.method === "ping") return ok(id, {});
   if (m.method === "tools/list") return ok(id, { tools: A.tools });
   if (m.method === "tools/call") { const p = m.params || {}; try { if (!A.tools.some((t) => t.name === p.name)) throw new Error("Herramienta desconocida"); const tx = await A.run(p.name, p.arguments || {}, me); return ok(id, { content: [{ type: "text", text: tx || "Sin datos." }] }); } catch (e) { return ok(id, { content: [{ type: "text", text: "No se pudo: " + (e.message || "error") }], isError: true }); } }
@@ -320,7 +379,7 @@ export default async function handler(req, res) {
   if (app === "u") {
     const sk0 = process.env.SUPABASE_SERVICE_KEY; if (!sk0) { res.status(500).json({ error: "Falta SUPABASE_SERVICE_KEY" }); return; }
     H = { apikey: sk0, Authorization: "Bearer " + sk0, "Content-Type": "application/json" };
-    me = await personal(k); A = PERSONAL;
+    me = await personal(k); if (me) A = personalApp(me);
     if (!me) { res.status(401).json({ error: "Link inválido o dado de baja" }); return; }
   } else {
     const h = crypto.createHash("sha256").update(app + ":" + k).digest("hex");

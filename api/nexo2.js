@@ -97,6 +97,20 @@ async function leerCodigos(H) {
   return { dir: "", obras: JSON.parse(JSON.stringify(SEED)), seed: true };
 }
 const dirVigente = (c) => c.dir || process.env.NEXO_DIR_CODE || process.env.NEXO2_DIR_CODE || "";
+// ===== Conector personal de Claude (un link por persona y rol; se guarda solo la huella) =====
+const huellaCod = (c) => crypto.createHash("sha256").update("c:" + norm(c)).digest("hex").slice(0, 16);
+const CAMPO_ROL = { jefe: "j", aud: "a", est: "e", prop: "clave" };
+// devuelve la credencial vigente de un link (o null si el código cambió o se dio de baja). Solo se usa dentro del servidor.
+export async function credToken(H, z) {
+  if (!z || !z.rol) return null;
+  const cods = await leerCodigos(H);
+  if (z.rol === "dir") { const d = dirVigente(cods); return d && huellaCod(d) === z.ch ? { rol: "dir", cred: { rol: "dir", codigo: d }, obras: null } : null; }
+  if (z.rol === "ct") { const reg = (await leer(H, "ctcods")) || {}; const x = (reg.items || []).find((c) => c.id === z.ctId); return x && huellaCod(x.cod) === z.ch ? { rol: "ct", cred: { rol: "ct", codigo: x.cod }, ct: x } : null; }
+  const f = CAMPO_ROL[z.rol]; if (!f) return null;
+  const cod = ((cods.obras || {})[z.obra] || {})[f];
+  if (!norm(cod) || huellaCod(cod) !== z.ch) return null;
+  return { rol: z.rol, cred: { rol: z.rol, codigo: cod }, obras: Object.keys(cods.obras || {}).filter((o) => norm((cods.obras[o] || {})[f]) === norm(cod)) };
+}
 
 // ===== sesión del aparato (cookie firmada de 400 días) =====
 // Recuerda en el servidor qué códigos ya se ingresaron en este aparato, así no se vuelven a pedir aunque
@@ -870,6 +884,31 @@ export default async function handler(req, res) {
       res.status(400).json({ error: "Operación desconocida" }); return;
     }
 
+    // ===== Conectar con Claude: Dirección genera, lista y da de baja los links personales de cada persona =====
+    if (b.op === "mcp_list" || b.op === "mcp_new" || b.op === "mcp_del") {
+      const cr = b.cred || {};
+      if (!(cr.rol === "dir" && dirOk(cr.codigo))) { await pausa(600); res.status(403).json({ error: "Volvé a ingresar tu código de Dirección." }); return; }
+      const regC = (await leer(H, "ctcods")) || {}; const listaC = Array.isArray(regC.items) ? regC.items : [];
+      const tk = (await leer(H, "mcptok")) || { items: [] }; let items = Array.isArray(tk.items) ? tk.items : [];
+      const vista = async (z) => ({ id: z.id, rol: z.rol, obra: z.obra || "", ctId: z.ctId || "", nombre: z.nombre || "", creado: z.creado, ult: z.ult || 0, vigente: !!(await credToken(H, z)) });
+      if (b.op === "mcp_list") { res.status(200).json({ ok: true, items: await Promise.all(items.map(vista)), roles: Object.fromEntries(Object.entries(cods.obras || {}).map(([o, c]) => [o, Object.keys(CAMPO_ROL).filter((r) => norm((c || {})[CAMPO_ROL[r]]))])) }); return; }
+      if (b.op === "mcp_del") { items = items.filter((z) => z.id !== String(b.id || "")); await escribir(H, "mcptok", { items }); res.status(200).json({ ok: true }); return; }
+      const rol = String(b.rol || ""); let z = null;
+      const nom = String(b.nombre || "").trim().slice(0, 60);
+      if (rol === "dir") { const d = dirVigente(cods); if (!nom) { res.status(400).json({ error: "Poné el nombre de la persona" }); return; } z = { key: "dir:" + norm(nom), rol, nombre: nom, ch: huellaCod(d) }; }
+      else if (rol === "ct") { const x = listaC.find((c) => c.id === String(b.id || "")); if (!x) { res.status(404).json({ error: "No existe ese contratista" }); return; } z = { key: "ct:" + norm(x.cod), rol, ctId: x.id, nombre: x.nombre, ch: huellaCod(x.cod) }; }
+      else if (CAMPO_ROL[rol]) {
+        const ob = String(b.obra || ""); const cod = ((cods.obras || {})[ob] || {})[CAMPO_ROL[rol]];
+        if (!/^[A-Za-z0-9_-]{1,40}$/.test(ob) || !norm(cod)) { res.status(400).json({ error: "Esa obra no tiene código para ese rol: cargalo primero en Códigos de acceso." }); return; }
+        z = { key: rol + ":" + ob, rol, obra: ob, nombre: nom, ch: huellaCod(cod) };
+      } else { res.status(400).json({ error: "Rol inválido" }); return; }
+      const k = crypto.randomBytes(18).toString("base64url");
+      z = { id: "m" + Date.now().toString(36) + crypto.randomBytes(3).toString("hex"), h: crypto.createHash("sha256").update("u:" + k).digest("hex"), ...z, creado: Date.now(), ult: 0 };
+      items = items.filter((y) => y.key !== z.key).concat([z]).slice(-500);
+      await escribir(H, "mcptok", { items });
+      res.status(200).json({ ok: true, link: "https://" + (req.headers.host || "nexoentorno.vercel.app") + "/mcp/u/" + k, item: await vista(z) }); return;
+    }
+
     // ===== Contratistas / subcontratistas (4.º panel): avisan faltantes, falta de definiciones, retrasos y adicionales DIRECTO a Dirección y Jefatura =====
     if (typeof b.op === "string" && b.op.startsWith("ct_")) {
       const str = (x, n) => String(x == null ? "" : x).slice(0, n);
@@ -924,7 +963,7 @@ export default async function handler(req, res) {
       else if (cr.rol === "prop" && b.op === "ct_list_obra" && norm(cr.codigo) && /^[A-Za-z0-9_-]{1,40}$/.test(obraAll) && norm((cods.obras[obraAll] || {}).clave) === norm(cr.codigo)) quien = "prop";
       if (!quien) { await pausa(600); res.status(403).json({ error: "Volvé a ingresar tu código." }); return; }
       const obra = quien === "ct" ? ct.obra : obraAll;
-      if (!/^[A-Za-z0-9_-]{1,40}$/.test(obra) && b.op !== "ct_list_all" && b.op !== "ct_mcp_new" && b.op !== "ct_mcp_del") { res.status(400).json({ error: "Obra inválida" }); return; }
+      if (!/^[A-Za-z0-9_-]{1,40}$/.test(obra) && b.op !== "ct_list_all") { res.status(400).json({ error: "Obra inválida" }); return; }
       const clave = "ctrec_" + obra;
       const pubOk = (u) => typeof u === "string" && (u.startsWith(NEW_PUB) || u.startsWith(OLD_PUB));
       const fts = (arr) => (Array.isArray(arr) ? arr : []).filter(pubOk).slice(0, 10);
@@ -1298,7 +1337,7 @@ export default async function handler(req, res) {
           if (cambio) await escribir(H, "ctrec_" + id, { ...v, items: v.items });
           out[id] = v.items; } }));
         const tk0 = (await leer(H, "mcptok")) || {}; const mcp = {};
-        (tk0.items || []).forEach((z) => { const base = lista.find((c) => c.id === z.ctId); if (base) lista.filter((c) => norm(c.cod) === norm(base.cod)).forEach((c) => (mcp[c.id] = { creado: z.creado, ult: z.ult || 0 })); });
+        (tk0.items || []).filter((z) => z.rol === "ct").forEach((z) => { const base = lista.find((c) => c.id === z.ctId); if (base) lista.filter((c) => norm(c.cod) === norm(base.cod)).forEach((c) => (mcp[c.id] = { id: z.id, creado: z.creado, ult: z.ult || 0 })); });
         res.status(200).json({ ok: true, obras: out, cts: lista, jw: reg.jw || {}, enc: reg.enc || [], mcp }); return;
       }
       if (b.op === "ct_cod_edit") {
@@ -1343,23 +1382,6 @@ export default async function handler(req, res) {
         lista.push(x);
         await escribir(H, "ctcods", { ...reg, items: lista });
         res.status(200).json({ ok: true, ct: x }); return;
-      }
-      // Conector personal de Claude: un link por contratista (vale para todas sus obras). Se guarda solo la huella; se muestra una vez.
-      if (b.op === "ct_mcp_new" || b.op === "ct_mcp_del") {
-        if (quien !== "dir") { res.status(403).json({ error: "Solo Dirección" }); return; }
-        const x = lista.find((c) => c.id === idOk(b.id));
-        if (!x) { res.status(404).json({ error: "No existe ese contratista" }); return; }
-        const delMismo = lista.filter((c) => norm(c.cod) === norm(x.cod)).map((c) => c.id);
-        const tk = (await leer(H, "mcptok")) || { items: [] };
-        let items = (Array.isArray(tk.items) ? tk.items : []).filter((z) => !delMismo.includes(z.ctId));
-        let link = "";
-        if (b.op === "ct_mcp_new") {
-          const k = crypto.randomBytes(18).toString("base64url");
-          items.push({ h: crypto.createHash("sha256").update("u:" + k).digest("hex"), rol: "ct", ctId: x.id, nombre: x.nombre, creado: Date.now(), ult: 0 });
-          link = "https://" + (req.headers.host || "nexoentorno.vercel.app") + "/mcp/u/" + k;
-        }
-        await escribir(H, "mcptok", { items: items.slice(-300) });
-        res.status(200).json({ ok: true, link }); return;
       }
       if (b.op === "ct_cod_del") {
         if (quien !== "dir") { res.status(403).json({ error: "Solo Dirección" }); return; }
