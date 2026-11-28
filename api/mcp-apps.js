@@ -10,6 +10,8 @@ import auditoria from "./auditoria.js";
 import { calcCert } from "./_fincalc.js";
 import nexo2, { credToken } from "./nexo2.js";
 import { correrNexo } from "./mcp-nexo.js";
+import { nombrePdf, docAvisoPdf, urlDescarga } from "./_pdfnombre.js";
+const pdfDe = (x, obraN) => (x && x.pdf ? urlDescarga(x.pdf, nombrePdf(docAvisoPdf(x, obraN))) : "");
 import PDFDocument from "pdfkit";
 
 const NX = process.env.SUPABASE_URL || "https://qaubkwiwtszebdgfrizr.supabase.co";
@@ -243,7 +245,7 @@ const CONTRATISTAS = {
     if (n === "contratistas") { const por = {}; L.forEach((c) => { const k = nrm(c.nombre); (por[k] = por[k] || { empresa: c.nombre, rubro: c.rubro, obras: [] }).obras.push(c.obraNombre || ON[c.obra] || c.obra); }); return JSON.stringify(Object.values(por)); }
     let X = R.flatMap((r) => ((r.valor && r.valor.items) || []).map((x) => ({ ...x, obraN: x.obraNombre || ON[x.obra || String(r.clave).slice(6)] || x.obra }))).sort((p, q) => (q.creado || 0) - (p.creado || 0));
     const resp = (x) => (x.hist || []).some((h) => h.por === "dir");
-    if (n === "reclamo") { const x = X.find((y) => nrm(y.num) === nrm(a.num) || String(Number(y.num)) === String(Number(a.num))); if (!x) return "No encontré ese número."; return JSON.stringify({ num: x.num, obra: x.obraN, contratista: x.ctNombre, rubro: x.rubro, tipo: x.tipo, titulo: x.titulo, estado: x.estado, fecha: fl(x.creado), detalle: x.tipo === "auditoria" ? audTxt(x.aud) : corta(x.desc, 3000), monto: x.monto ? pesos(x.monto) : undefined, fotos: (x.fotos || []).length, historial: (x.hist || []).map((h) => fl(h.t) + " " + (h.por === "dir" ? "Dirección" : h.nom || "Contratista") + ": " + corta(h.tx, 500)) }); }
+    if (n === "reclamo") { const x = X.find((y) => nrm(y.num) === nrm(a.num) || String(Number(y.num)) === String(Number(a.num))); if (!x) return "No encontré ese número."; return JSON.stringify({ pdf: pdfDe(x, x.obraN) || "Todavía no tiene PDF guardado (se arma al abrirlo o enviarlo desde la app de Contratistas)", num: x.num, obra: x.obraN, contratista: x.ctNombre, rubro: x.rubro, tipo: x.tipo, titulo: x.titulo, estado: x.estado, fecha: fl(x.creado), detalle: x.tipo === "auditoria" ? audTxt(x.aud) : corta(x.desc, 3000), monto: x.monto ? pesos(x.monto) : undefined, fotos: (x.fotos || []).length, historial: (x.hist || []).map((h) => fl(h.t) + " " + (h.por === "dir" ? "Dirección" : h.nom || "Contratista") + ": " + corta(h.tx, 500)) }); }
     if (a.contratista) X = X.filter((x) => nrm(x.ctNombre).includes(nrm(a.contratista)));
     if (a.obra) X = X.filter((x) => coincide(x.obraN, a.obra));
     if (a.dias) X = X.filter((x) => (x.creado || 0) >= Date.now() - Number(a.dias) * 864e5);
@@ -316,7 +318,7 @@ function personalApp(me) {
       if (n === "reclamos" || n === "constancias" || n === "reclamo") {
         let O = await cartera(); if (a.obra && n !== "reclamo") { const { o, err } = await unaObra(a.obra); if (err) return err; O = [o]; }
         let X = (await recDe(O)).sort((p, q) => (q.creado || 0) - (p.creado || 0));
-        if (n === "reclamo") { const x = X.find((y) => String(Number(y.num)) === String(Number(a.num))); if (!x) return "No encontré el reclamo N° " + a.num + " en tus obras."; return JSON.stringify({ ...corto(x), detalle: corta(x.desc || "", 2000), tarea: x.tarea, dias_retraso: x.diasRetraso, historial: (x.hist || []).filter((h) => !h.interno).map((h) => `${fl(h.t)} ${h.nom || h.por}: ${h.tx || ""}${h.estado ? " [" + h.estado + "]" : ""}`) }); }
+        if (n === "reclamo") { const x = X.find((y) => String(Number(y.num)) === String(Number(a.num))); if (!x) return "No encontré el reclamo N° " + a.num + " en tus obras."; return JSON.stringify({ ...corto(x), pdf: pdfDe(x, x.obraN) || "sin PDF guardado todavía", detalle: corta(x.desc || "", 2000), tarea: x.tarea, dias_retraso: x.diasRetraso, historial: (x.hist || []).filter((h) => !h.interno).map((h) => `${fl(h.t)} ${h.nom || h.por}: ${h.tx || ""}${h.estado ? " [" + h.estado + "]" : ""}`) }); }
         if (n === "reclamos") X = X.filter((x) => x.tipo !== "noconv");
         if (a.solo_sin_respuesta) X = X.filter((x) => !(x.hist || []).some((h) => h.por !== "ct") && !/resuelto|cerrado/.test(x.estado || ""));
         return JSON.stringify({ cantidad: X.length, items: X.slice(0, Math.min(30, Number(a.cantidad) || 10)).map(corto) });
