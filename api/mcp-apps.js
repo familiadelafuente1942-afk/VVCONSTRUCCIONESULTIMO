@@ -207,12 +207,27 @@ async function responderInforme(a) {
   } catch (e) { pdfU = ""; }
   return `CARGADO ✓ Cumplimiento semanal N° ${d.rec.num} · ${ct.obraN} · ${titulo}. Le llegó a la Dirección y a la Jefatura.${pdfU ? " PDF: " + pdfU : " (El PDF no se pudo armar ahora: se arma solo al abrir el reclamo en la app de Contratistas.)"}`;
 }
+// ---- cargar un reclamo como el contratista (desde el conector general de Sebastián o desde el link personal de cada contratista) ----
+const TIPO_R = { material: "Falta material", definicion: "Falta definición o plano", retraso: "Retraso", adicional: "Adicional", otro: "Otro" };
+const tipoR = (t) => { const x = nrm(t); if (TIPO_R[t]) return t; if (/material/.test(x)) return "material"; if (/defin|plano|document|nivel|medida|pase/.test(x)) return "definicion"; if (/retras|parad|demor/.test(x)) return "retraso"; if (/adicion|extra/.test(x)) return "adicional"; return "otro"; };
+async function cargarReclamo(a, ct) {
+  // ct: { cod, nombre, obra, obraN }
+  const titulo = String(a.que_pasa || "").trim().slice(0, 200);
+  if (!titulo) return "Falta decir qué pasa (ej: falta de niveles de piso terminado).";
+  const tipo = tipoR(a.tipo || titulo), det = String(a.detalle || "").trim().slice(0, 3000), tarea = String(a.tarea || "").trim().slice(0, 200), dias = Math.max(0, Math.min(999, Math.round(Number(a.dias_retraso) || 0)));
+  const monto = tipo === "adicional" ? Math.max(0, Math.round(Number(a.monto) || 0)) : 0;
+  const res = `${ct.obraN} · ${TIPO_R[tipo]} · "${titulo}"${tarea ? " · Tarea: " + tarea : ""}${det ? " · Detalle: " + det : ""}${dias ? " · " + dias + " días de retraso" : ""}${monto ? " · Monto $ " + monto.toLocaleString("es-AR") : ""} · Lo manda: ${ct.nombre}`;
+  if (!a.confirmado) return "TODAVÍA NO SE CARGÓ. Leele esto al usuario y preguntale si lo enviás (solo con un sí explícito volvé a llamar con confirmado=true y los mismos datos):\n" + res;
+  const d = await nx2({ op: "ct_new", cred: { rol: "ct", codigo: ct.cod }, obra: ct.obra, rec: { tipo, titulo, desc: det, tarea, diasRetraso: dias, monto, fotos: [], archivos: [], via: "claude" } });
+  return `ENVIADO ✓ Reclamo N° ${d.rec.num} · ${ct.obraN} · ${TIPO_R[tipo]}: ${titulo}. Ya le llegó a la Jefatura y a la Dirección en NEXO 2.`;
+}
 const CONTRATISTAS = {
   tools: [
     { name: "contratistas", description: "Lista de contratistas dados de alta (empresa, rubro y obras), sin códigos de acceso.", inputSchema: { type: "object", properties: {} } },
     { name: "reclamos", description: "Reclamos, presupuestos, listados de materiales y auditorías que mandaron los contratistas, con estado y si Dirección respondió. Filtros por contratista, obra o solo sin respuesta.", inputSchema: { type: "object", properties: { contratista: { type: "string" }, obra: { type: "string" }, solo_sin_respuesta: { type: "boolean" }, dias: { type: "number", description: "Solo los de los últimos N días" }, cantidad: { type: "number" } } } },
     { name: "reclamo", description: "Detalle completo de un reclamo o auditoría por número (ej 0004): pedido por pedido, historial y respuestas.", inputSchema: { type: "object", properties: { num: { type: "string" } }, required: ["num"] } },
     { name: "informe_jefatura", description: "Último informe de la jefatura de obra (NEXO 2) de una obra, con su texto, para ir leyéndole a Sebastián los puntos uno por uno antes de responderlos.", inputSchema: { type: "object", properties: { obra: { type: "string" } }, required: ["obra"] } },
+    { name: "cargar_reclamo", description: "CARGA un reclamo en la app de Contratistas en nombre del contratista (por defecto V+V Construcciones): le llega a la Jefatura y a la Dirección. Ej: 'cargame en jefatura del lote 246 un reclamo por falta de niveles de piso terminado'. Primero llamala con confirmado=false: devuelve el resumen; leéselo y preguntale si lo enviás. Solo con un sí explícito volvé a llamarla igual con confirmado=true. Tipos: material (falta material), definicion (falta definición, plano, documentación, niveles o medidas), retraso, adicional (trabajo extra), otro.", inputSchema: { type: "object", properties: { obra: { type: "string", description: "Como lo diga el usuario: 'lote 246', 'Puentes 246'" }, contratista: { type: "string", description: "Por defecto V+V" }, tipo: { type: "string", enum: ["material", "definicion", "retraso", "adicional", "otro"] }, que_pasa: { type: "string", description: "Título corto del reclamo" }, detalle: { type: "string" }, tarea: { type: "string" }, dias_retraso: { type: "number" }, monto: { type: "number", description: "Solo adicional, en pesos" }, confirmado: { type: "boolean" } }, required: ["obra", "que_pasa"] } },
     { name: "responder_informe", description: "CARGA en la app de Contratistas la respuesta al informe de la jefatura (como el contratista, por defecto V+V Construcciones) y arma el PDF, igual que si se hiciera desde la app: le llega a la Dirección y a la Jefatura. Uso: Sebastián dicta cada punto y qué pasa con él. Primero llamala con confirmado=false: devuelve el resumen; leéselo y preguntale si lo cargás. Solo con un sí explícito volvé a llamarla igual con confirmado=true. Estados: avanza (se puede avanzar: pedir cuánta gente y cuándo termina), material (falta material: qué falta y desde cuándo está pedido), definicion (falta definición/plano), otro (otro motivo, en nota), parcial (cumplimiento parcial: pedir qué porcentaje se hizo), terminado.", inputSchema: { type: "object", properties: {
       obra: { type: "string" }, contratista: { type: "string", description: "Por defecto V+V" }, semana: { type: "string", description: "Ej: Semana 70. Del 23 al 27 de Noviembre" }, responsable: { type: "string", description: "Jefe de obra que firmó el informe" }, fecha: { type: "string", description: "YYYY-MM-DD, por defecto hoy" }, personal: { type: "number", description: "Personas en obra" },
       tareas: { type: "array", items: { type: "object", properties: { n: { type: "number" }, tarea: { type: "string" }, estado: { type: "string", enum: ["avanza", "material", "definicion", "otro", "terminado", "parcial"] }, porcentaje: { type: "number", description: "solo si estado=parcial: qué porcentaje quedó hecho" }, gente: { type: "number" }, termina: { type: "string", description: "YYYY-MM-DD" }, falta: { type: "string" }, pedido: { type: "string", description: "YYYY-MM-DD en que se pidió el material" }, nota: { type: "string" } }, required: ["tarea", "estado"] } },
@@ -221,6 +236,7 @@ const CONTRATISTAS = {
   async run(n, a) {
     if (n === "informe_jefatura") return informeJefatura(a);
     if (n === "responder_informe") return responderInforme(a);
+    if (n === "cargar_reclamo") { const ct = await buscarCt(a.obra, a.contratista); return cargarReclamo(a, ct); }
     const [reg, R, ON] = await Promise.all([leer("ctcods"), filas("clave=like.ctrec_*"), obrasNombres()]);
     const L = (reg && reg.items) || [];
     if (n === "contratistas") { const por = {}; L.forEach((c) => { const k = nrm(c.nombre); (por[k] = por[k] || { empresa: c.nombre, rubro: c.rubro, obras: [] }).obras.push(c.obraNombre || ON[c.obra] || c.obra); }); return JSON.stringify(Object.values(por)); }
@@ -241,6 +257,41 @@ function buscarEn(data, texto) {
   rec(data, ""); return JSON.stringify({ busqueda: texto, resultados: hits });
 }
 
+// ---- link personal de cada contratista (/mcp/u/<clave>): solo ve y carga lo suyo ----
+async function personal(k) {
+  if (!/^[A-Za-z0-9_-]{20,60}$/.test(k)) return null;
+  const h = crypto.createHash("sha256").update("u:" + k).digest("hex");
+  const tk = (await leer("mcptok")) || {}; const z = (tk.items || []).find((y) => y.h && y.h.length === h.length && crypto.timingSafeEqual(Buffer.from(y.h), Buffer.from(h)));
+  if (!z) return null;
+  const reg = (await leer("ctcods")) || {}; const x = (reg.items || []).find((c) => c.id === z.ctId);
+  if (!x) return null;
+  if (Date.now() - (z.ult || 0) > 36e5) { z.ult = Date.now(); try { await fetch(`${NX}/rest/v1/nexo2_estado?on_conflict=clave`, { method: "POST", headers: { ...H, Prefer: "resolution=merge-duplicates" }, body: JSON.stringify({ clave: "mcptok", valor: tk }) }); } catch (e) {} }
+  return { cod: x.cod, nombre: x.nombre, rubro: x.rubro };
+}
+async function misDatos(me) { const d = await nx2({ op: "ct_mine", cred: { rol: "ct", codigo: me.cod } }); return d; }
+const PERSONAL = {
+  nombre: "NEXO · Contratista",
+  tools: [
+    { name: "mis_obras", description: "Las obras donde este contratista tiene acceso en NEXO (V+V Construcciones).", inputSchema: { type: "object", properties: {} } },
+    { name: "mis_reclamos", description: "Reclamos que cargó este contratista, del último al primero, con estado y si la Jefatura o la Dirección respondió. Filtro opcional por obra.", inputSchema: { type: "object", properties: { obra: { type: "string" }, cantidad: { type: "number" } } } },
+    { name: "cargar_reclamo", description: "CARGA un reclamo de este contratista en una de sus obras: le llega a la Jefatura y a la Dirección en NEXO. Ej: 'cargame en jefatura del lote 246 un reclamo por falta de niveles de piso terminado'. Primero llamala con confirmado=false: devuelve el resumen; leéselo al usuario y preguntale si lo enviás. Solo con un sí explícito volvé a llamarla igual con confirmado=true. Tipos: material (falta material), definicion (falta definición, plano, documentación, niveles o medidas), retraso, adicional (trabajo extra), otro.", inputSchema: { type: "object", properties: { obra: { type: "string", description: "Como lo diga el usuario: 'lote 246', 'Puentes 246'" }, tipo: { type: "string", enum: ["material", "definicion", "retraso", "adicional", "otro"] }, que_pasa: { type: "string", description: "Título corto del reclamo" }, detalle: { type: "string" }, tarea: { type: "string" }, dias_retraso: { type: "number" }, monto: { type: "number", description: "Solo adicional, en pesos" }, confirmado: { type: "boolean" } }, required: ["obra", "que_pasa"] } },
+  ],
+  async run(n, a, me) {
+    const d = await misDatos(me); const obras = d.obras || [];
+    if (n === "mis_obras") return JSON.stringify({ contratista: me.nombre, rubro: me.rubro, obras: obras.map((o) => o.nombre) });
+    if (n === "mis_reclamos") {
+      let X = (d.items || []).slice().sort((p, q) => (q.creado || 0) - (p.creado || 0)); if (a.obra) X = X.filter((x) => coincide(x.obraNombre, a.obra));
+      return JSON.stringify({ cantidad: X.length, items: X.slice(0, Math.min(30, Number(a.cantidad) || 10)).map((x) => ({ num: x.num, fecha: fl(x.creado), obra: x.obraNombre, tipo: TIPO_R[x.tipo] || x.tipo, titulo: x.titulo, estado: x.estado, respondido: (x.hist || []).some((h) => h.por !== "ct"), ultima: corta(((x.hist || []).slice(-1)[0] || {}).tx || "", 200) })) });
+    }
+    if (n === "cargar_reclamo") {
+      const m = obras.filter((o) => coincide(o.nombre, a.obra));
+      if (!m.length) return `No encontré "${a.obra}" entre tus obras: ${obras.map((o) => o.nombre).join(", ")}. Preguntale cuál es.`;
+      if (m.length > 1) return `"${a.obra}" puede ser ${m.map((o) => o.nombre).join(" o ")}. Preguntale cuál.`;
+      return cargarReclamo(a, { cod: me.cod, nombre: me.nombre, obra: m[0].id, obraN: m[0].nombre });
+    }
+    throw new Error("Consulta desconocida");
+  },
+};
 const APPS = { barracas: { ...BARRACAS, nombre: "Barracas" }, finanzas: { ...FINANZAS, nombre: "Finanzas cliente" }, seguimiento: { ...SEGUIMIENTO, nombre: "Seguimiento V+V" }, contratistas: { ...CONTRATISTAS, nombre: "Contratistas" } };
 // para MiAsistente (api/asistente-apps.js): misma consulta, sin pasar por el protocolo MCP
 export async function correrApp(app, name, args) {
@@ -250,12 +301,12 @@ export async function correrApp(app, name, args) {
 }
 export const CATALOGO = Object.fromEntries(Object.entries(APPS).map(([k, A]) => [k, A.tools.map((t) => ({ name: t.name, description: t.description, args: Object.keys((t.inputSchema && t.inputSchema.properties) || {}) }))]));
 const ok = (id, result) => ({ jsonrpc: "2.0", id, result });
-async function rpc(m, A) {
+async function rpc(m, A, me) {
   const id = m.id ?? null;
-  if (m.method === "initialize") return ok(id, { protocolVersion: (m.params && m.params.protocolVersion) || "2025-06-18", capabilities: { tools: { listChanged: false } }, serverInfo: { name: A.nombre, version: "1.0.0" }, instructions: `Datos reales de la app ${A.nombre} de Sebastián (V+V Construcciones, Argentina). Suele preguntar manejando: contestá corto y hablado, montos sin decimales con separador de miles. Solo lectura.` });
+  if (m.method === "initialize") return ok(id, { protocolVersion: (m.params && m.params.protocolVersion) || "2025-06-18", capabilities: { tools: { listChanged: false } }, serverInfo: { name: A.nombre, version: "1.0.0" }, instructions: me ? `NEXO de V+V Construcciones (Argentina) para el contratista ${me.nombre}. Puede consultar sus reclamos y cargar reclamos nuevos en sus obras: le llegan a la Jefatura y a la Dirección. Suele hablar manejando: contestá corto y hablado. Antes de enviar un reclamo leéle siempre el resumen y esperá un sí explícito. Montos en pesos sin decimales con separador de miles.` : A === APPS.contratistas ? `Datos reales de la app Contratistas de Sebastián (V+V Construcciones, Argentina). Suele preguntar manejando: contestá corto y hablado, montos sin decimales con separador de miles. Lectura, salvo cargar_reclamo y responder_informe, que cargan en nombre del contratista solo después de leerle el resumen y recibir un sí explícito.` : `Datos reales de la app ${A.nombre} de Sebastián (V+V Construcciones, Argentina). Suele preguntar manejando: contestá corto y hablado, montos sin decimales con separador de miles. Solo lectura.` });
   if (m.method === "ping") return ok(id, {});
   if (m.method === "tools/list") return ok(id, { tools: A.tools });
-  if (m.method === "tools/call") { const p = m.params || {}; try { if (!A.tools.some((t) => t.name === p.name)) throw new Error("Herramienta desconocida"); const tx = await A.run(p.name, p.arguments || {}); return ok(id, { content: [{ type: "text", text: tx || "Sin datos." }] }); } catch (e) { return ok(id, { content: [{ type: "text", text: "No se pudo: " + (e.message || "error") }], isError: true }); } }
+  if (m.method === "tools/call") { const p = m.params || {}; try { if (!A.tools.some((t) => t.name === p.name)) throw new Error("Herramienta desconocida"); const tx = await A.run(p.name, p.arguments || {}, me); return ok(id, { content: [{ type: "text", text: tx || "Sin datos." }] }); } catch (e) { return ok(id, { content: [{ type: "text", text: "No se pudo: " + (e.message || "error") }], isError: true }); } }
   if (m.method === "resources/list") return ok(id, { resources: [] });
   if (m.method === "prompts/list") return ok(id, { prompts: [] });
   if (String(m.method || "").startsWith("notifications/")) return null;
@@ -264,16 +315,24 @@ async function rpc(m, A) {
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*"); res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Mcp-Session-Id, Mcp-Protocol-Version"); res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS, DELETE");
   if (req.method === "OPTIONS") { res.status(204).end(); return; }
-  const app = String((req.query && req.query.app) || ""), k = String((req.query && req.query.k) || ""), A = APPS[app];
-  const h = crypto.createHash("sha256").update(app + ":" + k).digest("hex");
-  if (!A || !k || !crypto.timingSafeEqual(Buffer.from(h), Buffer.from(HUELLAS[app]))) { res.status(401).json({ error: "Link inválido" }); return; }
+  const app = String((req.query && req.query.app) || ""), k = String((req.query && req.query.k) || "");
+  let A = APPS[app], me = null;
+  if (app === "u") {
+    const sk0 = process.env.SUPABASE_SERVICE_KEY; if (!sk0) { res.status(500).json({ error: "Falta SUPABASE_SERVICE_KEY" }); return; }
+    H = { apikey: sk0, Authorization: "Bearer " + sk0, "Content-Type": "application/json" };
+    me = await personal(k); A = PERSONAL;
+    if (!me) { res.status(401).json({ error: "Link inválido o dado de baja" }); return; }
+  } else {
+    const h = crypto.createHash("sha256").update(app + ":" + k).digest("hex");
+    if (!A || !k || !crypto.timingSafeEqual(Buffer.from(h), Buffer.from(HUELLAS[app]))) { res.status(401).json({ error: "Link inválido" }); return; }
+  }
   if (req.method === "GET") { res.setHeader("Allow", "POST"); res.status(405).end(); return; }
   if (req.method === "DELETE") { res.status(200).end(); return; }
   if (req.method !== "POST") { res.status(405).end(); return; }
   const sk = process.env.SUPABASE_SERVICE_KEY; if (!sk) { res.status(500).json({ error: "Falta SUPABASE_SERVICE_KEY" }); return; }
   H = { apikey: sk, Authorization: "Bearer " + sk, "Content-Type": "application/json" };
   let b = req.body; if (typeof b === "string") { try { b = JSON.parse(b); } catch { res.status(400).json({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "JSON inválido" } }); return; } }
-  const lote = Array.isArray(b) ? b : [b]; const out = (await Promise.all(lote.map((m) => rpc(m, A)))).filter(Boolean);
+  const lote = Array.isArray(b) ? b : [b]; const out = (await Promise.all(lote.map((m) => rpc(m, A, me)))).filter(Boolean);
   if (!out.length) { res.status(202).end(); return; }
   res.setHeader("Content-Type", "application/json"); res.status(200).json(Array.isArray(b) ? out : out[0]);
 }

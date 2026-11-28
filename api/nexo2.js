@@ -924,7 +924,7 @@ export default async function handler(req, res) {
       else if (cr.rol === "prop" && b.op === "ct_list_obra" && norm(cr.codigo) && /^[A-Za-z0-9_-]{1,40}$/.test(obraAll) && norm((cods.obras[obraAll] || {}).clave) === norm(cr.codigo)) quien = "prop";
       if (!quien) { await pausa(600); res.status(403).json({ error: "Volvé a ingresar tu código." }); return; }
       const obra = quien === "ct" ? ct.obra : obraAll;
-      if (!/^[A-Za-z0-9_-]{1,40}$/.test(obra) && b.op !== "ct_list_all") { res.status(400).json({ error: "Obra inválida" }); return; }
+      if (!/^[A-Za-z0-9_-]{1,40}$/.test(obra) && b.op !== "ct_list_all" && b.op !== "ct_mcp_new" && b.op !== "ct_mcp_del") { res.status(400).json({ error: "Obra inválida" }); return; }
       const clave = "ctrec_" + obra;
       const pubOk = (u) => typeof u === "string" && (u.startsWith(NEW_PUB) || u.startsWith(OLD_PUB));
       const fts = (arr) => (Array.isArray(arr) ? arr : []).filter(pubOk).slice(0, 10);
@@ -968,9 +968,10 @@ export default async function handler(req, res) {
           id: "r" + t.toString(36) + Math.random().toString(36).slice(2, 5), obra, ctId: ct.id, ctNombre: ct.nombre, rubro: ct.rubro,
           tipo, titulo: str(q.titulo, 200).trim() || (tipo === "presupuesto" ? "Presupuesto" : tipo === "auditoria" ? "Auditoría de obra" : "Listado de materiales"), desc: str(q.desc, tipo === "auditoria" ? 8000 : 3000), tarea: str(q.tarea, 200), diasRetraso: esDoc ? 0 : num(q.diasRetraso, 0, 999),
           monto: num(q.monto, 0, 1e12), fotos: fts(q.fotos), archivos: arch(q.archivos), doc: esDoc, estado: esDoc ? "recibido" : "abierto", creado: t, editado: t,
-          hist: [{ t, por: "ct", nom: ct.nombre, tx: esDoc ? (tipo === "presupuesto" ? "Presupuesto enviado" : tipo === "auditoria" ? "Auditoría de obra enviada" : "Listado de materiales enviado") : tipo === "noconv" ? "Constancia cargada · informada" : "Reclamo cargado" }],
+          hist: [{ t, por: "ct", nom: ct.nombre, tx: esDoc ? (tipo === "presupuesto" ? "Presupuesto enviado" : tipo === "auditoria" ? "Auditoría de obra enviada" : "Listado de materiales enviado") : tipo === "noconv" ? "Constancia cargada · informada" : q.via === "claude" ? "Reclamo cargado por voz desde Claude" : "Reclamo cargado" }],
         };
         if (nc) rec.nc = nc;
+        if (q.via === "claude") rec.via = "claude";
         if (tipo === "adicional" && q.cert) { const cc = certLimpio(q.cert); if (cc) rec.cert = cc; }
         if (tipo === "auditoria") {
           // auditoría del estado de la obra: qué se puede avanzar y qué no (y por qué), con la gente que hay
@@ -1296,7 +1297,9 @@ export default async function handler(req, res) {
           let cambio = false; for (const x of v.items) { if (x.tipo === "adicional" && x.cert && !x.adicId) { x.adicId = await ctAdicSync(H, x); if (x.adicId) cambio = true; } }
           if (cambio) await escribir(H, "ctrec_" + id, { ...v, items: v.items });
           out[id] = v.items; } }));
-        res.status(200).json({ ok: true, obras: out, cts: lista, jw: reg.jw || {}, enc: reg.enc || [] }); return;
+        const tk0 = (await leer(H, "mcptok")) || {}; const mcp = {};
+        (tk0.items || []).forEach((z) => { const base = lista.find((c) => c.id === z.ctId); if (base) lista.filter((c) => norm(c.cod) === norm(base.cod)).forEach((c) => (mcp[c.id] = { creado: z.creado, ult: z.ult || 0 })); });
+        res.status(200).json({ ok: true, obras: out, cts: lista, jw: reg.jw || {}, enc: reg.enc || [], mcp }); return;
       }
       if (b.op === "ct_cod_edit") {
         // Dirección corrige el nombre de la empresa y el rubro de un contratista
@@ -1340,6 +1343,23 @@ export default async function handler(req, res) {
         lista.push(x);
         await escribir(H, "ctcods", { ...reg, items: lista });
         res.status(200).json({ ok: true, ct: x }); return;
+      }
+      // Conector personal de Claude: un link por contratista (vale para todas sus obras). Se guarda solo la huella; se muestra una vez.
+      if (b.op === "ct_mcp_new" || b.op === "ct_mcp_del") {
+        if (quien !== "dir") { res.status(403).json({ error: "Solo Dirección" }); return; }
+        const x = lista.find((c) => c.id === idOk(b.id));
+        if (!x) { res.status(404).json({ error: "No existe ese contratista" }); return; }
+        const delMismo = lista.filter((c) => norm(c.cod) === norm(x.cod)).map((c) => c.id);
+        const tk = (await leer(H, "mcptok")) || { items: [] };
+        let items = (Array.isArray(tk.items) ? tk.items : []).filter((z) => !delMismo.includes(z.ctId));
+        let link = "";
+        if (b.op === "ct_mcp_new") {
+          const k = crypto.randomBytes(18).toString("base64url");
+          items.push({ h: crypto.createHash("sha256").update("u:" + k).digest("hex"), rol: "ct", ctId: x.id, nombre: x.nombre, creado: Date.now(), ult: 0 });
+          link = "https://" + (req.headers.host || "nexoentorno.vercel.app") + "/mcp/u/" + k;
+        }
+        await escribir(H, "mcptok", { items: items.slice(-300) });
+        res.status(200).json({ ok: true, link }); return;
       }
       if (b.op === "ct_cod_del") {
         if (quien !== "dir") { res.status(403).json({ error: "Solo Dirección" }); return; }

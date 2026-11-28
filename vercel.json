@@ -63,7 +63,7 @@
   ],
   "rewrites": [
     {
-      "source": "/mcp/:app(barracas|finanzas|seguimiento|contratistas)/:k",
+      "source": "/mcp/:app(barracas|finanzas|seguimiento|contratistas|u)/:k",
       "destination": "/api/mcp-apps?app=:app&k=:k"
     },
     {
