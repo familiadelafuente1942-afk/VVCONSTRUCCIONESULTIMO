@@ -11,7 +11,7 @@ const nrm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[̀-�
 const pesos = (n) => "$ " + Math.round(Number(n) || 0).toLocaleString("es-AR");
 const fl = (t) => { if (!t) return ""; if (typeof t === "string" && /^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(8, 10) + "/" + t.slice(5, 7) + "/" + t.slice(0, 4); const d = new Date(Number(t) - 3 * 3600e3); return isNaN(d) ? String(t) : String(d.getUTCDate()).padStart(2, "0") + "/" + String(d.getUTCMonth() + 1).padStart(2, "0") + "/" + d.getUTCFullYear(); };
 const ts = (v) => { if (!v) return 0; if (typeof v === "number") return v; const p = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(v) ? v + "T12:00:00-03:00" : v); return isNaN(p) ? 0 : p; };
-const PROHIBIDO = /^(codigos|cfg|cfgx|cfg_prev|asist_cfg|seg_cfg|seg_flags|fotodesc|ctcods|mcptok)$|^cfgo_|^audfot_|^audtrash_|^bk_|token|hash|sesion|pin/i;
+const PROHIBIDO = /^(codigos|cfg|cfgx|cfg_prev|asist_cfg|seg_cfg|seg_flags|fotodesc|ctcods|mcptok|cad_google|cad_google_nonce)$|^cfgo_|^audfot_|^audtrash_|^bk_|token|hash|sesion|pin/i;
 const TIPO_ACTA = { sup: "Acta de supervisión", rev: "Revisión de documentación", cert: "Certificado de etapa" };
 const EST = { avanza: "se puede avanzar", material: "falta material", definicion: "falta definición", otro: "otro motivo", terminado: "terminado" };
 

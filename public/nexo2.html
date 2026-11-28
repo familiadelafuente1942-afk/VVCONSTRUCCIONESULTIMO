@@ -5229,7 +5229,7 @@ const rec=()=>{clearInterval(pend);pend=null;if(puede())recargarCuando()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261128-015001';window.NEXO_BUILD_V=NEXO_BUILD;
+const NEXO_BUILD='20261128-020449';window.NEXO_BUILD_V=NEXO_BUILD;
 {let aviso=null;const ocupado=()=>window.nxOcupado();
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 window.__nxVerAct=act;const barra=()=>{window.__nxVerNueva=1;let _ya='';try{_ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}if(_ya!==aviso)recargarCuando(true);return;if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -7384,7 +7384,8 @@ window.vCad=function(){if(ROLE()!=='direccion')return '<section class="sec"><p c
   if(!P)return h+'<p class="muted">Cargando…</p></section>';
   const D=P.docs||[],an=P.an,R=an&&an.r;
   const dsc=CAD.disc.length?CAD.disc:['Arquitectura','Estructura','Sanitaria','Eléctrica','Gas','Climatización','Incendio','Carpinterías','Detalles','Memoria / pliego','Estudio de suelos','Otro'];
-  h+=`<div class="card"><span class="eyebrow">${esc(nombre)} · Planos (${D.length})</span>${D.map(d=>`<div class="row" style="justify-content:space-between;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid rgba(127,127,127,.18)"><a href="${esc(urlDescarga(d.u,d.n))}" target="_blank" rel="noopener" style="flex:1;min-width:150px;word-break:break-word;color:inherit;text-decoration:none"><b>${esc(d.n)}</b></a><span class="muted small">${d.kb?num(d.kb/1024>=1?d.kb/1024:1)+(d.kb>=1024?' MB':' KB'):''}</span><select data-chg="cadDisc" data-id="${d.id}" style="max-width:170px">${dsc.map(x=>`<option ${x===d.disc?'selected':''}>${esc(x)}</option>`).join('')}</select><button class="btn sm ghost" data-act="cadQuitar" data-id="${d.id}">Quitar</button></div>`).join('')||'<p class="muted small">Todavía no subiste planos.</p>'}
+  h+=cadDriveCard(P);
+  h+=`<div class="card"><span class="eyebrow">${esc(nombre)} · Planos (${D.length})</span>${D.map(d=>`<div class="row" style="justify-content:space-between;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid rgba(127,127,127,.18)"><a href="${esc(urlDescarga(d.u,d.n))}" target="_blank" rel="noopener" style="flex:1;min-width:150px;word-break:break-word;color:inherit;text-decoration:none"><b>${esc(d.n)}</b>${d.drive?' <span class="muted small">· Drive'+(d.ruta?' · '+esc(d.ruta):'')+'</span>':''}</a><span class="muted small">${d.kb?num(d.kb/1024>=1?d.kb/1024:1)+(d.kb>=1024?' MB':' KB'):''}</span><select data-chg="cadDisc" data-id="${d.id}" style="max-width:170px">${dsc.map(x=>`<option ${x===d.disc?'selected':''}>${esc(x)}</option>`).join('')}</select><button class="btn sm ghost" data-act="cadQuitar" data-id="${d.id}">Quitar</button></div>`).join('')||'<p class="muted small">Todavía no subiste planos.</p>'}
   <label class="btn" style="display:inline-block;margin-top:10px;cursor:pointer">Subir planos (PDF)<input type="file" accept="application/pdf,.pdf" multiple data-chg="cadSubir" style="display:none"></label>
   <p class="muted small" style="margin-top:6px">Elegí la disciplina de cada plano. Se revisan hasta 12 planos juntos (máximo 100 páginas y 32 MB en total).</p>
   <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">${dsc.filter(x=>x!=='Otro').map(x=>{const ok=D.some(d=>d.disc===x);return `<span class="small" style="padding:3px 8px;border-radius:99px;border:1px solid ${ok?'var(--verde)':'rgba(127,127,127,.35)'};color:${ok?'var(--verde)':'var(--muted,#888)'}">${ok?'✓':'✗'} ${esc(x)}</span>`}).join('')}</div>
@@ -7400,6 +7401,36 @@ window.vCad=function(){if(ROLE()!=='direccion')return '<section class="sec"><p c
   }
   if(!en.obra)h+=`<button class="btn sm ghost" data-act="cadBorrar">Quitar este proyecto de la lista</button>`;
   return h+'</section>'};
+/* ---- Google Drive ---- */
+const GD={est:null,list:null,err:null,trab:false,prog:''};
+async function gdEstado(){try{GD.est=await cadApi({op:'cad_google_estado'})}catch(e){GD.est={conectado:false}}if(S.tab==='cad')draw()}
+function cadDriveCard(P){if(!GD.est){setTimeout(gdEstado,0);return ''}
+  const L=GD.list&&GD.list.pid===CAD.sel?GD.list:null,E=GD.err&&GD.err.pid===CAD.sel?GD.err:null;
+  let h=`<div class="card"><span class="eyebrow">Planos desde Google Drive</span>`;
+  if(!GD.est.conectado)return h+`<p class="muted small">Conectá una sola vez tu cuenta de Google. Después pegás el link de la carpeta que comparte el estudio y los planos vienen solos a la app.</p><button class="btn gold" data-act="gdConectar">Conectar Google Drive</button></div>`;
+  h+=`<p class="muted small">Conectado como <b>${esc(GD.est.email||'tu cuenta de Google')}</b>. El estudio tiene que compartir la carpeta con esa cuenta (o con «cualquiera con el link»). <button class="btn sm ghost" data-act="gdSalir">Desconectar</button></p>`;
+  if(P.drive&&P.drive.id)h+=`<p class="small" style="margin:6px 0">Carpeta vinculada: <b>${esc(P.drive.nombre||'')}</b> <button class="btn sm" data-act="gdBuscar" data-l="">${GD.trab?'Buscando…':'Buscar planos nuevos'}</button></p>`;
+  h+=`<form data-submit="gdLink" class="row" style="gap:8px;flex-wrap:wrap"><input id="gd-link" placeholder="Pegá el link de la carpeta o del plano en Drive" style="flex:1;min-width:200px"><button class="btn sm gold" type="submit">${GD.trab?'Buscando…':'Buscar planos'}</button></form>`;
+  if(E){h+=`<div class="infobox" style="margin-top:8px">${esc(E.falla)}${E.cod==='sin_acceso'?`<div class="fbtns" style="margin-top:8px">${E.link?`<a class="btn sm" href="${esc(E.link)}" target="_blank" rel="noopener">Pedir acceso en Drive</a>`:''}<button class="btn sm gold" data-act="gdPedirWa">Pedirle acceso al estudio por WhatsApp</button></div>`:E.cod==='sin_google'?`<div style="margin-top:8px"><button class="btn sm gold" data-act="gdConectar">Volver a conectar Google Drive</button></div>`:''}</div>`}
+  if(L){const sel=L.files.filter(f=>f.sel).length;
+    h+=`<p class="small" style="margin:10px 0 4px"><b>${esc(L.carpeta)}</b> · ${L.files.length} PDF${L.files.length===1?'':'s'}${L.otros.length?' · '+L.otros.length+' archivos que no son PDF':''}</p>${L.files.map((f,i)=>`<label class="row" style="gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid rgba(127,127,127,.18)"><input type="checkbox" data-chg="gdSel" data-i="${i}" ${f.sel?'checked':''} style="width:20px;height:20px"><span style="flex:1;word-break:break-word">${esc(f.n)}${f.ruta?` <span class="muted small">· ${esc(f.ruta)}</span>`:''}</span><span class="small" style="white-space:nowrap;margin-left:6px;color:${f.est==='importado'?'var(--verde)':f.est==='cambiado'?'#e0894f':'inherit'}">${f.est==='importado'?'ya está':f.est==='cambiado'?'versión nueva':'nuevo'}</span></label>`).join('')}
+    ${L.otros.length?`<p class="muted small">No se pueden revisar (pedilos en PDF): ${esc(L.otros.slice(0,12).map(x=>x.n).join(', '))}${L.otros.length>12?'…':''}</p>`:''}
+    <button class="btn gold" style="margin-top:8px" data-act="gdTraer" ${sel&&!GD.trab?'':'disabled'}>${GD.prog||('Traer '+sel+' plano'+(sel===1?'':'s')+' a la app')}</button>`}
+  return h+'</div>'}
+A.gdConectar=async()=>{try{const r=await cadApi({op:'cad_google_url'});try{sessionStorage.setItem('nx_cad_sel',CAD.sel||'')}catch(e){}location.href=r.url}catch(e){toast(e.message)}};
+A.gdSalir=async()=>{if(!confirm('¿Desconectar Google Drive de CAD Check?'))return;try{await cadApi({op:'cad_google_salir'});GD.est={conectado:false};draw()}catch(e){toast(e.message)}};
+async function gdBuscar(link){const pid=CAD.sel;GD.trab=true;GD.err=null;draw();
+  try{const r=await cadApi({op:'cad_drive_list',pid,link});if(!r.ok){GD.err={pid,...r};GD.list=null}else{CAD.P[pid]=r.p;r.files.forEach(f=>f.sel=f.est!=='importado');GD.list={pid,carpeta:r.carpeta,files:r.files,otros:r.otros||[]};if(!r.files.length)toast('No hay PDF en esa carpeta')}}catch(e){toast(e.message)}GD.trab=false;draw()}
+SUBMIT.gdLink=f=>{const l=(f.querySelector('#gd-link').value||'').trim();if(!l){toast('Pegá el link de Drive');return}gdBuscar(l)};
+A.gdBuscar=()=>gdBuscar('');
+CHG.gdSel=(v,el)=>{const f=GD.list&&GD.list.files[+el.dataset.i];if(f)f.sel=el.checked;draw()};
+A.gdTraer=async()=>{const L=GD.list;if(!L||GD.trab)return;const pid=L.pid,fs=L.files.filter(f=>f.sel);GD.trab=true;let ok=0;
+  for(let i=0;i<fs.length;i++){const f=fs[i];GD.prog=`Trayendo ${i+1} de ${fs.length}: ${f.n}`;draw();
+    try{const r=await cadApi({op:'cad_drive_import',pid,fid:f.id,ruta:f.ruta});if(!r.ok)throw new Error(r.falla);CAD.P[pid]=r.p;f.est='importado';f.sel=false;ok++}catch(e){toast('No se pudo traer '+f.n+': '+e.message)}}
+  GD.trab=false;GD.prog='';toast(ok+' plano'+(ok===1?'':'s')+' en la app');draw()};
+A.gdPedirWa=()=>{const P=CAD.P[CAD.sel],E=GD.err||{};const m=`Hola. Para revisar la documentación de ${(P&&P.nombre)||'la obra'} necesitamos acceso a la carpeta de Drive${E.link?': '+E.link:''}. ¿Nos la pueden compartir con ${GD.est&&GD.est.email?GD.est.email:'nuestra cuenta'}? Gracias.`;window.open('https://wa.me/?text='+encodeURIComponent(m),'_blank')};
+/* vuelta de Google: abre CAD Check en el proyecto donde estaba */
+try{const q=new URLSearchParams(location.search).get('drive');if(q){history.replaceState(null,'',location.pathname);const sel=sessionStorage.getItem('nx_cad_sel')||'';setTimeout(()=>{if(S.u&&ROLE()==='direccion'){S.tab='cad';if(sel)CAD.sel=sel;GD.est=null;draw()}toast(q==='ok'?'Google Drive conectado':'No se pudo conectar Google Drive')},2500)}}catch(e){}
 A.cadSel=ds=>{CAD.sel=ds.p;if(!CAD.P[ds.p])cadAbrir(ds.p);draw()};
 A.cadCrear=async ds=>{const o=findO(ds.p);try{const r=await cadApi({op:'cad_new',obra:o.id,nombre:o.nombre});CAD.P[r.id]=r.p;await cadLista(true)}catch(e){toast(e.message)}draw()};
 A.cadNuevo=()=>openSheet(`<span class="eyebrow">CAD Check</span><h2>Proyecto sin obra</h2><p class="muted small">Para revisar planos de un proyecto que todavía no es una obra en NEXO (por ejemplo, para cotizar).</p><form data-submit="cadNuevoOk"><label class="f">Nombre<input id="cad-nom" placeholder="Ej: Casa Pérez · Lote 52"></label><button class="btn gold" type="submit">Crear</button></form>`,'Proyecto nuevo');
