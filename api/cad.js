@@ -35,6 +35,63 @@ Devolvé SOLO un JSON válido, sin texto antes ni después, con este formato:
  "pedido":["…"]}
 Máximo 25 ítems de legajo, 20 planos, 15 hallazgos, 25 ítems de cómputo y 20 de pedido.`;
 
+// ===== Revisor de planos: cada observación es algo que hay que pedirle o corregirle al estudio =====
+const TIPOS_OBS = ["COTA", "NIVEL", "MURO", "EJE", "ABERTURA", "ESTRUCTURA", "INSTALACION", "DETALLE", "ESPECIFICACION", "INCONSISTENCIA", "DIBUJO", "ROTULO", "OTRO"];
+const CHECK = `Revisá el plano como lo revisaría un jefe de obra con experiencia antes de empezar a construir. Recorré TODO el plano, local por local, eje por eje y tramo por tramo, y anotá CADA problema por separado, con su ubicación exacta. No agrupes ni resumas: si faltan cotas en tres tramos distintos, son tres observaciones. Controlá:
+- COTA: cotas parciales y totales de cada tramo y de cada local; que la suma de las parciales dé la total (hacé la cuenta); cotas a ejes; ancho y alto de vanos y antepechos; escaleras (huella, contrahuella, ancho, cantidad de escalones); alturas de locales; retiros y medidas del terreno; cotas ilegibles o superpuestas.
+- NIVEL: NPT de cada local, nivel ±0,00 de referencia, niveles de losa, de fundación, de cielorraso (NPC), desniveles entre locales secos, húmedos y exteriores, umbrales, pendientes de patios, terrazas y desagües.
+- MURO: espesor de cada muro y tabique (15, 20, 30…), tipo de mampostería o material, muros sin espesor, muros que cambian de espesor sin explicación o que no coinciden entre plantas.
+- EJE: grilla de ejes, ejes sin nombre o sin cota, columnas o muros fuera de eje.
+- ABERTURA: designación de cada puerta y ventana, que coincida con la planilla, medidas, sentido de apertura, dinteles.
+- ESTRUCTURA: columnas, vigas y losas que interfieren con vanos o circulaciones, alturas de vigas vs dinteles, apoyos que no coinciden con la estructura.
+- INSTALACION: bajadas, plenos, ventilaciones, conductos y artefactos sin ubicar o que chocan con estructura o aberturas.
+- DETALLE: referencias a detalles, cortes o vistas que no existen o no se entienden; encuentros sin resolver (escaleras, baños, cocinas, aislaciones, carpetas, zócalos, cubiertas).
+- ESPECIFICACION: materiales y terminaciones sin especificar (pisos, revoques, aislaciones, contrapisos, carpetas).
+- INCONSISTENCIA: medidas, niveles, nombres o elementos que no coinciden dentro del mismo plano o con otro plano.
+- DIBUJO: errores de dibujo, superposiciones, elementos cortados, textos ilegibles.
+- ROTULO: escala, fecha, revisión, profesional, firma, norte, referencias.
+Reglas: no inventes nada; si no estás seguro, decilo en la observación ("verificar"). Cada observación dice qué hay que pedirle o corregirle al estudio, redactado para mandarlo tal cual. Gravedad: FRENA (no se puede construir sin eso), IMPORTANTE (hay que resolverlo antes de llegar a esa tarea), MENOR (prolijidad o aclaración). Español rioplatense, corto y claro.`;
+const SIS_PLANO = `Sos un revisor técnico de planos de obra de una constructora argentina (V+V Construcciones con Belfast). ${CHECK}
+Devolvé SOLO un JSON válido, sin texto antes ni después:
+{"lamina":"nombre o número de la lámina y qué muestra","escala":"…","obs":[{"tipo":"${TIPOS_OBS.join('"|"')}","grav":"FRENA"|"IMPORTANTE"|"MENOR","ubic":"dónde: local, eje, tramo, nivel","txt":"qué está mal o qué falta","pedir":"qué hay que pedirle o corregirle al estudio"}]}
+Hasta 120 observaciones, de las más graves a las menores.`;
+const SIS_CRUCE = `Sos un revisor técnico de planos de obra de una constructora argentina (V+V Construcciones con Belfast). Tenés TODOS los planos de la obra juntos. Ahora no revises cada plano por separado (eso ya se hizo): buscá lo que solo aparece al compararlos entre sí, y lo que falta en el legajo.
+1) CRUCE: medidas, niveles y alturas que no coinciden entre plantas, cortes y vistas; estructura que no coincide con arquitectura (columnas, vigas, losas, huecos); instalaciones que chocan con estructura o aberturas; aberturas que no coinciden con la planilla de carpinterías; locales o nombres distintos entre planos; cortes indicados que no están dibujados. Cada caso por separado, con los planos involucrados.
+2) LEGAJO: qué documentación falta o está incompleta para construir: plantas de cada nivel, cortes, vistas, planta de techos, replanteo con ejes, niveles, estructura (fundaciones, encofrados, armaduras, planillas, cálculo), estudio de suelos, sanitaria (agua, cloaca, pluvial), eléctrica, gas, climatización, incendio, planilla de carpinterías, planilla de locales y terminaciones, detalles constructivos, memoria o pliego.
+3) CÓMPUTO preliminar solo con datos de los planos (superficies cubiertas y semicubiertas, losas, hormigón, mampostería por tipo, contrapiso y carpeta, pisos, zócalos, aberturas). Sin datos suficientes, no lo pongas.
+Reglas: no inventes nada; usá los nombres de archivo exactos; español rioplatense, corto y claro. Gravedad: FRENA, IMPORTANTE o MENOR.
+Devolvé SOLO un JSON válido:
+{"resumen":"3 o 4 oraciones: cómo está la documentación y qué es lo más grave",
+ "obs":[{"tipo":"INCONSISTENCIA"|"ESTRUCTURA"|"INSTALACION"|"ABERTURA"|"NIVEL"|"COTA"|"OTRO","grav":"FRENA"|"IMPORTANTE"|"MENOR","planos":["…"],"ubic":"…","txt":"…","pedir":"…"}],
+ "legajo":[{"documento":"…","disciplina":"…","estado":"RECIBIDO"|"INCOMPLETO"|"FALTA","detalle":"…"}],
+ "computo":[{"item":"…","unidad":"m2"|"m3"|"ml"|"un"|"kg","cantidad":número,"base":"de dónde sale","confianza":0-100}]}
+Hasta 80 observaciones de cruce, 30 de legajo y 30 de cómputo.`;
+const gravOk = (x) => (["FRENA", "IMPORTANTE", "MENOR"].includes(x) ? x : x === "ALTA" ? "FRENA" : x === "BAJA" ? "MENOR" : "IMPORTANTE");
+const limpiarObs = (L, pref, n) => (Array.isArray(L) ? L : []).slice(0, n).map((o, i) => ({ id: pref + "-" + (i + 1), tipo: TIPOS_OBS.includes(o.tipo) ? o.tipo : "OTRO", grav: gravOk(o.grav), ubic: S(o.ubic, 200), txt: S(o.txt, 700), pedir: S(o.pedir, 500), planos: (Array.isArray(o.planos) ? o.planos : []).slice(0, 6).map((x) => S(x, 160)), e: "p" })).filter((o) => o.txt);
+async function claudeJSON(sistema, content, maxTok) {
+  const key = process.env.ANTHROPIC_API_KEY; if (!key) throw new Error("Falta ANTHROPIC_API_KEY en el servidor");
+  const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" }, body: JSON.stringify({ model: MODELO, max_tokens: maxTok, system: sistema, messages: [{ role: "user", content }] }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { const m = String((j.error && j.error.message) || r.status); throw new Error(/too large|exceed|maximum|pages/i.test(m) ? "El plano es demasiado pesado para revisarlo (máximo 100 páginas y 32 MB)." : "La IA no pudo revisar: " + m.slice(0, 200)); }
+  const txt = ((j.content || []).find((c) => c.type === "text") || {}).text || "";
+  const a = txt.indexOf("{"); let z = txt.lastIndexOf("}");
+  try { return JSON.parse(txt.slice(a, z + 1)); } catch (e) {
+    // respuesta cortada por largo: se rescatan las observaciones completas
+    if (j.stop_reason === "max_tokens") { const k = txt.lastIndexOf("},"); if (k > a) { try { return JSON.parse(txt.slice(a, k + 1) + "]}"); } catch (e2) {} } }
+    throw new Error("La IA devolvió una respuesta que no se pudo leer. Probá de nuevo.");
+  }
+}
+// cada plano revisado tiene su propia fila (cadr_<pid>_<docId>): así las revisiones en paralelo no se pisan
+async function conRev(pid, v) {
+  if (!v) return v; const ids = (v.docs || []).map((d) => d.id); v.rev = v.rev || null;
+  const filas = await Promise.all(ids.map(async (id) => [id, await leer("cadr_" + pid + "_" + id)]));
+  const porDoc = {}; filas.forEach(([id, r]) => { if (r) porDoc[id] = r; });
+  if (Object.keys(porDoc).length || (v.rev && v.rev.cruce)) v.rev = { ...(v.rev || {}), porDoc };
+  return v;
+}
+// guarda una parte de la revisión sin pisar lo que se guardó mientras tanto (las revisiones de planos corren en paralelo)
+async function guardarRev(K, f) { const v = (await leer(K)) || {}; v.rev = v.rev || { porDoc: {} }; v.rev.porDoc = v.rev.porDoc || {}; f(v.rev, v); await escribir(K, v); return v; }
+
 function limpiarR(r) {
   const arr = (x, n) => (Array.isArray(x) ? x.slice(0, n) : []);
   const g = (x) => (["ALTA", "MEDIA", "BAJA"].includes(x) ? x : "MEDIA");
@@ -95,7 +152,7 @@ export default async function handler(req, res) {
     if (!(await esDir(H, (b.cred || {}).codigo))) { await new Promise((r) => setTimeout(r, 600)); res.status(403).json({ error: "Volvé a ingresar tu código de Dirección." }); return; }
     const idx = (await leer("cad_idx")) || { items: [] }; const L = Array.isArray(idx.items) ? idx.items : [];
     if (b.op === "cad_list") {
-      const filas = await Promise.all(L.map(async (p) => { const v = await leer("cad_" + p.id); return { ...p, docs: ((v && v.docs) || []).length, an: resumenAn(v && v.an) }; }));
+      const filas = await Promise.all(L.map(async (p) => { const v = await conRev(p.id, await leer("cad_" + p.id)); const rv = v && v.rev; const obs = rv ? [...Object.values(rv.porDoc || {}).flatMap((x) => x.obs || []), ...((rv.cruce && rv.cruce.obs) || [])] : []; return { ...p, docs: ((v && v.docs) || []).length, an: resumenAn(v && v.an), rev: rv ? { t: rv.t || 0, pendientes: obs.filter((o) => o.e === "p").length, frenan: obs.filter((o) => o.e === "p" && o.grav === "FRENA").length } : null }; }));
       res.status(200).json({ ok: true, items: filas, disc: DISC }); return;
     }
     if (b.op === "cad_new") {
@@ -119,23 +176,23 @@ export default async function handler(req, res) {
     const pid = idOk(b.pid); const P = L.find((x) => x.id === pid);
     if (!P) { res.status(404).json({ error: "No existe ese proyecto" }); return; }
     const K = "cad_" + pid; const v = (await leer(K)) || { nombre: P.nombre, obra: P.obra, docs: [] }; v.docs = Array.isArray(v.docs) ? v.docs : [];
-    if (b.op === "cad_get") { res.status(200).json({ ok: true, p: v, disc: DISC }); return; }
+    if (b.op === "cad_get") { res.status(200).json({ ok: true, p: await conRev(pid, v), disc: DISC }); return; }
     if (b.op === "cad_doc_add") {
       const u = String(b.u || ""); if (!u.startsWith(PUB)) { res.status(400).json({ error: "Archivo inválido" }); return; }
       if (v.docs.length >= 60) { res.status(400).json({ error: "Hasta 60 planos por proyecto" }); return; }
       const d = { id: "d" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), n: S(b.n, 160) || "plano.pdf", u, disc: DISC.includes(b.disc) ? b.disc : "Arquitectura", kb: Math.round((Number(b.size) || 0) / 1024), t: Date.now() };
-      v.docs.push(d); await escribir(K, v); res.status(200).json({ ok: true, p: v }); return;
+      v.docs.push(d); await escribir(K, v); res.status(200).json({ ok: true, p: await conRev(pid, v) }); return;
     }
     if (b.op === "cad_doc_set" || b.op === "cad_doc_del") {
       const d = v.docs.find((x) => x.id === idOk(b.id)); if (!d) { res.status(404).json({ error: "No existe ese plano" }); return; }
       if (b.op === "cad_doc_del") v.docs = v.docs.filter((x) => x !== d); else if (DISC.includes(b.disc)) d.disc = b.disc;
-      await escribir(K, v); res.status(200).json({ ok: true, p: v }); return;
+      await escribir(K, v); res.status(200).json({ ok: true, p: await conRev(pid, v) }); return;
     }
     if (b.op === "cad_drive_list") {
       const id = b.link ? idDrive(b.link) : String((v.drive && v.drive.id) || ""); if (!id) { res.status(400).json({ error: "Pegá el link de la carpeta o del archivo de Google Drive" }); return; }
       try {
         const tok = await tokenDrive(); const { raiz, files } = await listarDrive(tok, id);
-        v.drive = { id, nombre: raiz.name, link: raiz.webViewLink || String(b.link || ""), t: Date.now() }; await escribir(K, v);
+        v.drive = { id, nombre: raiz.name, link: raiz.webViewLink || String(b.link || ""), t: Date.now() }; await escribir(K, v); await conRev(pid, v);
         const pdf = files.filter((f) => f.mimeType === "application/pdf" || /\.pdf$/i.test(f.name));
         const otros = files.filter((f) => !pdf.includes(f));
         const est = (f) => { const d = v.docs.find((x) => x.drive === f.id); return !d ? "nuevo" : d.dmod !== f.modifiedTime ? "cambiado" : "importado"; };
@@ -157,12 +214,39 @@ export default async function handler(req, res) {
         const prev = v2.docs.find((x) => x.drive === fid);
         const d = { id: prev ? prev.id : "d" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), n: S(meta.name, 160), u: PUB + path, disc: prev ? prev.disc : discDe(meta.name), kb: Math.round(buf.length / 1024), t: Date.now(), drive: fid, dmod: meta.modifiedTime, ruta: S(b.ruta, 200) };
         if (prev) v2.docs = v2.docs.map((x) => (x === prev ? d : x)); else { if (v2.docs.length >= 60) { res.status(200).json({ ok: false, falla: "Hasta 60 planos por proyecto" }); return; } v2.docs.push(d); }
-        await escribir(K, v2); res.status(200).json({ ok: true, p: v2, cambiado: !!prev });
+        await escribir(K, v2); res.status(200).json({ ok: true, p: await conRev(pid, v2), cambiado: !!prev });
       } catch (e) { if (!(e instanceof DriveError)) throw e; res.status(200).json({ ok: false, falla: e.message, cod: e.cod }); }
       return;
     }
     if (b.op === "cad_del") {
       await escribir("cad_idx", { items: L.filter((x) => x.id !== pid) }); res.status(200).json({ ok: true }); return;
+    }
+    if (b.op === "cad_rev_doc") {
+      const d = v.docs.find((x) => x.id === idOk(b.id)); if (!d) { res.status(404).json({ error: "No existe ese plano" }); return; }
+      const R = await claudeJSON(SIS_PLANO, [{ type: "document", source: { type: "url", url: d.u }, title: d.n }, { type: "text", text: `Obra: "${v.nombre}". Plano: "${d.n}" (disciplina: ${d.disc}). Revisalo completo y devolvé el JSON.` }], 16000);
+      const obs = limpiarObs(R.obs, d.id, 150).map((o) => ({ ...o, planos: [d.n] }));
+      await escribir("cadr_" + pid + "_" + d.id, { t: Date.now(), u: d.u, n: d.n, lamina: S(R.lamina, 200), escala: S(R.escala, 40), obs });
+      res.status(200).json({ ok: true, p: await conRev(pid, (await leer(K)) || v), n: obs.length }); return;
+    }
+    if (b.op === "cad_rev_cruce") {
+      const docs = v.docs.slice(0, 12);
+      if (!docs.length) { res.status(400).json({ error: "Subí al menos un plano en PDF" }); return; }
+      const content = docs.map((d) => ({ type: "document", source: { type: "url", url: d.u }, title: d.n + " (" + d.disc + ")" }));
+      content.push({ type: "text", text: `Obra: "${v.nombre}". Planos (${docs.length}):\n` + docs.map((d) => `- ${d.n} · ${d.disc}`).join("\n") + `\nDisciplinas que NO se subieron: ${DISC.filter((x) => x !== "Otro" && !docs.some((d) => d.disc === x)).join(", ") || "ninguna"}.\nHacé el cruce, el legajo y el cómputo y devolvé el JSON.` });
+      const R = await claudeJSON(SIS_CRUCE, content, 16000);
+      const L = limpiarR({ legajo: R.legajo, computo: R.computo });
+      const obs = limpiarObs(R.obs, "x", 100);
+      const v2 = (await leer(K)) || v; v2.rev = { t: Date.now(), cruce: { t: Date.now(), resumen: S(R.resumen, 1500), obs, legajo: L.legajo, computo: L.computo, docs: docs.map((d) => d.id) } };
+      await escribir(K, v2); res.status(200).json({ ok: true, p: await conRev(pid, v2) }); return;
+    }
+    if (b.op === "cad_obs_set") {
+      // estado de una observación: p = pendiente (se pide), r = resuelta, n = no corresponde
+      const oid = String(b.id || "").slice(0, 60), e = ["p", "r", "n"].includes(b.e) ? b.e : "p";
+      let ok = false;
+      if (/^x-/.test(oid)) { const v2 = (await leer(K)) || v; const o = (((v2.rev || {}).cruce || {}).obs || []).find((x) => x.id === oid); if (o) { o.e = e; o.et = Date.now(); ok = true; await escribir(K, v2); } }
+      else { const did = idOk(oid.split("-")[0]); const kr = "cadr_" + pid + "_" + did; const r = await leer(kr); const o = r && (r.obs || []).find((x) => x.id === oid); if (o) { o.e = e; o.et = Date.now(); ok = true; await escribir(kr, r); } }
+      if (!ok) { res.status(404).json({ error: "No existe esa observación" }); return; }
+      res.status(200).json({ ok: true, p: await conRev(pid, (await leer(K)) || v) }); return;
     }
     if (b.op === "cad_analizar") {
       const key = process.env.ANTHROPIC_API_KEY; if (!key) { res.status(500).json({ error: "Falta ANTHROPIC_API_KEY en el servidor" }); return; }

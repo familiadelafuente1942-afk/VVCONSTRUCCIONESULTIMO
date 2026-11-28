@@ -92,9 +92,12 @@ async function ejecutar(name, a, H) {
     const q = String(a.obra || ""); const n = nrm(q);
     const p = L.find((x) => nrm(x.nombre) === n) || L.find((x) => coincideTok(x.nombre, q) || nrm(x.nombre).includes(n));
     if (!p) return "No hay revisión de planos (CAD Check) para esa obra. Proyectos con planos: " + (L.map((x) => x.nombre).join(", ") || "ninguno");
-    const v = await leer(H, "cad_" + p.id); if (!v || !v.an) return `${p.nombre} tiene ${((v && v.docs) || []).length} planos cargados en CAD Check pero todavía no se revisaron.`;
-    const R = v.an.r;
-    return JSON.stringify({ obra: v.nombre, fecha: fl(v.an.t), planos: (v.docs || []).map((d) => d.n + " (" + d.disc + ")"), resumen: R.resumen, documentacion: R.legajo.map((x) => x.documento + ": " + x.estado.toLowerCase() + (x.detalle ? " · " + x.detalle : "")), faltantes_en_planos: R.planos.filter((x) => x.faltan.length).map((x) => x.plano + ": " + x.faltan.join(", ")), inconsistencias: R.hallazgos.map((x) => x.titulo + " (" + x.gravedad.toLowerCase() + "): " + x.detalle), computo_preliminar: R.computo.map((x) => x.item + ": " + Math.round(x.cantidad).toLocaleString("es-AR") + " " + x.unidad), pedido_al_estudio: R.pedido });
+    const v = await leer(H, "cad_" + p.id); if (v) { const pd = {}; for (const d of (v.docs || [])) { const r = await leer(H, "cadr_" + p.id + "_" + d.id); if (r) pd[d.id] = r; } if (Object.keys(pd).length || v.rev) v.rev = { ...(v.rev || {}), porDoc: pd }; } const rv = v && v.rev;
+    if (!rv) return `${p.nombre} tiene ${((v && v.docs) || []).length} planos cargados en CAD Check pero todavía no se revisaron.`;
+    const cr = rv.cruce || {}; const docs = (v.docs || []);
+    const obs = [...docs.flatMap((d) => (((rv.porDoc || {})[d.id] || {}).obs || []).map((o) => ({ ...o, plano: d.n }))), ...((cr.obs || []).map((o) => ({ ...o, plano: "Entre planos: " + (o.planos || []).join(", ") })))];
+    const pend = obs.filter((o) => o.e === "p");
+    return JSON.stringify({ obra: v.nombre, fecha: cr.t ? fl(cr.t) : "", planos: docs.map((d) => d.n + " (" + d.disc + ")"), resumen: cr.resumen || "", pendientes: pend.length, frenan_la_obra: pend.filter((o) => o.grav === "FRENA").length, observaciones: pend.slice(0, 120).map((o) => `[${o.grav.toLowerCase()} · ${o.tipo.toLowerCase()}] ${o.plano}${o.ubic ? " · " + o.ubic : ""}: ${o.txt}${o.pedir ? " → pedir: " + o.pedir : ""}`), documentacion_que_falta: (cr.legajo || []).filter((x) => x.estado !== "RECIBIDO").map((x) => x.documento + " (" + x.estado.toLowerCase() + ")"), computo_preliminar: (cr.computo || []).map((x) => x.item + ": " + Math.round(x.cantidad).toLocaleString("es-AR") + " " + x.unidad) });
   }
   throw new Error("Herramienta desconocida: " + name);
 }
