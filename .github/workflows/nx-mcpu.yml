@@ -1,0 +1,11 @@
+name: nx-mcpu
+on:
+  workflow_dispatch:
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "BUILD $(curl -s https://nexoentorno.vercel.app/api/nexo2?t=1)"
+          echo "LINK_FALSO $(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' https://nexoentorno.vercel.app/mcp/u/aaaaaaaaaaaaaaaaaaaaaaaa)"
+          echo "SIN_DIR $(curl -s -X POST -H 'content-type: application/json' -d '{"op":"ct_mcp_new","id":"x","cred":{"rol":"dir","codigo":"NO"}}' https://nexoentorno.vercel.app/api/nexo2)"
